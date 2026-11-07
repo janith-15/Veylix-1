@@ -1,0 +1,181 @@
+﻿after login ΓåÆ /
+{
+  "results": {
+    "420": {
+      "url": "/",
+      "viewport": {
+        "w": 420,
+        "dpr": 1
+      },
+      "mqDesktop": false,
+      "tokens": {
+        "sidebarWidth": "",
+        "sidebarOffset": "",
+        "mainOffset": ""
+      },
+      "boxes": [
+        {
+          "sel": ".app-shell",
+          "missing": true
+        },
+        {
+          "sel": ".app-sidebar",
+          "missing": true
+        },
+        {
+          "sel": ".app-main",
+          "missing": true
+        },
+        {
+          "sel": ".app-content",
+          "missing": true
+        },
+        {
+          "sel": ".app-topbar",
+          "missing": true
+        }
+      ]
+    },
+    "700": {
+      "url": "/",
+      "viewport": {
+        "w": 700,
+        "dpr": 1
+      },
+      "mqDesktop": false,
+      "tokens": {
+        "sidebarWidth": "",
+        "sidebarOffset": "",
+        "mainOffset": ""
+      },
+      "boxes": [
+        {
+          "sel": ".app-shell",
+          "missing": true
+        },
+        {
+          "sel": ".app-sidebar",
+          "missing": true
+        },
+        {
+          "sel": ".app-main",
+          "missing": true
+        },
+        {
+          "sel": ".app-content",
+          "missing": true
+        },
+        {
+          "sel": ".app-topbar",
+          "missing": true
+        }
+      ]
+    },
+    "900": {
+      "url": "/",
+      "viewport": {
+        "w": 900,
+        "dpr": 1
+      },
+      "mqDesktop": false,
+      "tokens": {
+        "sidebarWidth": "",
+        "sidebarOffset": "",
+        "mainOffset": ""
+      },
+      "boxes": [
+        {
+          "sel": ".app-shell",
+          "missing": true
+        },
+        {
+          "sel": ".app-sidebar",
+          "missing": true
+        },
+        {
+          "sel": ".app-main",
+          "missing": true
+        },
+        {
+          "sel": ".app-content",
+          "missing": true
+        },
+        {
+          "sel": ".app-topbar",
+          "missing": true
+        }
+      ]
+    },
+    "1100": {
+      "url": "/",
+      "viewport": {
+        "w": 1100,
+        "dpr": 1
+      },
+      "mqDesktop": true,
+      "tokens": {
+        "sidebarWidth": "",
+        "sidebarOffset": "",
+        "mainOffset": ""
+      },
+      "boxes": [
+        {
+          "sel": ".app-shell",
+          "missing": true
+        },
+        {
+          "sel": ".app-sidebar",
+          "missing": true
+        },
+        {
+          "sel": ".app-main",
+          "missing": true
+        },
+        {
+          "sel": ".app-content",
+          "missing": true
+        },
+        {
+          "sel": ".app-topbar",
+          "missing": true
+        }
+      ]
+    },
+    "1400": {
+      "url": "/",
+      "viewport": {
+        "w": 1400,
+        "dpr": 1
+      },
+      "mqDesktop": true,
+      "tokens": {
+        "sidebarWidth": "",
+        "sidebarOffset": "",
+        "mainOffset": ""
+      },
+      "boxes": [
+        {
+          "sel": ".app-shell",
+          "missing": true
+        },
+        {
+          "sel": ".app-sidebar",
+          "missing": true
+        },
+        {
+          "sel": ".app-main",
+          "missing": true
+        },
+        {
+          "sel": ".app-content",
+          "missing": true
+        },
+        {
+          "sel": ".app-topbar",
+          "missing": true
+        }
+      ]
+    }
+  },
+  "errors": []
+}

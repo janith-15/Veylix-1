@@ -1,0 +1,49 @@
+{
+  "name": "veylix-frontend",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "dev:quiet": "vite --open false",
+    "build": "tsc -b && vite build",
+    "lint": "oxlint",
+    "preflight": "node scripts/preflight-dev.mjs",
+    "audit": "node scripts/audit-ui-truth.mjs",
+    "audit:selftest": "node scripts/audit-ui-truth.mjs --self-test",
+    "docs:verify": "node scripts/docs-verify.mjs",
+    "docs:selftest": "node scripts/docs-verify.mjs --self-test",
+    "verify:ui": "node scripts/verify-dashboard.mjs",
+    "verify:nav": "node scripts/verify-nav.mjs",
+    "verify:subthemes": "node scripts/verify-subthemes.mjs",
+    "verify:theme-toggle": "node scripts/verify-theme-toggle.mjs",
+    "verify:studio": "node scripts/verify-theme-studio.mjs",
+    "verify:packages": "node scripts/verify-package-create.mjs",
+    "verify:vpn": "node scripts/verify-vpn-detail.mjs",
+    "verify:vpn-actions": "node scripts/verify-vpn-actions.mjs",
+    "qr:selftest": "node --experimental-strip-types scripts/qr-selftest.mjs",
+    "ping:selftest": "node --experimental-strip-types scripts/ping-selftest.mjs",
+    "workflows:check": "node scripts/check-workflows.mjs",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "lucide-react": "^0.468.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "react-router-dom": "^7.1.0",
+    "three": "^0.186.1",
+    "zustand": "^5.0.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.3",
+    "@types/node": "^24.19.2",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@types/three": "^0.186.0",
+    "@vitejs/plugin-react": "^6.1.2",
+    "oxlint": "^1.88.0",
+    "tailwindcss": "^4.3.3",
+    "typescript": "~6.0.3",
+    "vite": "^8.3.4"
+  }
+}

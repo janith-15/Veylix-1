@@ -1,0 +1,96 @@
+/* ------------------------------------------------------------------ *
+ * Order status timeline (Phase-6 UX, C5)
+ *
+ * Three fixed steps per pending order, so a paying customer can see exactly
+ * where their money is without asking a seller. Tokens only, so every theme
+ * preset keeps working.
+ * ------------------------------------------------------------------ */
+.ord-tl {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  background: var(--bg-surface);
+}
+
+.ord-tl__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.ord-tl__steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ord-tl__step {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  color: var(--text-muted, inherit);
+}
+
+/* A completed step is a fact; an active one is a wait; the rest are future. */
+.ord-tl__step.is-done {
+  color: var(--text, inherit);
+}
+
+.ord-tl__step.is-done .ord-tl__icon {
+  color: var(--success);
+}
+
+.ord-tl__step.is-waiting .ord-tl__icon {
+  color: var(--warning);
+}
+
+.ord-tl__icon {
+  flex: 0 0 auto;
+  display: inline-flex;
+  margin-top: 1px;
+}
+
+.ord-tl__body {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.ord-tl__log {
+  margin-top: 10px;
+  border-top: 1px solid var(--border);
+  padding-top: 8px;
+}
+
+.ord-tl__log summary {
+  cursor: pointer;
+}
+
+.ord-tl__log ul {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+}
+
+.ord-tl__log li {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 620px) {
+  .ord-tl__head {
+    flex-wrap: wrap;
+  }
+}

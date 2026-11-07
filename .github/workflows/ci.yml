@@ -1,0 +1,124 @@
+# VEYLIX — continuous integration.
+#
+# Every gate the project relies on, run on every push so none of them can quietly
+# rot. The `-race` job matters most: it cannot run on the Windows dev machine
+# (no C compiler with CGO_ENABLED=0), so this is the only place the detector
+# actually runs.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  GO_VERSION: '1.27'
+  NODE_VERSION: '24'
+
+jobs:
+  backend:
+    name: backend (build · vet · test)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: backend/go.sum
+
+      - name: gofmt
+        working-directory: backend
+        run: |
+          out=$(gofmt -l .)
+          if [ -n "$out" ]; then
+            echo "these files are not gofmt'd:"
+            echo "$out"
+            exit 1
+          fi
+
+      - name: build
+        working-directory: backend
+        run: go build ./...
+
+      - name: vet
+        working-directory: backend
+        run: go vet ./...
+
+      - name: test
+        working-directory: backend
+        run: go test ./... -count=1
+
+  race:
+    name: backend (race detector)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: backend/go.sum
+
+      # The race detector needs CGO, so it is built here rather than on the
+      # developer's CGO_ENABLED=0 Windows box.
+      - name: go test -race
+        working-directory: backend
+        env:
+          CGO_ENABLED: '1'
+        run: go test ./... -race -count=1
+
+  frontend:
+    name: frontend (typecheck · lint · audit · build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: install
+        working-directory: frontend
+        run: npm ci
+
+      - name: typecheck
+        working-directory: frontend
+        run: npx tsc -b
+
+      - name: lint
+        working-directory: frontend
+        run: npm run lint
+
+      # Fails if any screen claims a capability the backend contradicts, or if an
+      # invented money literal appears in src/.
+      - name: ui truth gate
+        working-directory: frontend
+        run: npm run audit
+
+      - name: ui truth gate self-test
+        working-directory: frontend
+        run: npm run audit:selftest
+
+      - name: qr encoder self-test
+        working-directory: frontend
+        run: npm run qr:selftest
+
+      - name: client ping self-test
+        working-directory: frontend
+        run: npm run ping:selftest
+
+      # The README states route/test/migration counts; this fails when they drift.
+      - name: docs verify
+        working-directory: frontend
+        run: npm run docs:verify
+
+      - name: build
+        working-directory: frontend
+        run: npm run build

@@ -1,0 +1,109 @@
+/* L2 — the order queue (D-031/D-036). Tokens only. */
+.orders-page {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.ord-summary {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.ord-pill {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--bg-surface);
+  font-size: 12.5px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.ord-pill strong {
+  color: var(--text);
+  font-size: 14px;
+}
+
+.ord-notice {
+  border-color: var(--warning);
+}
+
+.ord-when {
+  display: block;
+  font-size: 11.5px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.ord-amount {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.ord-ref {
+  font-size: 12px;
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface);
+}
+
+.ord-actions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+/* The timeline: a rule down the left, one dot per event. */
+.ord-timeline {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 0 4px;
+  display: grid;
+  gap: var(--space-3);
+}
+
+.ord-timeline__item {
+  display: grid;
+  grid-template-columns: 16px 1fr;
+  gap: 10px;
+  align-items: start;
+  position: relative;
+}
+
+/* The connecting rule lives on the item so the last one does not dangle. */
+.ord-timeline__item:not(:last-child)::before {
+  content: '';
+  position: absolute;
+  left: 5px;
+  top: 16px;
+  bottom: calc(-1 * var(--space-3));
+  width: 1px;
+  background: var(--border);
+}
+
+.ord-timeline__dot {
+  width: 11px;
+  height: 11px;
+  margin-top: 4px;
+  border-radius: 50%;
+  border: 2px solid var(--c-primary);
+  background: var(--bg-card);
+}
+
+.ord-timeline__kind {
+  margin: 0;
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+.ord-timeline__detail {
+  margin: 4px 0 0;
+  font-size: 12.5px;
+  color: var(--text-muted);
+  white-space: pre-wrap;
+}

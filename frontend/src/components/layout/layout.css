@@ -1,0 +1,735 @@
+﻿/* VEYLIX VPN — app shell layout
+   Architecture: position:fixed sidebar + margin-left content.
+   CRITICAL: no transform / filter / perspective / contain / will-change on
+   .app-shell — any of those create a containing block and would break the
+   fixed sidebar (MDN: "Stacking context / containing block"). */
+.app-shell {
+  display: flex;
+  min-height: 100vh;
+  transform: none;
+  filter: none;
+  perspective: none;
+  contain: none;
+  will-change: auto;
+}
+.app-sidebar {
+  /* !important: `.glass` also declares position and the injected stylesheet
+     order is not guaranteed (Vite injects component CSS after globals). */
+  position: fixed !important;
+  /* Floaty shell: inset by --sidebar-offset on every edge (0 for edge shells). */
+  top: var(--sidebar-offset);
+  bottom: var(--sidebar-offset);
+  left: var(--sidebar-offset);
+  /* `top` + `bottom` define the height; auto lets them win. */
+  height: auto;
+  max-height: none;
+  width: var(--sidebar-width);
+  background: var(--bg-sidebar);
+  border-right: var(--border-weight) solid var(--border);
+  display: flex;
+  flex-direction: column;
+  z-index: var(--z-sidebar, 30);
+  transition: transform var(--transition-med), width var(--transition-med);
+  overflow: visible;
+}
+.app-sidebar--closed { transform: translateX(calc(-1 * (var(--sidebar-width) + var(--sidebar-offset) + 4px))); }
+.app-sidebar--closed.translate-visible { transform: translateX(calc(-1 * var(--sidebar-width))); }
+@media (min-width: 1024px) {
+  /* Desktop: the drawer transform must NEVER apply. `!important` + higher
+     specificity because the base .app-sidebar--closed rule and the theme
+     skins both target the same element and the cascade order across
+     lazily-injected stylesheets is not guaranteed. */
+  .app-sidebar--closed,
+  .app-sidebar.app-sidebar--closed,
+  .app-shell .app-sidebar--closed {
+    transform: none !important;
+    margin-left: 0 !important;
+  }
+}
+.app-main {
+  flex: 1;
+  min-width: 0;
+  /* Single source of truth for the content offset. `.app-main` is a normal
+     flex item, so a margin here can never shift the fixed sidebar. */
+  margin-left: calc(var(--sidebar-width) + var(--sidebar-offset));
+  /* Right gutter matches the shell inset so nothing touches the viewport edge. */
+  margin-right: var(--sidebar-offset);
+  position: relative;
+  z-index: var(--z-content, 1);
+  display: flex;
+  flex-direction: column;
+  /* Deliberately NO margin transition: animating margin triggers layout on
+     every frame. The sidebar's width transition carries the visual change. */
+}
+.app-topbar {
+  position: sticky !important;
+  top: 0;
+  /* Below dropdowns (100) but above sidebar (30) and content (1). */
+  z-index: var(--z-topbar, 40);
+  border-radius: 0;   /* flush chrome — never rounded */
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  /* Inset from the top + right edges in floating shells (0 elsewhere). */
+  margin: var(--sidebar-offset) var(--sidebar-offset) 0 0;
+  padding: var(--space-2) var(--space-4);
+  border-bottom: var(--border-weight) solid var(--border);
+  overflow: visible;
+  min-width: 0;
+}
+.app-content {
+  flex: 1;
+  /* Generous breathing room between chrome and page content.
+     Per-shell density overrides live in ui-themes.css. */
+  padding: var(--space-5);
+  /* TRANSPARENT on purpose: glass cards must sample the animated scene
+     behind them. A solid background here kills every backdrop-filter. */
+  background: transparent;
+  position: relative;
+}
+/* Very wide screens: keep line lengths readable. */
+@media (min-width: 1600px) {
+  .app-content > * { max-width: 1440px; margin-inline: auto; }
+}
+.app-mobile-scrim {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: var(--z-sidebar, 30);
+  display: none;
+}
+
+/* ---------------------------------------------------------------------------
+   Route-splitting pending state (App.tsx RouteFallback).
+   Route modules are lazy-loaded, so the first visit to a screen has a real
+   chunk fetch. This placeholder sits INSIDE .app-content for in-shell routes,
+   so the sidebar/topbar never unmount. Token-driven: no literal colour, so all
+   six presets style it correctly, and it costs nothing when a chunk is cached
+   (it is never rendered).
+   --------------------------------------------------------------------------- */
+.route-fallback {
+  display: grid;
+  place-items: center;
+  min-height: 40vh;
+  padding: var(--space-6);
+  color: var(--text-muted);
+  font-size: calc(13px * var(--font-size-scale, 1));
+}
+.route-fallback__label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+/* A quiet three-dot pulse instead of a spinner: no layout shift, no rotation
+   cost on a 1 vCPU box, and it is suppressed entirely by the existing
+   --reduce-motion / .low-resource rules. */
+.route-fallback__label::before {
+  content: '';
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid color-mix(in srgb, var(--c-primary) 30%, transparent);
+  border-top-color: var(--c-primary);
+  animation: route-fallback-spin 700ms linear infinite;
+}
+@keyframes route-fallback-spin {
+  to { transform: rotate(360deg); }
+}
+.reduce-motion .route-fallback__label::before,
+.low-resource .route-fallback__label::before {
+  animation: none;
+}
+.app-sidebar__brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+  font-weight: 800;
+  font-size: 17px;
+  color: var(--text-strong);
+  letter-spacing: 0.2px;
+}
+.app-sidebar__brand-logo {
+  width: 34px;
+  height: 34px;
+  border-radius: 30%;
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--c-primary) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--c-primary) 28%, transparent);
+  box-shadow: var(--fx-glow);
+}
+.app-nav { flex: 1; overflow-y: auto; padding: var(--space-2) var(--space-3); }
+.app-nav__group { margin-top: var(--space-2); }
+.app-nav__group-label {
+  font-size: calc(11px * var(--font-size-scale, 1));
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  padding: var(--space-3) var(--space-3) var(--space-1);
+}
+.app-nav__item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  margin: 2px 0;
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-weight: 500;
+  font-size: 14px;
+  text-decoration: none;
+  transition: background-color var(--transition-fast), color var(--transition-fast);
+  /* Anchor for the active rail below. */
+  position: relative;
+}
+.app-nav__item:hover { background: var(--bg-hover); color: var(--text-strong); text-decoration: none; }
+.app-nav__item--active {
+  background: color-mix(in srgb, var(--c-primary) 14%, transparent);
+  color: var(--c-primary);
+  font-weight: 600;
+}
+/*
+ * Active rail (Phase C). A 3px accent bar on the leading edge, drawn with a
+ * pseudo-element so it cannot shift the item's padding or text baseline. The
+ * active item already had a tinted background; the rail is what makes the
+ * current location readable at a glance in the collapsed icon rail, where the
+ * background tint alone is ambiguous next to a hovered neighbour.
+ * Suppressed in the collapsed rail because a bar against a 44px column reads as
+ * a layout bug rather than a marker.
+ */
+.app-nav__item--active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 60%;
+  border-radius: 0 3px 3px 0;
+  background: var(--c-primary);
+}
+.app-sidebar--rail .app-nav__item--active::before { display: none; }
+/* Icon buttons: give the glyph a resting tint and a clear hover/press edge so a
+   row of them does not read as decoration. */
+.app-nav__item svg { flex: 0 0 auto; opacity: 0.85; }
+.app-nav__item--active svg { opacity: 1; }
+.app-nav__item:hover svg { opacity: 1; }
+.app-sidebar__footer {
+  padding: var(--space-3) var(--space-4);
+  border-top: var(--border-weight) solid var(--border);
+}
+.app-topbar__spacer { flex: 1; }
+.app-topbar__icon-btn {
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  /* One shared focus treatment for every icon control in the chrome. */
+  transition: background-color var(--transition-fast), color var(--transition-fast),
+    box-shadow var(--transition-fast);
+}
+.app-topbar__icon-btn:hover { background: var(--bg-hover); color: var(--text-strong); }
+.app-topbar__icon-btn:active { transform: scale(0.96); }
+.app-topbar__icon-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--bg-card), 0 0 0 4px var(--focus);
+}
+.app-topbar__badge {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  min-width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  background: var(--error);
+  color: #fff;
+  font-size: calc(10px * var(--font-size-scale, 1));
+  font-weight: 700;
+  display: grid;
+  place-items: center;
+  padding: 0 4px;
+}
+.app-search {
+  flex: 1 1 220px;
+  min-width: 160px;
+  max-width: 420px;
+  position: relative;
+}
+/* Search trigger: input-like surface, but scroll indicator-free */
+.app-search__btn {
+  border: var(--border-weight) solid var(--border);
+  border-bottom-width: 1px;
+}
+
+/* ---------- Shell polish: avatar, nav counts, search kbd ---------- */
+.app-topbar__user {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-1) var(--space-3) var(--space-1) var(--space-1);
+  /* Square chip to match the avatar (no rounding anywhere on this control). */
+  border-radius: 0;
+  font-weight: 600;
+  border: 1px solid var(--border);
+  background: var(--bg-surface);
+  transition:
+    background-color var(--dur-fast, 120ms) var(--ease, ease),
+    border-color var(--dur-fast, 120ms) var(--ease, ease);
+}
+.app-topbar__user:hover { background: var(--bg-hover); border-color: var(--border-strong); }
+.app-avatar,
+.app-user__avatar {
+  display: grid;
+  place-items: center;
+  /* Sharp square — no corner radius on the account chip (explicit requirement). */
+  border-radius: 0;
+  background: var(--cmp-accent-grad, linear-gradient(135deg, var(--c-primary), var(--c-secondary)));
+  color: var(--c-primary-contrast, #fff);
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  flex-shrink: 0;
+}
+.app-avatar { width: 26px; height: 26px; font-size: 12px; }
+.app-topbar__user-name { font-size: 13px; white-space: nowrap; }
+.app-search { position: relative; }
+.app-search .ui-input--search { padding-right: 68px; }
+.app-search__kbd {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+  font-family: var(--font-mono);
+  font-size: calc(10px * var(--font-size-scale, 1));
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 2px 6px;
+  background: var(--bg-surface);
+}
+.app-nav__item { position: relative; }
+.app-nav__item--active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 22%;
+  height: 56%;
+  width: 3px;
+  border-radius: 999px;
+  background: var(--c-primary);
+}
+.app-nav__count {
+  margin-left: auto;
+  min-width: 22px;
+  text-align: center;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: calc(11px * var(--font-size-scale, 1));
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+  background: color-mix(in srgb, var(--text-muted) 14%, transparent);
+}
+.app-nav__item--active .app-nav__count {
+  color: var(--c-primary);
+  background: color-mix(in srgb, var(--c-primary) 16%, transparent);
+}
+.app-user { display: flex; align-items: center; gap: var(--space-3); padding-top: 2px; min-width: 0; }
+.app-user__avatar { width: 32px; height: 32px; font-size: 13px; }
+.app-user__meta { display: flex; flex-direction: column; line-height: 1.25; min-width: 0; }
+.app-user__name {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-strong);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.app-user__role { font-size: calc(11px * var(--font-size-scale, 1)); color: var(--text-muted); }
+
+/* ---------- Responsive: topbar + table scroll + utility ---------- */
+@media (min-width: 1024px) {
+  /* The mobile menu button is display:none but its flex gap still shifted
+     the search box; reset the desktop padding so it starts at the edge. */
+  .app-topbar { padding-left: var(--space-5); }
+}
+@media (max-width: 768px) {
+  .app-topbar__user-name { display: none; }
+  .app-topbar { padding: 8px var(--space-3); }
+  .app-search__btn { padding: 0 10px; }
+  .app-search__kbd { display: none; }
+}
+
+/* ---------- Phase 5 shell refinements ---------- */
+/* Search opens the ⌘K command palette */
+.app-search__btn {
+  width: 100%;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  height: 38px;
+  padding: 0 8px 0 14px;
+  border: var(--border-weight) solid var(--border);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--bg-card) 80%, transparent);
+  color: var(--text-muted);
+  font-size: 13.5px;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color var(--dur-fast, 120ms) var(--ease, ease),
+    background-color var(--dur-fast, 120ms) var(--ease, ease);
+}
+.app-search__btn:hover { border-color: var(--border-strong); background: var(--bg-card); color: var(--text); }
+.app-search__placeholder { flex: 1; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+
+/* Topbar scroll shadow — must stay BELOW the notification popover */
+.app-topbar--scrolled {
+  z-index: var(--z-topbar, 40);
+  border-bottom-color: var(--border-strong);
+  box-shadow: 0 12px 28px -22px rgba(0, 0, 0, 0.55);
+}
+
+/* Sidebar footer user dropdown fills the footer */
+.app-sidebar__footer .ui-dropdown { width: 100%; }
+.app-sidebar__footer .ui-dropdown > button {
+  width: 100%;
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+}
+.app-sidebar__footer .ui-dropdown > button:hover { background: var(--bg-hover); }
+.app-user--trigger { padding: var(--space-2); border-radius: var(--radius-sm); }
+.app-user__chev { margin-left: auto; color: var(--text-muted); flex-shrink: 0; }
+
+/* Desktop: collapse sidebar to an icon rail */
+.app-sidebar__brand { position: relative; }
+.app-sidebar__toggle {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: none;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.app-sidebar__toggle:hover { background: var(--bg-hover); color: var(--text); border-color: var(--border); }
+@media (min-width: 1024px) {
+  .app-sidebar__toggle { display: grid; }
+  /* Rail mode overrides the WIDTH VARIABLE so the sidebar and the content
+     offset both follow automatically (single formula, no magic numbers). */
+  .app-shell--rail { --sidebar-width: 72px; }
+  .app-sidebar--rail { width: var(--sidebar-width); }
+  .app-shell--rail .app-main {
+    margin-left: calc(var(--sidebar-width) + var(--sidebar-offset));
+  }
+  .app-sidebar--rail .app-sidebar__brand { justify-content: center; padding-inline: 8px; }
+  .app-sidebar--rail .app-sidebar__toggle { right: 50%; transform: translate(50%, -50%); }
+  .app-sidebar--rail .app-sidebar__brand-label,
+  .app-sidebar--rail .app-nav__group-label,
+  .app-sidebar--rail .app-nav__label,
+  .app-sidebar--rail .app-nav__count,
+  .app-sidebar--rail .app-user__meta,
+  .app-sidebar--rail .app-user__chev { display: none; }
+  .app-sidebar--rail .app-nav__item { justify-content: center; padding-inline: 0; gap: 0; }
+  .app-sidebar--rail .app-nav__item--active::before { left: -2px; }
+  .app-sidebar--rail .app-sidebar__footer .ui-dropdown > button:hover { background: transparent; }
+  .app-sidebar--rail .app-sidebar__footer .ui-dropdown__menu {
+    left: auto;
+    right: 72px;
+    top: auto;
+    bottom: 0;
+  }
+  .app-sidebar--rail .app-user { padding: 2px; justify-content: center; }
+}
+
+/* ---------- Notifications popover (topbar bell) ---------- */
+/* ---------- Notifications: centered modal (⌘K-palette style) ---------- */
+.app-topbar__notif { position: relative; }
+
+.notif-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal, 300);
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 10vh var(--space-4) var(--space-4);
+  background: color-mix(in srgb, #000 45%, transparent);
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
+  animation: palette-fade 140ms var(--ease, ease);
+}
+
+.notif-modal {
+  width: min(520px, 100%);
+  max-height: 72vh;
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--radius-card-lg, var(--radius-lg));
+  background: var(--bg-card);
+  border: 1px solid var(--border-strong);
+  box-shadow: var(--elev-3, 0 24px 56px -16px rgba(0, 0, 0, 0.5));
+  overflow: hidden;
+  animation: palette-in 160ms var(--ease, ease) both;
+}
+
+.notif-modal__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--border);
+  font-size: 13.5px;
+  background: var(--bg-sidebar);
+}
+.notif-modal__mark {
+  background: none;
+  border: none;
+  color: var(--c-primary);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.notif-modal__mark:hover { text-decoration: underline; }
+
+.notif-modal__list { flex: 1; overflow-y: auto; }
+
+.notif-modal__item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  width: 100%;
+  /* A notification row is a button: it must be tappable, not merely readable.
+     44px is the smallest reliable target, and on a desktop trackpad a row that is
+     exactly text-height is easy to miss too. */
+  min-height: 44px;
+  padding: var(--space-3) var(--space-4);
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  cursor: pointer;
+  color: var(--text);
+}
+.notif-modal__item:last-child { border-bottom: none; }
+.notif-modal__item:hover { background: var(--bg-hover); }
+.notif-modal__item--unread {
+  background: color-mix(in srgb, var(--c-primary) 7%, transparent);
+}
+.notif-modal__item--unread:hover {
+  background: color-mix(in srgb, var(--c-primary) 12%, transparent);
+}
+
+.notif-modal__dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  margin-top: 5px;
+  flex-shrink: 0;
+  background: var(--info);
+}
+.notif-modal__dot--success { background: var(--success); }
+.notif-modal__dot--warning { background: var(--warning); }
+.notif-modal__dot--error { background: var(--error); }
+
+.notif-modal__txt { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1; }
+.notif-modal__txt strong { font-size: 13px; color: var(--text-strong); }
+.notif-modal__txt > span { font-size: 12.5px; color: var(--text-muted); }
+.notif-modal__txt time { font-size: 11px; color: var(--text-muted); font-family: var(--font-mono); }
+
+.notif-modal__unread {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--c-primary);
+  margin-top: 5px;
+  flex-shrink: 0;
+}
+
+.notif-modal__empty {
+  padding: var(--space-10) var(--space-4);
+  text-align: center;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.notif-modal__view-all {
+  padding: var(--space-3);
+  background: var(--bg-surface);
+  border: none;
+  border-top: 1px solid var(--border);
+  color: var(--c-primary);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.notif-modal__view-all:hover { background: var(--bg-hover); }
+
+@media (min-width: 1024px) {
+  .app-mobile-toggle { display: none !important; }
+}
+/* Tablet (640–1023px): keep the sidebar VISIBLE — narrower, not hidden. */
+@media (min-width: 640px) and (max-width: 1023px) {
+  .app-shell { --sidebar-width: 208px; }
+  .app-sidebar--closed { transform: none; }
+  .app-sidebar { box-shadow: none; }
+  .app-main { margin-left: calc(var(--sidebar-width) + var(--sidebar-offset)); }
+  .app-mobile-toggle { display: none !important; }
+  .app-topbar { padding-left: var(--space-4); }
+  .app-content { padding: var(--space-4); }
+}
+/* Phone (<640px): sidebar becomes a drawer. */
+@media (max-width: 639px) {
+  .app-main { margin-left: 0; }
+  .app-content { background: var(--bg-page); }
+  .app-sidebar.scrim-show { transform: none; }
+  .app-sidebar {
+    box-shadow: var(--shadow-lg);
+  }
+  .app-mobile-scrim.app-mobile-scrim--visible { display: block; }
+  .app-content { padding: var(--space-4); }
+  .app-search { display: none; }
+}
+
+
+/* ============================================================
+   D-084 · APPLICATION SHELL ADDITIONS
+   Appended, never overriding. Everything here reads a token,
+   so it is correct in all six presets (light / dark / classic /
+   modern / gaming / hacking) without a per-theme rule.
+   ============================================================ */
+
+/* ---- Topbar context block (breadcrumbs) ---- */
+.app-topbar__context {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  flex-shrink: 1;
+}
+/* Below 900px the trail is redundant: the mobile drawer already shows the
+   active item and horizontal space is scarce. Hiding it is deliberate, not a
+   layout accident. */
+@media (max-width: 900px) {
+  .app-topbar__context { display: none; }
+}
+
+.app-crumbs { min-width: 0; }
+.app-crumbs__list {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+  font-size: calc(13px * var(--font-size-scale, 1));
+}
+.app-crumbs__item {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+.app-crumbs__sep {
+  color: var(--text-muted);
+  opacity: 0.65;
+  margin: 0 var(--space-1);
+  flex: 0 0 auto;
+}
+.app-crumbs__link {
+  color: var(--text-muted);
+  text-decoration: none;
+  white-space: nowrap;
+  padding: var(--space-1) var(--space-1);
+  border-radius: var(--radius-sm);
+  transition: color var(--transition-fast), background var(--transition-fast);
+}
+.app-crumbs__link:hover {
+  color: var(--text-strong);
+  background: var(--bg-hover);
+  text-decoration: none;
+}
+.app-crumbs__link:focus-visible {
+  outline: none;
+  box-shadow: var(--ring-focus);
+}
+.app-crumbs__current {
+  color: var(--text-strong);
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: var(--space-1) var(--space-1);
+}
+
+/* ---- Role badge ---- */
+.app-topbar__role {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 var(--space-2);
+  border-radius: 999px;
+  border: var(--border-weight) solid var(--border);
+  background: var(--bg-surface);
+  color: var(--text-muted);
+  font-size: calc(11px * var(--font-size-scale, 1));
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  flex: 0 0 auto;
+}
+@media (max-width: 720px) {
+  .app-topbar__role { display: none; }
+}
+
+/* ---- Collapsible nav group (used only when a group has > 4 items) ---- */
+.app-nav__group-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  background: none;
+  border: 0;
+  cursor: pointer;
+  font: inherit;
+  font-size: calc(11px * var(--font-size-scale, 1));
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  padding: var(--space-3) var(--space-3) var(--space-1);
+  border-radius: var(--radius-sm);
+  transition: color var(--transition-fast);
+}
+.app-nav__group-toggle:hover { color: var(--text-strong); }
+.app-nav__group-toggle:focus-visible {
+  outline: none;
+  box-shadow: var(--ring-focus);
+}
+.app-nav__group-toggle svg {
+  flex: 0 0 auto;
+  transition: transform var(--transition-fast);
+  opacity: 0.7;
+}
+.app-nav__group-toggle[aria-expanded='false'] svg { transform: rotate(-90deg); }
+
+/* The rail has no room for a group header at all. */
+.app-sidebar--rail .app-nav__group-toggle { display: none; }
+

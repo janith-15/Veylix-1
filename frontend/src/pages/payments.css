@@ -1,0 +1,84 @@
+/* Pricing & payments page */
+.pay-prices {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--space-4);
+}
+.pay-client {
+  display: block;
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+.pay-amount {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.pay-pending {
+  position: relative;
+}
+.pay-pending::before {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--warning);
+  margin-right: 6px;
+  vertical-align: 1px;
+}
+/* How long a payment has been sitting in the queue — the aging cue that turns a
+   list into a work queue: the longer a payment waits, the louder it reads. */
+.pay-age {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--warning);
+  background: color-mix(in srgb, var(--warning) 14%, transparent);
+  white-space: nowrap;
+  vertical-align: 1px;
+}
+.pay-age--cold {
+  color: var(--error);
+  background: color-mix(in srgb, var(--error) 12%, transparent);
+}
+/* The audit context viewer: the entry's stored JSON, read-only. */
+.audit-context {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-hover, rgba(127, 127, 127, 0.06));
+  font-size: 12.5px;
+  line-height: 1.5;
+  font-variant-numeric: tabular-nums;
+  max-height: 320px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* Audit filters reuse .dash-range chips */
+/* Notifications page list reuses .notif-pop__* item styles */
+.notif-page-list {
+  display: grid;
+}
+.notif-page-list .notif-pop__item {
+  border: none;
+  border-bottom: 1px solid var(--border);
+}
+.notif-page-list .notif-pop__item:last-child {
+  border-bottom: none;
+}
+
+/* Profile page */
+.prof-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.prof-row .app-user__avatar { width: 44px; height: 44px; font-size: 17px; }
+.prof-role { margin-left: auto; }
+.prof-roles { display: flex; gap: 8px; flex-wrap: wrap; }

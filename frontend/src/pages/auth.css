@@ -1,0 +1,142 @@
+/* Auth screens — split-screen premium layout, token-driven (all themes) */
+.auth {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: minmax(340px, 44%) 1fr;
+}
+
+.auth__brand {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: var(--space-8);
+  padding: var(--space-8);
+  background: linear-gradient(
+    160deg,
+    color-mix(in srgb, var(--c-primary) 22%, var(--bg-page)) 0%,
+    color-mix(in srgb, var(--c-secondary) 14%, var(--bg-page)) 100%
+  );
+  border-right: 1px solid var(--border);
+}
+.auth__brand::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  /* `--cmp-accent-grad` is applied by ThemeProvider at runtime; the literal
+     fallback keeps the first paint from showing an empty overlay. */
+  background: var(--cmp-accent-grad, linear-gradient(135deg, var(--c-primary), var(--c-secondary)));
+  opacity: 0.12;
+  pointer-events: none;
+}
+.auth__brand > * { position: relative; }
+
+.auth__brand-title { font-size: 1.4rem; margin-top: var(--space-4); }
+.auth__brand-sub { margin: 6px 0 0; max-width: 46ch; }
+
+.auth__points { display: grid; gap: 14px; }
+.auth__point { display: flex; gap: 12px; align-items: flex-start; }
+.auth__point-dot {
+  width: 8px;
+  height: 8px;
+  margin-top: 6px;
+  border-radius: 50%;
+  background: var(--c-primary);
+  box-shadow: 0 0 0 4px var(--tint-primary, color-mix(in srgb, var(--c-primary) 14%, transparent));
+  flex-shrink: 0;
+}
+.auth__point strong { display: block; font-size: 13.5px; }
+.auth__point .ui-muted { font-size: 12.5px; }
+
+.auth__main { display: grid; place-items: center; padding: var(--space-6); }
+.auth__card { width: min(430px, 100%); display: grid; gap: var(--space-3); }
+.auth__title { font-size: 1.3rem; }
+.auth__switch { margin: 0; font-size: 13px; color: var(--text-muted); text-align: center; }
+.auth__switch a { color: var(--c-primary); font-weight: 700; text-decoration: none; }
+.auth__switch a:hover { text-decoration: underline; }
+.auth__hint { margin: -2px 0 0; font-size: 12px; text-align: center; line-height: 1.45; }
+
+/* Outcomes of the Google / e-mail-verification round trip (D-039).
+   Tokens, not literals: the light-mode greens and reds below were unreadable on
+   the dark and gaming presets, and they ignored every sub-theme. */
+.auth__notice { margin: 0; padding: 9px 11px; border-radius: 10px; font-size: 12.5px; line-height: 1.45; border: 1px solid transparent; }
+.auth__notice--ok {
+  color: var(--success);
+  background: color-mix(in srgb, var(--success) 10%, var(--bg-card));
+  border-color: color-mix(in srgb, var(--success) 30%, transparent);
+}
+.auth__notice--bad {
+  color: var(--error);
+  background: color-mix(in srgb, var(--error) 10%, var(--bg-card));
+  border-color: color-mix(in srgb, var(--error) 30%, transparent);
+}
+
+
+.auth__divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 11.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.auth__divider::before,
+.auth__divider::after { content: ''; height: 1px; flex: 1; background: var(--border); }
+
+.auth__google { width: 100%; }
+.auth__roles {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: stretch;
+}
+.auth__my { margin: 0; }
+.auth__demo {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+}
+
+@media (max-width: 880px) {
+  .auth { grid-template-columns: 1fr; }
+  .auth__brand { display: none; }
+  .auth__main { place-items: start center; padding-top: var(--space-10); }
+}
+
+/* Session-restore splash shown by RequireAuth while /api/me is in flight. */
+.auth-boot {
+  display: grid;
+  place-items: center;
+  gap: var(--space-3);
+  min-height: 40vh;
+  padding: var(--space-8);
+}
+
+.auth-boot__spinner {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  border-top-color: var(--c-primary);
+  animation: auth-boot-spin 0.7s linear infinite;
+}
+
+@keyframes auth-boot-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-boot__spinner { animation: none; }
+}
+
+/* Staff door role chips (D-041) — a hint for the person, never a permission. */
+.auth__roles { display: flex; gap: 8px; }
+.auth__role { display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; border-radius: 10px; border: 1px solid var(--border); background: transparent; color: var(--text-muted); font-size: 12.5px; font-weight: 600; cursor: pointer; flex: 1; justify-content: center; }
+.auth__role:hover { border-color: var(--c-primary); color: var(--text); }
+.auth__role.is-active { border-color: var(--c-primary); background: color-mix(in srgb, var(--c-primary) 12%, transparent); color: var(--c-primary); }
+.auth__switch--split { display: flex; justify-content: space-between; gap: 12px; font-size: 12.5px; }
+

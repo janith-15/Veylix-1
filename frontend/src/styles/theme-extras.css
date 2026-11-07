@@ -1,0 +1,110 @@
+﻿/* ============================================================
+   VEYLIX VPN — Per-theme glass + brand logo tokens
+   Extends styles/tokens.css (same selectors, extra variables).
+   ============================================================ */
+
+:root,
+[data-theme='modern'] {
+  /* ---------- Glass effect (per theme) ---------- */
+  --glass-enabled: 1;
+  --glass-blur: 14px;
+  --glass-opacity: 0.74;
+  --glass-bg: color-mix(in srgb, var(--bg-card) 74%, transparent);
+  --glass-border: color-mix(in srgb, #ffffff 55%, transparent);
+  --glass-highlight: linear-gradient(135deg, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0) 45%);
+  --glass-shadow: 0 8px 32px rgba(70, 65, 160, 0.1);
+  --glass-saturate: 1.4;
+
+  /* ---------- Brand logo (per theme) ---------- */
+  --logo-a: var(--c-primary);
+  --logo-a-2: var(--c-primary-hover);
+  --logo-b: var(--c-secondary);
+  --logo-b-2: var(--c-secondary);
+  --logo-metal: #94a3b8;
+  --logo-metal-2: #f1f5f9;
+  --logo-lock: var(--bg-card);
+  --logo-shield-fill: color-mix(in srgb, var(--c-primary) 8%, transparent);
+}
+
+[data-theme='dark'] {
+  --glass-enabled: 1;
+  --glass-blur: 18px;
+  --glass-opacity: 0.68;
+  --glass-bg: color-mix(in srgb, var(--bg-card) 68%, transparent);
+  --glass-border: color-mix(in srgb, #ffffff 14%, transparent);
+  --glass-highlight: linear-gradient(135deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0) 45%);
+  --glass-shadow: 0 10px 44px rgba(2, 2, 14, 0.6);
+  --glass-saturate: 1.3;
+
+  --logo-a: #7c3aed;
+  --logo-a-2: #8b5cf6;
+  --logo-b: #22d3ee;
+  --logo-b-2: #0ea5e9;
+  --logo-metal: #7b7b9c;
+  --logo-metal-2: #d3d3ea;
+  --logo-lock: #0a0a14;
+  --logo-shield-fill: rgba(124, 58, 237, 0.16);
+}
+
+[data-theme='light'] {
+  --glass-enabled: 1;
+  --glass-blur: 12px;
+  --glass-opacity: 0.82;
+  --glass-bg: color-mix(in srgb, #ffffff 82%, transparent);
+  --glass-border: rgba(255, 255, 255, 0.85);
+  --glass-highlight: linear-gradient(135deg, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0) 50%);
+  --glass-shadow: 0 8px 28px rgba(35, 45, 100, 0.1);
+  --glass-saturate: 1.2;
+
+  --logo-a: #4f46e5;
+  --logo-a-2: #6366f1;
+  --logo-b: #f59e0b;
+  --logo-b-2: #d97706;
+  --logo-metal: #a9b2c9;
+  --logo-metal-2: #ffffff;
+  --logo-lock: #f7f8fd;
+  --logo-shield-fill: rgba(79, 70, 229, 0.08);
+}
+
+[data-theme='classic'] {
+  /* Classic = familiar solid admin panel, no glass (Bible: no strong effects) */
+  --glass-enabled: 0;
+  --glass-blur: 0px;
+  --glass-opacity: 1;
+  --glass-bg: var(--bg-card);
+  --glass-border: var(--border);
+  --glass-highlight: none;
+  --glass-shadow: var(--shadow-sm);
+  --glass-saturate: 1;
+
+  --logo-a: #2f6bef;
+  --logo-a-2: #1d54e0;
+  --logo-b: #5e7191;
+  --logo-b-2: #46536b;
+  --logo-metal: #94a3b8;
+  --logo-metal-2: #e2e8f0;
+  --logo-lock: #ffffff;
+  --logo-shield-fill: rgba(47, 107, 239, 0.08);
+}
+
+[data-theme='gaming'] {
+  --glass-enabled: 1;
+  --glass-blur: 20px;
+  --glass-opacity: 0.62;
+  --glass-bg: color-mix(in srgb, var(--bg-card) 62%, transparent);
+  --glass-border: rgba(0, 240, 255, 0.35);
+  --glass-highlight: linear-gradient(135deg, rgba(0, 240, 255, 0.22), rgba(214, 17, 125, 0) 50%);
+  --glass-shadow: 0 0 34px rgba(0, 240, 255, 0.22), 0 12px 44px rgba(214, 17, 125, 0.16);
+  --glass-saturate: 1.7;
+
+  --logo-a: #00f0ff;
+  --logo-a-2: #00bedd;
+  --logo-b: #d6117d;
+  --logo-b-2: #a30d62;
+  --logo-metal: #6ea8bd;
+  --logo-metal-2: #d6fbff;
+  --logo-lock: #04060d;
+  --logo-shield-fill: rgba(0, 240, 255, 0.14);
+}
+
+

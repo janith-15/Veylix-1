@@ -1,0 +1,909 @@
+﻿/* ============================================================
+   VEYLIX VPN — UI component styles
+   Consumed by components under src/components/ui/*
+   ============================================================ */
+
+/* ---------- Button ---------- */
+.ui-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;                       /* --space-2 */
+  border-radius: var(--cmp-radius-button, var(--radius-sm));
+  font-weight: 600;
+  line-height: 1.2;
+  border: 0;
+  box-shadow: none;
+  transition:
+    filter var(--transition-fast),
+    background-color var(--transition-fast),
+    box-shadow var(--transition-fast);
+  white-space: nowrap;
+}
+.ui-btn:hover { filter: brightness(1.05); }
+.ui-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.ui-btn--primary {
+  background: var(--c-primary);
+  color: var(--c-primary-contrast, #fff);
+  box-shadow: var(--shadow-sm);
+}
+.ui-btn--secondary {
+  background: var(--c-secondary);
+  color: var(--c-secondary-contrast, #fff);
+  box-shadow: var(--shadow-sm);
+}
+.ui-btn--outline {
+  background: transparent;
+  color: var(--text);
+  border: var(--border-weight) solid var(--border-strong);
+}
+.ui-btn--ghost {
+  background: transparent;
+  color: var(--text);
+}
+.ui-btn--danger {
+  background: var(--error);
+  color: #fff;
+  box-shadow: var(--shadow-sm);
+}
+/* ---- Component spacing contract (single source for every primitive) ----
+   Every primitive uses these tokens so rhythm stays identical app-wide. */
+.ui-btn--sm { padding: 8px 12px; font-size: 13px; }
+.ui-btn--md { padding: 10px 16px; font-size: 14px; }
+.ui-btn--lg { padding: 12px 24px; font-size: 15px; }
+
+/* Spinner */
+.ui-spinner {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  animation: ui-spin 0.7s linear infinite;
+}
+.ui-spinner--sm { width: 13px; height: 13px; border-width: 2px; }
+@keyframes ui-spin { to { transform: rotate(360deg); } }
+
+/* ---------- Card ---------- */
+.ui-card {
+  background: var(--bg-card);
+  border: var(--border-weight) solid var(--border);
+  border-radius: var(--radius);
+  border-radius: var(--radius-card, var(--radius));
+  padding: var(--space-4);
+}
+/* Media/chart cards clip their own overflow; chart cards must stay visible
+   so absolutely-positioned tooltips are not cut off. */
+.ui-card--clip { overflow: hidden; }
+/* Tables and charts must never escape their card. */
+.ui-card:has(.ui-table-wrap),
+.ui-card:has(.ui-chart-root) { overflow: hidden; }
+.ui-card--hover:hover { box-shadow: var(--shadow-md); }
+.ui-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+.ui-card__title { font-weight: 600; font-size: 1rem; color: var(--text-strong); }
+
+/* ---------- Badge ---------- */
+.ui-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 9px;
+  border-radius: var(--cmp-radius-badge, 999px);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.5;
+  border: 1px solid transparent;
+}
+.ui-badge--default {
+  background: var(--bg-surface);
+  color: var(--text-muted);
+  border-color: var(--border);
+}
+.ui-badge--success { background: color-mix(in srgb, var(--success) 15%, transparent); color: var(--success); }
+.ui-badge--warning { background: color-mix(in srgb, var(--warning) 15%, transparent); color: var(--warning); }
+.ui-badge--error { background: color-mix(in srgb, var(--error) 15%, transparent); color: var(--error); }
+.ui-badge--info { background: color-mix(in srgb, var(--info) 15%, transparent); color: var(--info); }
+.ui-badge--primary { background: color-mix(in srgb, var(--c-primary) 15%, transparent); color: var(--c-primary); }
+
+/* ---------- Inputs ---------- */
+.ui-field { display: flex; flex-direction: column; gap: 6px; margin-bottom: var(--space-3); }
+.ui-field__label { font-size: 13px; font-weight: 600; color: var(--text); }
+.ui-field__hint { font-size: 12px; color: var(--text-muted); }
+.ui-field__error { font-size: 12px; color: var(--error); }
+.ui-input {
+  width: 100%;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  border: var(--border-weight) solid var(--border-strong);
+  background: var(--bg-input);
+  color: var(--text);
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+/* --- Native controls must follow the active theme -------------------------
+ *
+ * The date picker's calendar button, the number spinners and the scrollbars are
+ * drawn by the browser, not by us. Without `color-scheme` the UA paints them in
+ * LIGHT mode whatever the page looks like, so on a dark `--bg-input` (#191938)
+ * the calendar glyph is a near-black shape on a near-black field: invisible, and
+ * the field looks like it simply has no picker.
+ *
+ * Each preset declares its own scheme because the themes are not all the same
+ * brightness: `modern`, `light` and `classic` are light surfaces, while `dark`
+ * and `gaming` are dark.
+ */
+[data-theme='modern'],
+[data-theme='light'],
+[data-theme='classic'] {
+  color-scheme: light;
+}
+[data-theme='dark'],
+[data-theme='gaming'] {
+  color-scheme: dark;
+}
+
+/* Keep the picker affordance explicit and clickable in every browser.
+ * Chromium/WebKit draw `::-webkit-calendar-picker-indicator` themselves; making
+ * it a pointer and slightly translucent is enough now that `color-scheme` gets
+ * the colour right. */
+input[type='date'].ui-input,
+input[type='datetime-local'].ui-input,
+input[type='time'].ui-input {
+  /* Match the height of a text input so the column does not jump. */
+  min-height: 38px;
+  cursor: pointer;
+}
+input[type='date']::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  opacity: 0.85;
+}
+input[type='date']::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
+}
+/* Firefox shows its own icon; the field is still clickable across its width. */
+input[type='date'] {
+  cursor: pointer;
+}
+.ui-input:focus-visible {
+  outline: none;
+  border-color: var(--focus);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus) 25%, transparent);
+}
+.ui-input:disabled { opacity: 0.6; }
+textarea.ui-input { min-height: 90px; resize: vertical; }
+.ui-input--search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px;
+}
+.ui-input--search .ui-input__text {
+  border: none;
+  background: transparent;
+  color: var(--text);
+  flex: 1;
+  outline: none;
+  min-width: 0;
+}
+.ui-input--search .ui-input__text::placeholder { color: var(--text-muted); }
+.ui-input--error { border-color: var(--error) !important; }
+/* Select also carries the `ui-input` class in the JSX (plain CSS has no `composes`) */
+.ui-select { appearance: auto; }
+
+/* ---------- Table ---------- */
+.ui-table-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  border: var(--border-weight) solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-card);
+}
+.ui-table { width: 100%; min-width: 560px; border-collapse: collapse; font-size: 14px; }
+.ui-table th,
+.ui-table td {
+  padding: 10px 14px;
+  text-align: left;
+  border-bottom: var(--border-weight) solid var(--border);
+  white-space: nowrap;
+}
+.ui-table th {
+  background: var(--bg-surface);
+  color: var(--text-muted);
+  font-weight: 600;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  /*
+   * Sticky header (Phase C). A long server or client list scrolled past its own
+   * column names is the most common way a dense table becomes unreadable: the
+   * operator has to scroll back up to know what a column is. The wrap is the
+   * scroll container, so `top: 0` pins the header to it.
+   *
+   * The 2px bottom border is drawn with box-shadow rather than border-bottom
+   * because `border-collapse: collapse` drops a collapsed cell border once the
+   * cell is position:sticky in Chromium - the header would otherwise lose its
+   * divider the moment it pinned.
+   */
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  box-shadow: 0 2px 0 0 var(--border);
+}
+.ui-table tbody tr:last-child td { border-bottom: none; }
+.ui-table tbody tr:hover td { background: var(--bg-hover); }
+/* Numbers line up when they are tabular, so a column of byte counts or prices
+   can be compared by eye. Applies only to explicitly right-aligned columns -
+   the `align` the Column type already carries. */
+.ui-table td[style*='right'] { font-variant-numeric: tabular-nums; }
+
+/* A sticky actions edge: the primary controls must never scroll out of reach.
+   `background` matches the row so scrolled-under content cannot show through. */
+.ui-table .ui-table__cell--sticky {
+  position: sticky;
+  right: 0;
+  z-index: 1;
+}
+.ui-table td.ui-table__cell--sticky {
+  background: var(--bg-card);
+  box-shadow: -8px 0 12px -10px rgb(0 0 0 / 35%);
+}
+.ui-table th.ui-table__cell--sticky {
+  background: var(--bg-surface);
+  box-shadow: -8px 0 12px -10px rgb(0 0 0 / 35%);
+}
+.ui-table tbody tr:hover td.ui-table__cell--sticky { background: var(--bg-hover); }
+
+/* Narrow screens: drop the secondary columns instead of hiding the table
+   behind a horizontal scroll. */
+@media (max-width: 900px) {
+  .ui-table .ui-table__cell--hide-sm { display: none; }
+}
+
+/* ---------- Skeleton ---------- */
+.ui-skeleton {
+  position: relative;
+  overflow: hidden;
+  background: var(--bg-surface);
+  border-radius: var(--radius-sm);
+}
+.ui-skeleton::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--text-muted) 12%, transparent), transparent);
+  animation: ui-shimmer 1.4s infinite;
+}
+@keyframes ui-shimmer { 100% { transform: translateX(100%); } }
+
+/* ---------- Empty state ---------- */
+.ui-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-8) var(--space-4);
+  text-align: center;
+  color: var(--text-muted);
+}
+.ui-empty__icon {
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius);
+  background: var(--bg-surface);
+  color: var(--text-muted);
+  margin-bottom: var(--space-1);
+}
+/*
+ * The title is an <h2> so a screen reader gets a heading (an empty/not-found
+ * screen has no other one). These three lines remove the browser's heading
+ * defaults so the element renders exactly like the previous <div>.
+ */
+.ui-empty__title {
+  margin: 0;
+  font-size: inherit;
+  line-height: inherit;
+}
+
+/* ---------- Tabs ---------- */
+.ui-tabs {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  background: var(--bg-surface);
+  border-radius: var(--radius-sm);
+  border: var(--border-weight) solid var(--border);
+}
+.ui-tabs__item {
+  padding: 6px 14px;
+  border-radius: calc(var(--radius-sm) - 2px);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+  transition: background-color var(--transition-fast), color var(--transition-fast);
+}
+.ui-tabs__item:hover { color: var(--text); }
+.ui-tabs__item--active {
+  background: var(--bg-card);
+  color: var(--text-strong);
+  box-shadow: var(--shadow-sm);
+}
+
+/* ---------- Dialog ---------- */
+.ui-dialog-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: grid;
+  place-items: center;
+  z-index: var(--z-modal, 300);
+  padding: var(--space-4);
+}
+.ui-dialog {
+  width: min(560px, 100%);
+  max-height: 85vh;
+  overflow: auto;
+  background: var(--bg-card);
+  border: var(--border-weight) solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  padding: var(--space-6);
+}
+.ui-dialog__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+.ui-dialog__title { font-size: 1.15rem; font-weight: 700; color: var(--text-strong); }
+.ui-dialog__close {
+  color: var(--text-muted);
+  border-radius: var(--radius-sm);
+  padding: 4px;
+}
+.ui-dialog__close:hover { background: var(--bg-hover); color: var(--text); }
+.ui-dialog__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  margin-top: var(--space-6);
+}
+
+/* ---------- Toast viewport ---------- */
+.toast-viewport {
+  position: fixed;
+  bottom: var(--space-4);
+  right: var(--space-4);
+  z-index: var(--z-toast, 400);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  max-width: 360px;
+}
+.toast {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  background: var(--bg-card);
+  border-radius: var(--cmp-radius-toast, var(--radius-sm));
+  border-left-width: 4px;
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-md);
+  padding: 12px 14px;
+  animation: ui-toast-in 0.2s ease;
+}
+@keyframes ui-toast-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+.toast--success { border-left-color: var(--success); }
+.toast--info { border-left-color: var(--info); }
+.toast--warning { border-left-color: var(--warning); }
+.toast--error { border-left-color: var(--error); }
+.toast-icon { color: inherit; display: grid; place-items: center; }
+.toast--success .toast-icon { color: var(--success); }
+.toast--info .toast-icon { color: var(--info); }
+.toast--warning .toast-icon { color: var(--warning); }
+.toast--error .toast-icon { color: var(--error); }
+.toast-body { flex: 1; min-width: 0; }
+.toast-title { font-weight: 600; font-size: 14px; color: var(--text-strong); }
+.toast-message { font-size: 13px; color: var(--text-muted); margin-top: 2px; }
+.toast-close { color: var(--text-muted); padding: 2px; border-radius: var(--radius-sm); }
+.toast-close:hover { background: var(--bg-hover); color: var(--text); }
+
+
+/* ---------- Switch ---------- */
+.ui-switch {
+  position: relative;
+  display: inline-flex;
+  width: 42px;
+  height: 23px;
+  border-radius: 999px;
+  background: var(--border-strong);
+  border: none;
+  transition: background-color var(--transition-fast);
+  flex-shrink: 0;
+}
+.ui-switch[data-on='true'] { background: var(--c-primary); }
+.ui-switch__thumb {
+  position: absolute;
+  top: 2.5px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: var(--shadow-sm);
+  transition: transform var(--transition-fast);
+}
+.ui-switch[data-on='true'] .ui-switch__thumb { transform: translateX(18px); }
+
+/* ---------- Checkbox ---------- */
+.ui-checkbox {
+  accent-color: var(--c-primary);
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+}
+
+/* ---------- Tooltip ---------- */
+.ui-tooltip {
+  position: relative;
+  display: inline-flex;
+}
+.ui-tooltip__tip {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--text-strong);
+  color: var(--bg-card);
+  font-size: 12px;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--transition-fast);
+  z-index: var(--z-dropdown, 100);
+}
+.ui-tooltip:hover .ui-tooltip__tip,
+.ui-tooltip:focus-within .ui-tooltip__tip { opacity: 1; }
+
+/* ---------- Dropdown ---------- */
+.ui-dropdown { position: relative; display: inline-block; }
+/*
+ * The trigger is a real <button> (Dropdown.tsx), and it had NO styling, so it
+ * fell back to the UA default and could measure 0x0 inside a chat row — an
+ * invisible, unlabelled control. Every dropdown in the app now gets a real
+ * target: at least the 40px touch minimum, with the glyph centred inside.
+ */
+.ui-dropdown > button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 40px;
+  min-height: 40px;
+  padding: 0 var(--space-2);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+.ui-dropdown > button:hover { background: var(--bg-hover); }
+.ui-dropdown > button:focus-visible { outline: 2px solid var(--c-primary); outline-offset: 1px; }
+.ui-dropdown__menu {
+  /* Portal-mounted: fixed so it escapes every ancestor stacking context. */
+  position: fixed;
+  min-width: 180px;
+  background: var(--bg-card);
+  border: var(--border-weight) solid var(--border-strong);
+  border-radius: var(--cmp-radius-button, var(--radius-sm));
+  box-shadow: var(--elev-2, var(--shadow-md));
+  padding: var(--space-1);
+  z-index: var(--z-dropdown, 100);
+}
+.ui-dropdown__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  padding: 8px 10px;
+  border-radius: calc(var(--radius-sm) - 2px);
+  font-size: 14px;
+  color: var(--text);
+}
+.ui-dropdown__item:hover { background: var(--bg-hover); }
+.ui-dropdown__item--danger { color: var(--error); }
+.ui-dropdown__separator { height: 1px; background: var(--border); margin: 4px; }
+
+/* ---------- Metric card ---------- */
+.ui-metric {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.ui-metric__chart {
+  min-width: 0;
+  overflow: hidden;
+}
+.ui-metric__label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.ui-metric__value { font-size: 1.6rem; font-weight: 700; color: var(--text-strong); line-height: 1.1; }
+.ui-metric__delta { font-size: 13px; font-weight: 600; }
+.ui-metric__delta--up { color: var(--success); }
+.ui-metric__delta--down { color: var(--error); }
+
+/* A metric that opens the list behind its number: the affordance is quiet at
+   rest (the tile still reads as a figure first) and appears on hover/focus. */
+button.ui-metric--link {
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  border-radius: var(--radius);
+  transition: transform 120ms ease;
+}
+button.ui-metric--link:hover {
+  transform: translateY(-1px);
+}
+button.ui-metric--link:hover .ui-metric__label {
+  color: var(--text-strong);
+}
+button.ui-metric--link:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+/* ---------- Pagination ---------- */
+.ui-pagination {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: var(--space-3);
+}
+.ui-pagination__btn {
+  min-width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  color: var(--text);
+  border: var(--border-weight) solid var(--border);
+  background: var(--bg-card);
+}
+.ui-pagination__btn:hover { background: var(--bg-hover); }
+.ui-pagination__btn--active {
+  background: var(--c-primary);
+  color: var(--c-primary-contrast, #fff);
+  border-color: var(--c-primary);
+}
+.ui-pagination__btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ---------- Layout helpers ---------- */
+.ui-row { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
+.ui-row--spread { justify-content: space-between; }
+.ui-col { display: flex; flex-direction: column; gap: var(--space-2); }
+.ui-grid {
+  display: grid;
+  gap: var(--space-4);
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+}
+@media (max-width: 640px) {
+  .ui-grid { grid-template-columns: 1fr; }
+}
+.ui-muted { color: var(--text-muted); }
+.ui-strong { color: var(--text-strong); font-weight: 600; }
+.ui-mt-1 { margin-top: var(--space-4); }
+.ui-mt-2 { margin-top: var(--space-6); }
+.ui-text-right { text-align: right; }
+.ui-full { width: 100%; }
+
+/* ============================================================
+   Polish layer — motion, data type, elevation (theme tokens)
+   Appended last; [data-ui] skins in ui-themes.css still win
+   where they intentionally override these.
+   ============================================================ */
+
+/* Floating layers sit on the elevation ladder */
+.ui-dropdown__menu { box-shadow: var(--elev-2, var(--shadow-md)); }
+.ui-tooltip__tip { box-shadow: var(--elev-2, var(--shadow-md)); }
+.ui-dialog { box-shadow: var(--elev-3, var(--shadow-lg)); }
+.toast { box-shadow: var(--elev-3, var(--shadow-lg)); }
+
+/* Dialog enters with the shared easing (dropdown-style, subtle scale) */
+.ui-dialog { animation: ui-dialog-in var(--dur, 180ms) var(--ease, ease) both; }
+@keyframes ui-dialog-in {
+  from { opacity: 0; transform: translateY(6px) scale(0.985); }
+  to { opacity: 1; transform: none; }
+}
+.ui-dialog-overlay { background: color-mix(in srgb, #000 45%, transparent); }
+
+/* Fast, decelerating interactions on controls */
+.ui-tabs__item {
+  transition:
+    background-color var(--dur-fast, 120ms) var(--ease, ease),
+    color var(--dur-fast, 120ms) var(--ease, ease),
+    box-shadow var(--dur-fast, 120ms) var(--ease, ease),
+    border-color var(--dur-fast, 120ms) var(--ease, ease);
+}
+.ui-input {
+  transition:
+    border-color var(--dur-fast, 120ms) var(--ease, ease),
+    box-shadow var(--dur-fast, 120ms) var(--ease, ease),
+    background-color var(--dur-fast, 120ms) var(--ease, ease);
+}
+.ui-input:hover { border-color: var(--border-strong); }
+
+/* Data reads better with fixed-width numerals */
+.ui-metric__value,
+.ui-metric__delta,
+.ui-table td,
+.ui-table th,
+.ui-badge,
+.ui-pagination__btn {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Gentle global row hover (theme skins override with their own tint) */
+.ui-table tbody tr { transition: background-color var(--dur-fast, 120ms) var(--ease, ease); }
+:where(.ui-table tbody tr:hover) td { background: color-mix(in srgb, var(--c-primary) 5%, transparent); }
+
+/* ---------- Page header (standard for every page) ---------- */
+.ui-page-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+.ui-page-head__title { font-size: 1.35rem; margin: 0; }
+.ui-page-head__subtitle { margin: 2px 0 0; font-size: 13px; color: var(--text-muted); }
+.ui-page-head__actions { display: flex; align-items: center; gap: var(--space-2); }
+
+/* ---------- Premium button treatment (Stripe/Linear-style) ---------- */
+/* Top-light gradient on the solid primary — skins that override the
+   background (glass solid, neon outline) are unaffected. */
+.ui-btn--primary {
+  background-image: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--c-primary) 86%, #ffffff 14%) 0%,
+    var(--c-primary) 52%,
+    color-mix(in srgb, var(--c-primary) 90%, #000000 10%) 100%
+  );
+}
+.ui-btn--secondary:hover { background: var(--c-secondary-hover, color-mix(in srgb, var(--c-secondary) 86%, #000000 14%)); }
+.ui-btn:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+/* Sortable table headers */
+.ui-table__sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  font-weight: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+.ui-table__sort-arrow { font-size: 10px; opacity: 0.35; transition: transform var(--dur-fast, 120ms) var(--ease, ease); }
+.ui-table__sort-arrow[data-dir='asc'] { opacity: 1; transform: none; }
+.ui-table__sort-arrow[data-dir='desc'] { opacity: 1; transform: rotate(180deg); }
+
+/* Skeleton shimmer (sweep instead of blink) */
+.ui-skeleton {
+  background-image: linear-gradient(100deg, var(--bg-surface) 32%, var(--bg-hover) 50%, var(--bg-surface) 68%);
+  background-size: 220% 100%;
+  animation: ui-skeleton-sweep 1.4s linear infinite;
+}
+@keyframes ui-skeleton-sweep {
+  from { background-position: 170% 0; }
+  to { background-position: -70% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ui-skeleton { animation: none; }
+}
+
+/* Toast exit */
+.toast--leaving { animation: ui-toast-out 180ms var(--ease, ease) forwards; }
+@keyframes ui-toast-out {
+  to { opacity: 0; transform: translateY(6px) scale(0.97); }
+}
+
+/* ============================================================
+   Motion / micro-interaction system (research: Rauno, Josh Comeau)
+   Every interaction uses transform + opacity (GPU-composited).
+   All respect prefers-reduced-motion via global guard in base.css.
+   ============================================================ */
+
+/* Button press feedback — tactile, springs back */
+.ui-btn {
+  touch-action: manipulation;
+  transition:
+    transform 100ms var(--ease, ease),
+    box-shadow 100ms var(--ease, ease),
+    background-color 100ms var(--ease, ease),
+    color 100ms var(--ease, ease);
+}
+.ui-btn:hover { transform: translateY(-1px); }
+.ui-btn:active { transform: translateY(1px) scale(0.97); }
+.ui-btn:disabled { transform: none; }
+
+/* Card hover elevation — subtle lift with shadow grow */
+.ui-card--hover {
+  transition:
+    transform var(--dur-fast, 120ms) var(--ease, ease),
+    box-shadow var(--dur, 180ms) var(--ease, ease),
+    border-color var(--dur-fast, 120ms) var(--ease, ease);
+  will-change: transform;
+}
+.ui-card--hover:hover { transform: translateY(-2px); }
+
+/* Staggered child entrance — each child reveals 50ms after the previous */
+@keyframes stagger-rise {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: none; }
+}
+.stagger > * {
+  animation: stagger-rise var(--dur-entrance, 320ms) var(--ease-entrance, ease) both;
+}
+.stagger > *:nth-child(1) { animation-delay: 0ms; }
+.stagger > *:nth-child(2) { animation-delay: var(--dur-stagger, 50ms); }
+.stagger > *:nth-child(3) { animation-delay: calc(var(--dur-stagger, 50ms) * 2); }
+.stagger > *:nth-child(4) { animation-delay: calc(var(--dur-stagger, 50ms) * 3); }
+.stagger > *:nth-child(5) { animation-delay: calc(var(--dur-stagger, 50ms) * 4); }
+.stagger > *:nth-child(6) { animation-delay: calc(var(--dur-stagger, 50ms) * 5); }
+@media (prefers-reduced-motion: reduce) {
+  .stagger > * { animation: none; }
+}
+
+/* Scroll-triggered reveal (adds .revealed class via IntersectionObserver) */
+.reveal {
+  opacity: 0;
+  transform: translateY(16px);
+  transition:
+    opacity var(--dur-entrance, 320ms) var(--ease-entrance, ease),
+    transform var(--dur-entrance, 320ms) var(--ease-entrance, ease);
+}
+.reveal.revealed {
+  opacity: 1;
+  transform: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .reveal { opacity: 1; transform: none; transition: none; }
+}
+
+/* Input focus ring — premium two-layer glow */
+.ui-input:focus-within,
+.ui-input:focus {
+  border-color: var(--c-primary);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--c-primary) 30%, transparent),
+    0 0 0 4px var(--tint-primary, color-mix(in srgb, var(--c-primary) 14%, transparent));
+}
+
+/* Label color shift on focus (premium form detail) */
+.ui-field:focus-within .ui-field__label { color: var(--c-primary); }
+
+/* Notification unread dot — subtle pulse */
+@keyframes unread-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+.notif-modal__unread {
+  animation: unread-pulse 2s ease infinite;
+}
+
+/* Page transition — content rises in on route change */
+.app-content > * {
+  animation: page-rise var(--dur-entrance, 320ms) var(--ease-entrance, ease) both;
+}
+@keyframes page-rise {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .app-content > * { animation: none; }
+}
+
+
+
+
+
+/* Async state: one presentation for loading / failed / empty.
+   The failure row is a real panel, not a coloured sentence, because it carries
+   an action (Try again) and must read as recoverable rather than terminal. */
+.ui-async {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 18px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--bg-surface);
+}
+.ui-async--error {
+  border-color: color-mix(in srgb, var(--error) 35%, var(--border));
+  background: color-mix(in srgb, var(--error) 7%, var(--bg-surface));
+  color: var(--text);
+}
+.ui-async--error > svg {
+  color: var(--error);
+  flex: none;
+}
+.ui-async__body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+}
+.ui-async__body span { font-size: 12.5px; }
+
+/* Bulk selection: the checkbox column stays narrow and quiet, the selected row is
+   tinted so a 25-row page still shows what is in scope at a glance. */
+.ui-table__check {
+  width: 40px;
+  padding-left: 4px !important;
+  padding-right: 0 !important;
+  text-align: center;
+}
+.ui-table__check input {
+  width: 15px;
+  height: 15px;
+  cursor: pointer;
+  accent-color: var(--c-primary);
+}
+.ui-table tbody tr[data-selected='true'] {
+  background: var(--tint-primary);
+}
+.ui-selection {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 10px 14px;
+  margin-bottom: 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid color-mix(in srgb, var(--c-primary) 32%, var(--border));
+  background: color-mix(in srgb, var(--c-primary) 8%, var(--bg-surface));
+}
+.ui-selection__count { font-size: 13px; }
+.ui-selection__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  flex-wrap: wrap;
+}

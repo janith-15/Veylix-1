@@ -1,0 +1,99 @@
+/* ---------------------------------------------------------------------------
+ * Profile page (D-041): tabs, inline field rows, avatar image and notices.
+ * Everything reads design tokens, so the page follows the active theme.
+ * ------------------------------------------------------------------------- */
+
+.prof-tabs {
+  display: flex;
+  gap: 6px;
+  padding: 5px;
+  border-radius: var(--radius);
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  width: fit-content;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.prof-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.prof-tab:hover { color: var(--text); }
+
+.prof-tab.is-active {
+  color: var(--c-primary);
+  background: var(--tint-primary, rgba(91, 91, 214, 0.14));
+}
+
+/* Two fields side by side on a wide screen, stacked on a phone. */
+.prof-inline {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 12px;
+}
+
+.prof-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+
+.prof-note {
+  margin: 12px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+/* A failed save is stated above the form, not only next to one input. */
+.prof-alert {
+  margin: 0;
+  padding: 10px 13px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  color: var(--error);
+  background: color-mix(in srgb, var(--error) 10%, var(--bg-card));
+  border: 1px solid color-mix(in srgb, var(--error) 30%, transparent);
+}
+
+/* An uploaded avatar is cropped to the same circle as the initial. */
+.prof-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: inherit;
+  display: block;
+}
+
+/* Multi-line bio. */
+.ui-textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--bg-input);
+  color: var(--text);
+  font: inherit;
+  font-size: 13.5px;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.ui-textarea:focus {
+  outline: none;
+  border-color: var(--c-primary);
+  box-shadow: 0 0 0 3px var(--tint-primary, rgba(91, 91, 214, 0.14));
+}

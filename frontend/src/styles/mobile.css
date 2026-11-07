@@ -1,0 +1,115 @@
+/* ============================================================
+   Phone (≤480px): the smallest screens the product supports.
+
+   Measured, not guessed: at 390px every visible control was under the
+   44×44 minimum (menu 36×36, buttons 34px tall, inputs 41px), and a data
+   table scrolled sideways rather than reflowing. A thumb needs a bigger
+   target than a cursor, and a table that scrolls horizontally hides the
+   column that matters — usually the one with the action on it.
+
+   Rules here are additive and override by later position, so a theme that
+   sets its own sizes still wins on desktop.
+   ============================================================ */
+@media (max-width: 480px) {
+  /* Touch targets. 44px is the smallest reliable thumb target (WCAG 2.5.5). */
+  .ui-btn--sm,
+  .ui-btn--md {
+    min-height: 44px;
+    padding: 10px 14px;
+  }
+  .ui-input {
+    min-height: 44px;
+    font-size: 16px; /* below 16px iOS zooms the whole page on focus */
+  }
+  .app-mobile-toggle,
+  .app-topbar__icon,
+  .app-topbar button {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  /* Tables reflow into stacked cards. Each cell keeps its header as a label so a
+     value is never shown without the column that explains it. */
+  .ui-table-wrap {
+    overflow-x: visible;
+  }
+  /* The desktop rule is `min-width: 560px` so columns cannot crush; on a phone that
+     is exactly what forces a sideways scroll, so it has to be released here. */
+  .ui-table {
+    min-width: 0;
+  }
+  .ui-table,
+  .ui-table thead,
+  .ui-table tbody,
+  .ui-table tr,
+  .ui-table th,
+  .ui-table td {
+    display: block;
+    width: auto;
+  }
+  .ui-table thead {
+    /* The header row becomes per-cell labels below, so the strip is redundant. */
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+  }
+  .ui-table tbody tr {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    margin-bottom: 10px;
+    padding: 10px 12px;
+    background: var(--bg-card);
+  }
+  .ui-table td {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 6px 0 !important;
+    border: 0;
+    text-align: left !important;
+  }
+  .ui-table td::before {
+    content: attr(data-label);
+    flex: none;
+    max-width: 45%;
+    color: var(--text-muted);
+    font-size: 12px;
+    padding-top: 2px;
+  }
+  .ui-table td.ui-table__check {
+    justify-content: flex-start;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 4px;
+    padding-bottom: 8px !important;
+  }
+  .ui-table td.ui-table__check::before {
+    content: 'Select';
+  }
+  /* Nothing is "hidden on mobile" now that each row is a card: hiding a field
+     there would silently drop information the operator came for. */
+  .ui-table__cell--hide-sm {
+    display: flex !important;
+  }
+  .ui-table__cell--sticky {
+    position: static;
+  }
+
+  /* Filters stack instead of squeezing into a grid. */
+  .cl-filters {
+    grid-template-columns: 1fr !important;
+  }
+  .cl-filters__search {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  /* Page headers keep their action reachable rather than pushing it off-screen. */
+  .ui-page-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+}

@@ -1,0 +1,168 @@
+@import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
+
+@layer base {
+  :root {
+    --primary-color: #10b981;
+    --accent-color: #059669;
+    --bg-dark: #091511;
+    --card-bg: #0f241d;
+    --surface-bg: #133026;
+  }
+}
+
+/* -------------------------------------------------------------
+ * Dynamic Color Harmony & Light Mode Inversion
+ * Adapts neutral-900 / neutral-950 cards and text seamlessly
+ * ------------------------------------------------------------- */
+html:not(.dark) {
+  color-scheme: light;
+}
+
+html:not(.dark) body {
+  background-color: #f8fafc !important;
+  color: #0f172a !important;
+}
+
+/* Light mode card surface harmony */
+html:not(.dark) .bg-neutral-900,
+html:not(.dark) .bg-neutral-900\/90,
+html:not(.dark) .bg-neutral-900\/80,
+html:not(.dark) .bg-neutral-900\/70,
+html:not(.dark) .bg-neutral-900\/50 {
+  background-color: rgba(255, 255, 255, 0.94) !important;
+  border-color: rgba(226, 232, 240, 0.9) !important;
+  box-shadow: 0 4px 14px -2px rgba(15, 23, 42, 0.05);
+}
+
+html:not(.dark) .bg-neutral-950,
+html:not(.dark) .bg-neutral-950\/85,
+html:not(.dark) .bg-neutral-950\/80,
+html:not(.dark) .bg-neutral-950\/70,
+html:not(.dark) .bg-neutral-950\/60,
+html:not(.dark) .bg-neutral-950\/40 {
+  background-color: rgba(248, 250, 252, 0.96) !important;
+  border-color: rgba(226, 232, 240, 0.8) !important;
+}
+
+html:not(.dark) .border-neutral-800,
+html:not(.dark) .border-neutral-800\/80,
+html:not(.dark) .border-neutral-800\/60 {
+  border-color: #e2e8f0 !important;
+}
+
+/* Light mode text contrast fixes */
+html:not(.dark) .text-white {
+  color: #0f172a !important;
+}
+
+html:not(.dark) .text-neutral-200,
+html:not(.dark) .text-neutral-300 {
+  color: #1e293b !important;
+}
+
+html:not(.dark) .text-neutral-400 {
+  color: #64748b !important;
+}
+
+html:not(.dark) .text-neutral-500 {
+  color: #94a3b8 !important;
+}
+
+html:not(.dark) input,
+html:not(.dark) select,
+html:not(.dark) textarea {
+  background-color: #ffffff !important;
+  border-color: #cbd5e1 !important;
+  color: #0f172a !important;
+}
+
+html:not(.dark) input::placeholder,
+html:not(.dark) textarea::placeholder {
+  color: #94a3b8 !important;
+}
+
+html:not(.dark) .hover\:bg-neutral-800:hover,
+html:not(.dark) .hover\:bg-neutral-800\/60:hover,
+html:not(.dark) .hover\:bg-neutral-800\/90:hover {
+  background-color: #f1f5f9 !important;
+}
+
+/* Background animation keyframes */
+@keyframes orbFloatSlow {
+  0%, 100% {
+    transform: translate(0px, 0px) scale(1);
+  }
+  33% {
+    transform: translate(30px, -40px) scale(1.08);
+  }
+  66% {
+    transform: translate(-25px, 25px) scale(0.95);
+  }
+}
+
+@keyframes cyberGridScroll {
+  0% {
+    background-position: 0 0;
+  }
+  100% {
+    background-position: 40px 40px;
+  }
+}
+
+@keyframes auroraWave {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+@keyframes crtScanline {
+  0% {
+    transform: translateY(-100%);
+  }
+  100% {
+    transform: translateY(1000%);
+  }
+}
+
+.animate-orb-slow {
+  animation: orbFloatSlow 18s ease-in-out infinite;
+}
+
+.animate-orb-reverse {
+  animation: orbFloatSlow 22s ease-in-out infinite reverse;
+}
+
+.animate-grid-scroll {
+  animation: cyberGridScroll 20s linear infinite;
+}
+
+.animate-aurora {
+  background-size: 200% 200%;
+  animation: auroraWave 12s ease infinite;
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(160, 160, 160, 0.2);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(160, 160, 160, 0.4);
+}

@@ -1,0 +1,328 @@
+/* ---------------------------------------------------------------------------
+ * Client management console (D-042): filters, client cells, detail facts.
+ * All values read design tokens, so the console follows the active theme.
+ * ------------------------------------------------------------------------- */
+
+.cl-alert {
+  margin: 0;
+  padding: 10px 13px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  color: var(--error);
+  background: color-mix(in srgb, var(--error) 10%, var(--bg-card));
+  border: 1px solid color-mix(in srgb, var(--error) 30%, transparent);
+}
+
+/* Filters wrap rather than scroll: a hidden filter looks like a missing feature. */
+.cl-filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(165px, 1fr));
+  gap: 10px 12px;
+  align-items: end;
+}
+
+.cl-filters__search {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 8px;
+  align-items: end;
+}
+
+.cl-filters__search > *:first-child {
+  flex: 1;
+}
+
+/* A client row: avatar + name on one line, identifiers beneath. */
+.cl-cell {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  text-decoration: none;
+  color: inherit;
+}
+
+.cl-cell__text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.cl-cell__sub {
+  font-size: 11.5px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+
+.cl-avatar {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 700;
+  background: var(--tint-primary, rgba(91, 91, 214, 0.14));
+  color: var(--c-primary);
+  flex: 0 0 auto;
+}
+
+.cl-avatar--lg {
+  width: 56px;
+  height: 56px;
+  font-size: 20px;
+}
+
+.cl-avatar__img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.cl-tag {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 5px;
+  background: var(--bg-surface);
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.cl-tag--warn {
+  background: color-mix(in srgb, var(--warning) 14%, transparent);
+  color: var(--warning);
+}
+
+.cl-free {
+  font-variant-numeric: tabular-nums;
+}
+
+.cl-open {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--c-primary);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.cl-open:hover {
+  text-decoration: underline;
+}
+
+.cl-note {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+/* Detail page: identity block and the two-up facts grid. */
+.cl-identity {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.cl-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 10px 20px;
+  margin: 0;
+  flex: 1;
+  min-width: 240px;
+}
+
+.cl-facts--single {
+  grid-template-columns: 1fr;
+}
+
+.cl-facts > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.cl-facts dt {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+.cl-facts dd {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.cl-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 14px;
+}
+
+.cl-inline {
+  display: flex;
+  gap: 10px;
+  align-items: end;
+  flex-wrap: wrap;
+}
+
+.cl-code {
+  font-size: 11.5px;
+  padding: 1px 5px;
+  border-radius: 5px;
+  background: rgba(0, 0, 0, 0.06);
+}
+
+/* A tiny bar chart for FREE claims. Height is a percentage of the tallest bar, so
+   the shape is honest even when every value is small. */
+.cl-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  height: 130px;
+  padding: 4px 2px 0;
+}
+
+.cl-bar {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  height: 100%;
+  gap: 4px;
+}
+
+.cl-bar__value {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.cl-bar__fill {
+  width: 100%;
+  max-width: 38px;
+  min-height: 2px;
+  border-radius: 6px 6px 2px 2px;
+  background: var(--c-primary);
+  opacity: 0.85;
+}
+
+.cl-bar__label {
+  font-size: 10.5px;
+  color: var(--text-muted);
+}
+
+/* A statement, not an error: "N VPNs could not be read" is information. */
+.cl-alert--soft {
+  color: var(--warning);
+  background: color-mix(in srgb, var(--warning) 10%, var(--bg-card));
+  border-color: color-mix(in srgb, var(--warning) 30%, transparent);
+}
+
+
+/* A staff row opens the detail panel below the table, so the name is a button. */
+.cl-cell--btn {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+
+.cl-cell--btn:hover .ui-strong { text-decoration: underline; }
+
+.cl-actions {
+  display: inline-flex;
+  gap: 10px;
+}
+
+.cl-inline--wrap { flex-wrap: wrap; }
+
+/* The one-time password: large, selectable, impossible to miss. */
+.cl-once {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: var(--tint-primary, rgba(91, 91, 214, 0.12));
+  border: 1px dashed var(--c-primary);
+  font-size: 16px;
+  user-select: all;
+}
+
+.cl-once code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+
+/* ---------- VPN console: server picker + assign picker ---------- */
+/*
+ * A server is a card you click, not a filter you type. The owner asked to
+ * organise VPNs per server and open one server whole, so the entry point is a
+ * target big enough to hit and it carries its own "showing" state.
+ */
+.cl-server-pick {
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+  border: 1px solid var(--border);
+  transition: border-color var(--dur-fast, 120ms) var(--ease, ease);
+}
+.cl-server-pick:hover { border-color: var(--c-primary); }
+.cl-server-pick.is-active {
+  border-color: var(--c-primary);
+  box-shadow: inset 0 0 0 1px var(--c-primary);
+}
+
+/* The assign dialog lists real customers; each row is one button. */
+.cl-pick-list { width: 100%; }
+.cl-pick {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm, 8px);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.cl-pick:hover { background: var(--bg-surface); }
+.cl-pick.is-active {
+  border-color: var(--c-primary);
+  background: var(--tint-primary, rgba(91, 91, 214, 0.12));
+}
+.cl-pick__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  flex: 0 0 26px;
+  border-radius: 999px;
+  background: var(--bg-surface);
+  color: var(--text-muted);
+}
+.cl-pick.is-active .cl-pick__icon { color: var(--c-primary); }

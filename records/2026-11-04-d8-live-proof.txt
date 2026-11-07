@@ -1,0 +1,13 @@
+server ready on http://127.0.0.1:18297
+super admin signed in
+
+--- 1. hwids for a server that does not exist (must NOT be 200) ---
+   status = 503  (want 5xx, never 200 with an empty list)
+
+--- 2. delete a device on a missing server (must NOT be 204) ---
+   status = 503  (want 5xx, never 204)
+
+--- 3. anonymous access (must be 401) ---
+   status = 401  (want 401)
+
+server stopped; temp dir removed

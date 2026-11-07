@@ -1,0 +1,29 @@
+/* QR code — a plain block so it sits in any card without disturbing the layout.
+   The white background is deliberate: a scanner needs contrast, and the theme's
+   surfaces are translucent. */
+.qr {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+  border-radius: var(--radius);
+  background: #ffffff;
+  box-shadow: var(--shadow-sm);
+  line-height: 0;
+}
+
+.qr svg {
+  display: block;
+  border-radius: 4px;
+}
+
+.qr--error {
+  max-width: 220px;
+  padding: 14px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  text-align: center;
+  color: var(--text-muted);
+  background: var(--bg-surface);
+  box-shadow: none;
+}

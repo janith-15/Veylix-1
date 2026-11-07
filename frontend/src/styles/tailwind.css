@@ -1,0 +1,96 @@
+/* ============================================================
+   Tailwind CSS v4 — token-mapped theme layer
+   Utilities read OUR design tokens, so switching theme / sub-theme
+   instantly recolours every Tailwind class (no hard-coded hexes).
+   Preflight is intentionally skipped: styles/base.css owns the reset.
+
+   NOTE: `@theme` is a Tailwind CSS v4 at-rule (not plain CSS). It is
+   processed by the @tailwindcss/vite plugin and compiled away in the
+   build output. Editors without the Tailwind extension may report
+   "Unknown at rule @theme" — that is a false positive; see the
+   "css.lint.unknownAtRules" setting in .vscode/settings.json.
+   ============================================================ */
+@import 'tailwindcss/theme' layer(theme);
+@import 'tailwindcss/utilities' layer(utilities);
+
+@theme {
+  /* Spacing scale — 4px base, identical to --space-* tokens.
+     p-1=4  p-2=8  p-3=12  p-4=16  p-5=20  p-6=24  p-8=32  p-10=40 */
+  --spacing: 0.25rem;
+
+  /* Surfaces */
+  --color-primary: var(--c-primary);
+  --color-primary-hover: var(--c-primary-hover);
+  --color-primary-contrast: var(--c-primary-contrast);
+  --color-secondary: var(--c-secondary);
+  --color-secondary-contrast: var(--c-secondary-contrast);
+
+  --color-page: var(--bg-page);
+  --color-sidebar: var(--bg-sidebar);
+  --color-card: var(--bg-card);
+  --color-surface: var(--bg-surface);
+  --color-input: var(--bg-input);
+  --color-hover: var(--bg-hover);
+
+  /* Text */
+  --color-text: var(--text);
+  --color-muted: var(--text-muted);
+  --color-strong: var(--text-strong);
+
+  /* Lines + states */
+  --color-line: var(--border);
+  --color-line-strong: var(--border-strong);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-error: var(--error);
+  --color-info: var(--info);
+
+  /* Radii follow the Theme Studio */
+  --radius-card: var(--radius-card, var(--radius));
+  --radius-card-lg: var(--radius-card-lg, var(--radius-lg));
+  --radius-btn: var(--cmp-radius-button, var(--radius-sm));
+  --radius-badge: var(--cmp-radius-badge, 999px);
+
+  /* Motion */
+  --ease-out-soft: var(--ease-entrance, cubic-bezier(0.16, 1, 0.3, 1));
+  --ease-standard: var(--ease, cubic-bezier(0.2, 0.8, 0.2, 1));
+}
+
+/* ---- Small semantic helpers used across pages ---- */
+@layer utilities {
+  .surface-card {
+    background: var(--bg-card);
+    border: var(--border-weight) solid var(--border);
+    border-radius: var(--radius-card, var(--radius));
+  }
+  .text-balance { text-wrap: balance; }
+  .tabular { font-variant-numeric: tabular-nums; }
+  .scroll-x { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+  /* ---------------------------------------------------------------
+     Type and rhythm utilities (D-059).
+
+     155 inline `style={{ fontSize: 12.5 }}` / `style={{ margin: '10px 0' }}`
+     attributes bypassed the theme entirely: changing the type scale in Theme Studio
+     could not reach them, and every one was a hard-coded pixel that ignored the
+     `--font-size-scale` token.
+
+     These classes read tokens, so a theme change reaches them, and they are the exact
+     values the inline styles used — the visual result is identical by construction.
+     --------------------------------------------------------------- */
+  .t-xs { font-size: calc(11px * var(--font-size-scale, 1)); }
+  .t-sm { font-size: calc(12px * var(--font-size-scale, 1)); }
+  .t-sm2 { font-size: calc(12.5px * var(--font-size-scale, 1)); }
+  .t-base { font-size: calc(13px * var(--font-size-scale, 1)); }
+
+  /* Vertical rhythm between blocks, using the 4px spacing token. */
+  .rhythm { margin: 10px 0; }
+  .rhythm-tight { margin: 6px 0; }
+  .rhythm-loose { margin: 12px 0; }
+  .flow-top { margin-top: 10px; }
+  .flow-top-3 { margin-top: 12px; }
+  .flow-top-0 { margin-top: 0; }
+  .no-underline { text-decoration: none; }
+  .no-underline:hover { text-decoration: none; }
+}
+

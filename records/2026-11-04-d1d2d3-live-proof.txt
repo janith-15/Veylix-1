@@ -1,0 +1,22 @@
+server ready on http://127.0.0.1:18299 (db: C:\Users\Dhanu\AppData\Local\Temp\veylix-e2e-bcba828f)
+
+--- 1. bootstrap (creates "Nimal Perera") ---
+   role = super_admin
+
+--- 2. GET /api/me  (D1/D2: display_name + created_at) ---
+{"created_at":1793809797,"display_name":"Nimal Perera","email":"nimal@e2e.test","email_verified":true,"id":1,"role":"super_admin"}
+   display_name = 'Nimal Perera'   (want 'Nimal Perera')
+   created_at   = 1793809797   (want a Unix timestamp)
+   email_verified = True
+
+--- 3. two more sign-ins, then logout-others (D3) ---
+   three sessions signed in
+   ended = 2   (want 2)
+   caller  : 200 still signed in
+   device2 : 401 ended
+   device3 : 401 ended
+
+--- 4. anonymous logout-others must be refused ---
+   anonymous : 401 (want 401)
+
+server stopped; temp dir removed

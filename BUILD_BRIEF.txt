@@ -1,0 +1,763 @@
+=========================================================================
+BUILD BRIEF - {{APP_NAME}}
+A complete specification prompt for building a new app modelled on the
+VEYLIX architecture (reviewed 2026-11-04).
+=========================================================================
+
+HOW TO USE THIS FILE
+--------------------
+1. Copy this file into the new project's root as BUILD_BRIEF.txt.
+2. Replace every {{...}} placeholder with your own values (Section Q).
+3. Paste the ENTIRE file as the first message of a fresh Cline session
+   (or keep it in the repo and say "read BUILD_BRIEF.txt and start S0").
+4. Nothing in here is optional. If a section does not apply, it must be
+   explicitly struck out in docs/DECISIONS.md with D-xxx and a reason.
+
+Working language: Sinhala + English mix (Sinhala for explanation, English
+for every identifier, file name, command, endpoint and technical term).
+
+SINHALA GUIDE (කෙටියෙන්)
+------------------------
+- මේ file එක අලුත් project එකේ root එකට copy කරන්න (BUILD_BRIEF.txt).
+- Section Q එකේ {{...}} ඔක්කොම ඔයාගේ අලුත් app එකේ විස්තර වලින් replace කරන්න.
+- ඊට පස්සේ මේ file එකේ **සම්පූර්ණයෙන්ම** Cline එකට paste කරන්න (නැත්නම්
+  "read BUILD_BRIEF.txt and start S0" කියන්න).
+- Section A2 එකේ invariants 10 **කිසිම දෙයක් අඩු කරන්නේ නෑ**. ඒවා බිඳෙනවා නම්
+  build එක වැරදියි, compile වුනත්.
+- Section N එකේ S0 -> S8 පිළිවෙළට යන්න; හැම stage එකකින් පස්සේ Section J gates
+  green වෙන්න ඕන. එකක් fail නම් ඊළඟට යන්නේ නෑ.
+- Section M එකේ docs 8 විතරයි. Bible / ledger / gap analysis වගේ අනවශ්‍ය
+  documents හදන්නේ නෑ.
+
+=========================================================================
+SECTION A - MISSION AND NON-NEGOTIABLE RULES
+=========================================================================
+
+A1. WHAT YOU ARE BUILDING
+{{APP_NAME}} is {{ONE_LINE_PRODUCT_STATEMENT}}.
+(Example shape: "a self-hosted VPN reseller platform where 3X-UI is the
+source of truth and the app adds accounts, resellers, quotas, payments and
+support chat on top".)
+
+Target deployment: a very small server - 1 vCPU, 512 MB RAM, one SQLite
+file on local disk, one Go binary serving both API and UI on one port.
+This is a design requirement, not an aspiration: every feature must be
+justified against that budget.
+
+A2. THE TEN NON-NEGOTIABLE INVARIANTS
+Break any of these and the build is wrong, even if it compiles.
+
+ 1. THE EXTERNAL SYSTEM IS THE SOURCE OF TRUTH.
+    Every write to the external system follows: write -> fresh read back
+    -> confirm -> only then write the local record. Never insert the local
+    row first and hope the remote call succeeds. A provisional row may
+    exist inside a transaction, but it must be rolled back if the remote
+    call fails (no orphan resource, no orphan assignment, quota released).
+
+ 2. AMBIGUOUS WRITES ARE RECORDED ONCE.
+    Any remote write that can time out mid-flight goes into an outbox table
+    with UNIQUE(integration_id, op, idempotency_key). A background
+    reconciler executes and confirms it. A retried user action can never
+    create a second remote object.
+
+ 3. THE REMOTE SYSTEM WINS EVERY CONFLICT.
+    Limits, expiry, enable/disable state and usage are mirrored FROM the
+    remote system on every sync. The app never derives a live limit from an
+    offer, a plan, or a cached value. A limit changed by hand in the remote
+    panel must appear in the app on the next tick, and the app must say when
+    the mirror last changed.
+
+ 4. NEVER CLAIM A REMOTE EFFECT YOU DID NOT VERIFY.
+    "Suspended", "revoked", "created" are words that may only be shown
+    after a verified remote response. If the call failed, the UI says the
+    call failed - it does not optimistically show success.
+
+ 5. NO SSRF, NO CREDENTIAL LEAK THROUGH THE BACK DOOR.
+    Outbound calls to user-supplied base URLs pass a guard: reject
+    loopback, private ranges (10/8, 172.16/12, 192.168/16, 169.254/16,
+    ::1, fc00::/7), link-local and cloud metadata addresses unless the
+    address is explicitly allowlisted by a super admin. Redirects are not
+    followed blindly. Every outbound request has a hard timeout.
+
+ 6. QUOTAS ARE COUNTED INSIDE A TRANSACTION.
+    Concurrent claims/sales cannot exceed a cap. Counting happens in the
+    same transaction as the insert, and a failed remote write releases the
+    count. Never "check then insert" in two separate steps.
+
+ 7. SECRETS NEVER LEAVE THE SERVER.
+    Remote tokens, URLs with embedded credentials, client UUIDs/passwords,
+    signing keys and session keys must never appear in frontend code, in
+    browser storage, in a public API response, in Git, in logs, in error
+    messages, in test snapshots or in docs. Redact every error path. Sealed
+    secrets live in a BLOB column (there is no plaintext column to put them
+    in) and are sealed with AES-256-GCM using a 32-byte key from env.
+
+ 8. EVERY PRIVILEGED ACTION IS AUDITED.
+    Actor, action, target, result, timestamp and non-secret context, in an
+    append-only table. Refusals are audited as DENIED. Destructive local
+    actions snapshot the row's identity (owner, remote key, plan) inside the
+    delete transaction, so the audit trail never says only "id 37".
+
+ 9. DESTRUCTIVE ACTIONS ARE LOCAL AND REVERSIBLE.
+    Deleting a customer's remote resource from the app is forbidden. Removal
+    is local-only after a grace period with an undo. Remote deletion, if it
+    ever exists, is a separate, explicit, super-admin-only, audited action.
+
+10. THE UI IS ALLOWED TO SAY "I DON'T KNOW".
+    unknown, stale, read_error, missing and disabled are five different
+    facts and must render as five different states. A resource the remote
+    panel no longer lists must never render as "healthy, 0% used" and must
+    never match a "healthy" or "unused" filter.
+
+A3. HOW YOU WORK WITH ME
+- Language: Sinhala + English mix as described above.
+- Order of work: AUDIT -> PLAN -> IMPLEMENT -> VERIFY. Confirm the real
+  state of the repository before writing code. Do not assume.
+- One item at a time. FIX -> BUILD -> UNIT QA -> LIVE QA -> GATE -> close
+  it. Nothing advances on an unverified item.
+- A feature is "done" only when UI + API authorization + DB persistence +
+  failure paths + tests are all proven. The existence of a button or a
+  handler proves nothing.
+- Never write a claim without the command or file that proves it. Anything
+  not executed is marked NOT RUN. Do not fabricate test results, screenshots
+  or live API output.
+- A behaviour change to a business rule needs my decision first. Record it
+  as D-xxx in docs/DECISIONS.md with the reason. Never change behaviour
+  silently and never "helpfully" overturn an ownership rule.
+- When information is missing, ask ONE question with concrete options.
+  Do not stack five assumptions.
+- If a change is destructive (schema drop, data reset, production remote
+  write, permission widening), stop and ask before doing it.
+- End every turn with: files changed and why, commands run and their real
+  output, what is verified vs not, and the next single item.
+
+=========================================================================
+SECTION B - TECHNOLOGY STACK (LOCKED)
+=========================================================================
+
+B1. BACKEND
+- Go, latest stable ({{GO_VERSION}}, e.g. 1.27).
+- Standard library net/http only. No router framework, no ORM, no DI
+  framework. Hand-written mux with explicit pattern matching, a middleware
+  chain and a single response helper.
+- SQLite through modernc.org/sqlite (pure Go, no cgo) so the binary builds
+  without a C toolchain and `go test -race` is possible in CI.
+- golang.org/x/crypto for argon2id.
+- Total direct dependencies: 4 maximum. Adding a fifth requires a
+  D-xxx entry explaining why the stdlib cannot do it.
+- go.mod module path: {{MODULE_PATH}}.
+
+B2. DATABASE
+- SQLite single file at {{DATA_DIR}}/{{APP_NAME}}.db.
+- Pragmas on open: journal_mode=WAL, foreign_keys=ON, busy_timeout=5000,
+  synchronous=NORMAL.
+- Pool: SetMaxOpenConns(4), SetMaxIdleConns(4), SetConnMaxLifetime(30m).
+  SQLite serialises writes; the pool must not pretend otherwise.
+- One transaction helper (WithTx) used everywhere. No naked Begin.
+- Migrations: embedded via //go:embed, numbered 0001_xxx.sql upward, each
+  file applied inside its own transaction, idempotent, recorded in a
+  schema_migrations table. /api/ready reports the current schema_version.
+- There is exactly ONE canonical database path per environment. Stale
+  copies living in the repo (var/data, cmd/*/var/data, *.pre-*.db) are a
+  bug, not a convenience - never create a second path.
+
+B3. FRONTEND
+- React + TypeScript (strict) + Vite.
+- react-router-dom for routing, zustand for state, lucide-react for icons.
+- Tailwind through @tailwindcss/vite, plus one tokens.css that is the SINGLE
+  source of colours, radii, spacing, shadows and typography CSS custom
+  properties. No hardcoded hex colour in any component.
+- Optional heavy visuals (three.js / particles) must be lazy-loaded into a
+  separate chunk and must be disabled by a Low-Resource mode.
+- Linting: oxlint. Types: tsc -b. Both are gates.
+- No Node.js runs on the production server. The SPA is built in CI or on the
+  dev machine, embedded into the Go binary with //go:embed, and served from
+  the same port as the API.
+
+B4. DELIVERY
+- One binary, one port, both UI and API. SPA fallback for client routes,
+  JSON 404 for /api/*, hashed assets served with long cache headers, and
+  /assets/nope.js must stay 404.
+- Reverse proxy: Caddy with automatic HTTPS (config shipped in deploy/).
+- Process supervision: systemd unit shipped in deploy/.
+- Backup: a documented, rehearsed procedure (VACUUM INTO a timestamped
+  file, plus a restore rehearsal that is actually executed once and recorded
+  in the QA report).
+
+B5. EXPLICITLY OUT OF SCOPE FOR v1 (unless the owner overrides)
+{{EXTRA_OUT_OF_SCOPE}}
+(Default list: Docker/Kubernetes, Redis, PostgreSQL, a job-queue server,
+an SPA state library other than zustand, a chart library dependency, native
+mobile apps, automated payment-gateway integration, and any remote-panel
+feature that the remote API does not officially support.)
+
+=========================================================================
+SECTION C - HARD RESOURCE BUDGET
+=========================================================================
+
+Document this table in docs/ARCHITECTURE.md and hold to it:
+
+  DB connections (max)                 4
+  HTTP server read / write / idle      15s / 30s / 60s
+  Remote per-request timeout           {{REMOTE_TIMEOUT}} (e.g. 10s)
+  Remote retries                       GET only, max 2, exponential backoff
+  Remote health polling                >= 30s per integration
+  Remote list page size                <= 200 rows; always paged
+  Sync concurrency                     bounded (2-3 workers), per-integration
+  Graceful shutdown                    10s, then force
+  Idle process RSS target              < 120 MB
+  Frontend build location              CI/dev only, never the server
+
+Additional rules:
+- One slow or offline integration must never block the dashboard. Use
+  context timeouts per integration and a per-integration error field.
+- Never fetch an unbounded list from the remote system to "count" something.
+- Pagination on every list endpoint, with a hard maximum page size.
+- The server must start and answer /api/health even when the DB is down.
+- Measure it, do not guess: record `ps` RSS and a CPU duty-cycle number on
+  an idle instance in the QA report, and re-measure after each stage that
+  adds a background job.
+
+=========================================================================
+SECTION D - ACTORS, RBAC AND OWNERSHIP
+=========================================================================
+
+D1. EXACTLY THREE ACTORS
+  super_admin  platform owner. Sees and may do everything.
+  admin        reseller/operator. Only assigned resources, only own
+               customers, only within its quota.
+  client       end customer. Only their own resources.
+
+Two separate doors:
+  /staff/login   for super_admin and admin
+  /login         for client
+A credential from the wrong door answers 403 wrong_portal. Enforce this
+server-side, on the login handler and on every authenticated route.
+
+D2. PERMISSION MATRIX (mandatory, in docs/REQUIREMENTS.md)
+Columns: action | super_admin | admin | client. Cover at minimum: create
+resources, assign/sell, set prices, create/suspend staff, edit own profile,
+see own history, see other customers' data, see server-wide metrics, read
+audit, change global settings. Every row is enforced in the service layer,
+never only by hiding a button.
+
+D3. OWNERSHIP IS ROW-LEVEL
+Every query that returns customer-owned rows is filtered by owner in SQL,
+not in the handler and not in the frontend. A resource id belonging to
+another owner answers 404 (not 403) so existence is not leaked.
+Ownership rules must be tested with a negative test per resource type, e.g.
+TestClientCannotReadAnotherOwnersResource, TestAdminCannotTouchUnassignedServer,
+TestSuspendedAdminIsRefused, TestWrongPortalIsRefused.
+
+D4. AUTH DETAILS
+- Password hashing: argon2id, per-user salt, parameters documented in
+  docs/ARCHITECTURE.md.
+- Password policy: minimum length, entropy check, small blocklist, checked
+  before hashing, with unit tests covering the rejection cases.
+- Sessions: opaque 32-byte random token, stored server-side, delivered in an
+  HttpOnly + SameSite=Lax + Secure cookie (Secure off only when
+  {{APP}}_INSECURE_COOKIES is explicitly set for local dev). The session row
+  holds user id, created, last seen, ip fingerprint, user-agent fingerprint.
+  Logout deletes the row. Idle AND absolute expiry are both enforced.
+- CSRF: SameOrigin check on every state-changing request, plus a required
+  custom header.
+- Rate limiting: per-IP and per-account on login, register, password reset
+  and every mail-sending route. An in-memory token bucket is acceptable at
+  this scale, but the limits and the 429 response must be tested.
+- No dev auth bypass may exist in the codebase. There must be a test that
+  fails if a bypass flag is ever reintroduced into the bundled output.
+- Password reset / email verification: time-limited single-use token, stored
+  hashed, never logged, identical response for known and unknown accounts.
+
+=========================================================================
+SECTION E - DATA MODEL
+=========================================================================
+
+Create the following tables (names indicative; map them to your domain).
+
+IDENTITY
+  users(id, email UNIQUE, password_hash, role, status, display_name,
+        created_at, updated_at, last_login_at)
+  sessions(id, user_id, token_hash UNIQUE, created_at, last_seen_at,
+           ip_fp, ua_fp, expires_at)
+  reset_tokens(id, user_id, token_hash, purpose, expires_at, used_at)
+
+INTEGRATIONS (the external system)
+  integrations(id, name, base_url, token_ciphertext BLOB, token_nonce,
+               api_version, status CHECK IN ('UNKNOWN','ACTIVE','DEGRADED',
+               'REAUTH_REQUIRED','CONNECTION_UNAVAILABLE','DISABLED'),
+               last_ok_at, last_error_code, created_by, created_at,
+               updated_at)
+  integration_targets(id, integration_id, remote_key, safe_metadata_json,
+               enabled, last_seen_at, UNIQUE(integration_id, remote_key))
+
+REMOTE MIRROR
+  remote_objects(id, integration_id, remote_key, owner_user_id,
+                 local_status, remote_enabled, remote_total_bytes,
+                 remote_used_bytes, remote_expiry_at, remote_limit_ip,
+                 remote_limit_hwid, mirrored_at, lifetime_used_bytes,
+                 UNIQUE(integration_id, remote_key))
+  Note: keep a STABLE local id. Never use a mutable remote name/email as
+  the only relational key. Lifetime usage lives locally so a remote counter
+  reset cannot erase history.
+
+COMMERCE
+  offers(id, name, kind CHECK IN ('FREE','PREMIUM','CUSTOM'),
+         constraints_json, active, created_by)
+  resource_tags(object_id, tag CHECK IN ('FREE','PREMIUM'), locked_at,
+                tagged_by)  -- visibility tag only, NEVER written remotely
+  assignments(id, object_id, client_user_id, seller_user_id,
+              status CHECK IN (<state machine in E1>), limit_snapshot_json,
+              assigned_at, expires_at, released_at)
+  quota_ledger(id, user_id, integration_id, delta, reason, assignment_id,
+               created_at)  -- authoritative source for quota counting
+  prices(id, offer_id, seller_user_id, currency, wholesale_cents,
+         retail_cents, effective_from)
+  orders(id, client_user_id, seller_user_id, offer_id,
+         price_snapshot_json, status CHECK IN (<state machine in E1>),
+         created_at, updated_at)
+  payments(id, order_id, method_id, amount_cents, currency, reference,
+           status, confirmed_by, confirmed_at, note)
+  payment_methods(id, owner_user_id, kind, public_instructions, active)
+
+OBSERVABILITY / SUPPORT
+  usage_snapshots(id, object_id, at, used_bytes, total_bytes)
+  notifications(id, user_id, event, payload_json, read_at, created_at)
+  chat_threads(id, subject, context_object_id, created_at)
+  chat_messages(id, thread_id, author_user_id, body, created_at,
+                deleted_at)
+  audit_log(id, at, actor_user_id, actor_role, action, target_type,
+            target_id, result CHECK IN ('OK','DENIED','FAILED'),
+            context_json)  -- append only, no secrets
+  outbox(id, integration_id, op, idempotency_key, payload_json, state,
+         attempts, last_error, created_at,
+         UNIQUE(integration_id, op, idempotency_key))
+
+INDEX RULES
+- Every list endpoint's filter/sort combination has an index. Write the
+  EXPLAIN QUERY PLAN for the three heaviest queries into the QA report.
+- Foreign keys on, ON DELETE behaviour chosen deliberately per table.
+
+E1. STATE MACHINES (write them down, test every transition)
+  assignment:  PROVISIONING -> ACTIVE -> (SUSPENDED | EXPIRED | RELEASED |
+               SERVER_UNAVAILABLE | REVOKED_BY_OWNER)
+  order:       DRAFT -> PENDING_PAYMENT -> PAID -> FULFILLED
+               (CANCELLED and REFUNDED reachable only from the documented
+               states)
+  integration: UNKNOWN -> ACTIVE <-> DEGRADED -> REAUTH_REQUIRED ->
+               CONNECTION_UNAVAILABLE -> DISABLED
+  outbox:      PENDING -> IN_FLIGHT -> DONE | FAILED_RETRYABLE | DEAD
+Illegal transitions return a typed error and are unit tested. A transition
+that is legal but destructive requires an explicit confirmation flag.
+
+E2. ATOMICITY STATEMENT
+A local SQLite transaction NEVER covers a remote call. Remote effects are
+reconciled through the outbox plus fresh reads. State this in
+docs/ARCHITECTURE.md and honour it in code.
+
+=========================================================================
+SECTION F - BACKEND LAYOUT
+=========================================================================
+
+Dependency direction, one way only:
+
+  cmd/{{APP}}d            process wiring: config, db, server, jobs, shutdown
+    -> internal/httpapi   transport only: routing, decode, encode, status
+    -> internal/domain    business rules, state machines, quota, policies
+    -> internal/store     SQLite only: queries, transactions, migrations
+    -> internal/remote    outbound client for the external system
+  internal/config         env parsing, fail closed
+  internal/auth           argon2id, sessions, RBAC, ownership, rate limit, seal
+  internal/audit          append-only privileged log
+  internal/jobs           sync, reconcile, purge, retention
+  internal/mail           outbound mail behind an interface (optional)
+  internal/integrations   integration lifecycle (add / test / disable / remove)
+
+Enforced rules:
+- httpapi holds no business rules. It decodes, validates shape, calls the
+  domain, encodes. It never touches the DB driver.
+- domain imports store interfaces and never httpapi; it holds every rule,
+  every state machine and every quota decision.
+- store is the only package that speaks SQL.
+- remote is the only package that performs outbound calls.
+- No import cycles. No global mutable state. Dependencies injected in cmd.
+- Every package has a doc comment stating its one responsibility.
+- Errors are typed sentinels or wrapped error codes mapped at the HTTP edge
+  to exactly ONE envelope:
+    { "error": { "code": "...", "message": "...", "details": {...} } }
+  Codes are stable and machine-readable: validation, unauthorized,
+  forbidden, wrong_portal, not_found, conflict, quota_exceeded,
+  rate_limited, upstream_failed, upstream_timeout, internal.
+
+STARTUP SEQUENCE (exactly this, with logs that carry no secrets)
+  load config (fail closed) -> ensure data dir 0700 -> open SQLite + pragmas
+  -> apply migrations -> log schema_version -> start jobs -> serve HTTP
+  -> on SIGINT/SIGTERM: stop accepting, drain 10s, stop jobs, close DB.
+A failure at any step exits non-zero with a logged reason. The process never
+starts half-configured.
+
+MIDDLEWARE CHAIN (order matters, document it)
+  recover -> request id -> access log (no bodies, no secrets) -> realistic
+  timeout -> SameOrigin/CSRF -> rate limit -> session load -> RBAC guard
+  -> ownership guard -> handler.
+
+JOBS
+- sync: per integration every {{SYNC_INTERVAL}} (e.g. 60s), bounded
+  concurrency, writes usage snapshots and mirrors remote limits.
+- reconcile: drains the outbox, verifies ambiguous writes, marks dead
+  letters after N attempts and notifies the owner.
+- purge: deletes local rows whose grace period expired, snapshotting identity
+  into the audit log inside the delete transaction.
+- retention: trims usage snapshots and old audit rows per a documented policy.
+- All jobs must be idempotent, cancellable through context, and must not run
+  when the process is shutting down.
+
+=========================================================================
+SECTION G - HTTP API CONTRACT
+=========================================================================
+
+G1. ROUTE GROUPS
+  GET  /api/health                  liveness, no DB access
+  GET  /api/ready                   readiness: db ping, schema_version,
+                                    build sha, ui embedded yes/no
+  POST /api/setup/bootstrap         one-time super admin; 409 after any user
+  POST /api/auth/register|login|logout|change-password|forgot|reset
+  GET  /api/me                      principal + permissions
+  CRUD /api/{resource}              owner-scoped
+  /api/admin/*                      staff only
+  /api/me/*                         client only
+  POST /api/{resource}/{id}/{action} explicit verbs for state changes
+                                    (suspend, resume, release, restore, verify)
+
+G2. CONVENTIONS
+- JSON in, JSON out, explicit content types, no HTML errors on /api/*.
+- Every list: filter params + pagination (limit/offset or cursor), total
+  count, and explicit unknown/unread counts. Filters are also accepted by the
+  UI through the URL so a refresh keeps them and a link is shareable.
+- 201 + Location on create. 409 for conflicts with a specific code
+  (tag_locked, quota_exceeded, already_exists). 403 vs 404 as per D3.
+- Idempotency: mutating routes accept an Idempotency-Key header and reject a
+  duplicate inside the window.
+- Every endpoint is documented in docs/API_CONTRACT.md with method, path,
+  auth, request schema, response schema, error codes and one example.
+- A route test exists per endpoint: happy path plus at least one refusal.
+
+=========================================================================
+SECTION H - UI SPECIFICATION
+=========================================================================
+
+H1. SHELLS AND ROUTES
+Three role-scoped shells sharing one design system.
+  public:   /login  /staff/login  /register  /forgot  /reset  /setup
+  super:    /dashboard /servers /servers/:id /resources /resources/:id
+            /staff /clients /clients/:id /orders /orders/:id /payments
+            /audit /notifications /chat /profile
+  admin:    /admin /admin-servers /admin-clients /admin-resources /sale
+            /retail-price /orders /payments /notifications /chat /profile
+  client:   /client /resource/:id /buy /history /orders /notifications
+            /chat /profile
+A role hitting a route it does not own is redirected to its own home, and the
+API still refuses the data (defence in depth).
+
+H2. DESIGN SYSTEM
+- tokens.css is the single source: colours, surfaces, text, borders, radii,
+  shadows, motion durations, font stacks. Every preset defines the full token
+  set. ThemeProvider may override any token through inline custom properties
+  for user customisation.
+- Presets (minimum 3): Light, Dark, Modern, each with a small set of
+  sub-themes that also define AA-contrast text colours.
+- Typography must include a Sinhala-capable fallback stack
+  ('Noto Sans Sinhala', 'Iskoola Pota', 'Nirmala UI').
+- Components (own, no UI-kit dependency): Button, Input, Select, Checkbox,
+  Switch, Tabs, Dialog (WAI-ARIA focus trap, initial focus, focus restore,
+  aria-modal), Tooltip, Toast, Table (sortable, aria-sort), Pagination,
+  Badge, StatusBadge, Card, MetricCard, EmptyState, Skeleton, Spinner,
+  StepProgress, AsyncState, Dropdown, SavedViewsBar, SelectionBar, QrCode,
+  and hand-written SVG charts (Bar, Line, Donut, Sparkline, Progress).
+- Reduced motion respected globally and per component. A Low-Resource mode
+  disables 3D, glass and animation, and must visibly reduce work.
+- Command palette (Ctrl/Cmd+K): navigation + actions + theme groups,
+  filter-as-you-type, arrow keys, Enter, Esc, aria-activedescendant.
+
+H3. HONEST STATES - MANDATORY PER SCREEN
+Every data screen implements and visibly distinguishes:
+  loading (skeleton) | empty | error (with retry) | partial failure (one
+  integration down, the rest still shown) | stale (with age: "synced 4 min
+  ago", warning styling when stale) | unknown | missing-from-remote |
+  disabled | forbidden.
+A resource the remote system no longer lists renders as "missing from panel"
+- never as healthy, and never inside a "healthy" filter.
+Every displayed number is either measured (with its timestamp) or explicitly
+labelled as an estimate. No fake charts, no demo series on production paths.
+
+H4. PRODUCT RULES TO RENDER IN THE UI
+{{LIST_YOUR_PRODUCT_RULES}}
+Shape reference (these are Veylix's; replace them with yours):
+- 3 concurrent FREE resources per client, 5 per rolling 30 days, per server;
+  counting comes from a ledger, never from scanning rows.
+- A visibility tag locks once the resource is issued; changing it is refused
+  with 409 tag_locked and audited.
+- Release is local-only with a 3-day grace and an undo; the remote object is
+  untouched. Restore is available to the owner and to an operator.
+- Only the owner may release their own resource. An operator acting on a
+  customer's behalf is refused ON PURPOSE (ownership rule) unless the super
+  admin escalates with an audited, explicit action.
+
+H5. ACCESSIBILITY AND MOBILE
+- Everything keyboard reachable, visible focus ring, skip link.
+- Status colour is never the only signal (dot + text).
+- Mobile: the sidebar collapses, tables become card lists below 768px, touch
+  targets >= 44px.
+
+=========================================================================
+SECTION I - SECURITY CHECKLIST (each item has a test)
+=========================================================================
+ [ ] Secrets absent from DB files (grep the .db for known token strings).
+ [ ] Secrets absent from the production bundle (grep the dist output).
+ [ ] SSRF guard tests: 127.0.0.1, 10.x, 192.168.x, 169.254.169.254, ::1,
+     a redirect to a private IP, a DNS name resolving to a private IP.
+ [ ] Session cookie flags asserted in a handler test.
+ [ ] CSRF: a cross-origin POST is refused.
+ [ ] Rate limit: 429 after N attempts, tested.
+ [ ] RBAC denial test per role per resource type.
+ [ ] Wrong-portal test for both doors.
+ [ ] Password policy rejection tests (too short, common password, reuse).
+ [ ] Account enumeration: forgot-password answers identically for unknown and
+     known emails.
+ [ ] Error envelope never includes a stack trace, SQL text or a secret.
+ [ ] Audit DENIED entry written on each refusal path.
+ [ ] No dev bypass flag exists; a test fails if one is reintroduced.
+ [ ] Access log redacts query strings and bodies.
+ [ ] Dependency count within budget, `go mod tidy` clean.
+ [ ] Remote timeout and retry behaviour tested with a fake slow server.
+ [ ] Token sealing: tampering with the ciphertext fails closed.
+
+=========================================================================
+SECTION J - QUALITY GATES (all must be green to advance)
+=========================================================================
+  backend build        go build ./...                       exit 0
+  backend vet          go vet ./...                         no output
+  backend fmt          gofmt -l .                           no output
+  backend tests        go test ./... -count=1               100% pass
+  backend race (CI)    go test ./... -race -count=1         100% pass
+  frontend types       npx tsc -b                           0 errors
+  frontend lint        npm run lint                         0 warnings 0 errors
+  frontend build       npm run build                        pass
+  UI truth gate        npm run audit                        0 unwired claims
+  UI render            npm run verify:ui -- /path           0 console errors
+  nav gate             npm run verify:nav                   every route reachable
+  docs truth           npm run docs:verify                  README == tree
+  packaged binary      dev.ps1 -Package (or make package)   ready=ui embedded,
+                                                            /dashboard 200,
+                                                            /assets/nope.js 404,
+                                                            no dev bypass in bundle
+  restore rehearsal    run once, result recorded in the QA report
+
+Implement the frontend gates as node scripts in frontend/scripts (no extra
+dependencies), plus a dev.ps1 (or Makefile) at the root with
+-Start -Stop -Restart -Status -Package -Preflight.
+The UI truth gate scans the frontend for API calls and fails when a screen
+claims data it never fetches. The docs verify script derives counts from the
+tree (routes, tests, migrations, pages) and fails when the README disagrees.
+preflight starts the stack, proves anonymous access is refused with 401, and
+proves a seeded account can actually sign in, before printing the URL.
+
+=========================================================================
+SECTION K - REPOSITORY STRUCTURE
+=========================================================================
+  {{APP_NAME}}/
+    cmd/{{APP}}d/          main
+    cmd/{{APP}}-tool/      admin CLI: seed, reset-password, db-check
+    internal/              as per Section F
+    frontend/
+      src/{pages,components,stores,lib,theme,styles,hooks}
+      scripts/             audit-ui-truth, docs-verify, verify-ui, selftests
+      package.json
+    deploy/                Caddyfile, systemd unit, installer, backup scripts
+    docs/                  exactly the eight documents in Section M
+    var/                   runtime only (gitignored): data/, logs/, secrets/
+    .github/workflows/     ci.yml, release.yml
+    dev.ps1                start/stop/status/package/preflight
+    README.md
+    BUILD_BRIEF.txt        this file
+
+RULES
+- Never commit: *.exe, binaries, logs, diagnostic dumps (*.json/*.txt at the
+  root), database files or database copies, .env, secrets, node_modules, dist.
+- Exactly one canonical DB path per environment. Delete stale copies; do not
+  keep them "just in case".
+- .gitignore must be verified by actually trying to add each of the above.
+- Secrets live in var/secrets/ (0700, gitignored) with a README explaining
+  what each key is and how to generate it (e.g. openssl rand -hex 32).
+- No generated artefact is ever checked in as "evidence".
+
+=========================================================================
+SECTION L - DELIVERY: INSTALL, UPGRADE, BACKUP
+=========================================================================
+L1. INSTALLER (one command, idempotent)
+- Validates inputs and refuses to overwrite an existing data dir without
+  --force.
+- Creates a dedicated system user, the directory layout and a 0700 secrets
+  dir.
+- Generates the encryption and session keys if absent and prints where they
+  are (never the values in a log).
+- Installs the systemd unit, enables and starts it, waits for /api/ready.
+- Configures Caddy with the given domain and waits for the certificate.
+- On any failure prints exactly what failed and how to roll back. It never
+  leaves a half-installed state.
+- Prints the URL and the first-run bootstrap instruction.
+
+L2. UPGRADE
+- Stops the service, backs up the DB, replaces the binary, runs migrations,
+  waits for /api/ready, restarts jobs. A failed migration aborts and restores
+  the previous binary. The procedure is documented and rehearsed once.
+
+L3. BACKUP / RESTORE
+- A script producing a timestamped consistent DB copy (VACUUM INTO) plus a
+  reference to the secrets file, with retention.
+- A documented restore rehearsal that was actually executed; the output goes
+  in the QA report. "Backups work" is not a claim without a restore.
+
+L4. CI
+- ci.yml: build, vet, gofmt, test, race, frontend types, lint, build, audit,
+  docs:verify on every push.
+- release.yml: build the SPA, embed it, build the binary, run the package
+  proof, publish the artefact with a checksum.
+
+=========================================================================
+SECTION M - DOCUMENTATION (EXACTLY EIGHT FILES, ONE HOME EACH)
+=========================================================================
+  1. README.md              what it is, run it in 2 commands, the gates, status
+  2. docs/ARCHITECTURE.md   layers, dependency rules, startup, resource budget,
+                            atomicity statement
+  3. docs/DECISIONS.md      append-only D-001 ... each with context, decision,
+                            consequence. THIS is where behaviour changes live.
+  4. docs/API_CONTRACT.md   every endpoint, auth, schema, errors, example
+  5. docs/REQUIREMENTS.md   business rules numbered (2.1, 2.2 ...) so code and
+                            tests can cite them
+  6. docs/PROCESS_MAP.md    process x actor truth table with a VERIFIED date and
+                            the file/endpoint that proves each row
+  7. docs/QA_REPORT.md      commands run, real output, what was NOT run
+  8. docs/TROUBLESHOOTING.md known failure modes and their fixes
+
+FORBIDDEN: a 70 KB "bible", a 150 KB improvement ledger, a duplicated QA
+report, a gap analysis that contradicts the README, or any document whose
+claims are not verifiable. If a second document answers the same question,
+delete one. Every count in the README is derived by docs:verify and fails the
+build when it drifts.
+
+Each document states: type, version, last synced date, and what proves it.
+
+=========================================================================
+SECTION N - STAGES (implement in this order, gate between each)
+=========================================================================
+S0  AUDIT. Read the repo (or confirm it is empty). Produce PROCESS_MAP with
+    real states and the evidence. Write no feature code.
+    Gate: the document exists, every row cites a file or says MISSING.
+
+S1  SKELETON. Go module, config, SQLite open + pragmas + migrations, health,
+    ready, graceful shutdown, single-binary embedding, CI, dev.ps1.
+    Gate: /api/ready 200 with schema_version, go test passes, package proof
+    passes, /assets/nope.js 404.
+
+S2  AUTH. Bootstrap super admin, register, login, logout, change password,
+    forgot/reset, sessions, RBAC middleware, ownership helper, rate limits,
+    CSRF, audit of auth events, three shells in the UI.
+    Gate: every item in the Section I security checklist has a passing test;
+    wrong-portal and cross-owner denials proven live.
+
+S3  INTEGRATIONS. Add/test/disable/remove an external integration, sealed
+    tokens, SSRF guard, capability/version detection, status state machine,
+    error redaction.
+    Gate: add + verify against a real instance; the token string is absent
+    from the DB and from logs; SSRF tests pass.
+
+S4  READ + SYNC. Paged remote read, remote mirror, usage snapshots, job
+    scheduling, stale/unknown surfacing in the UI, per-integration error
+    isolation.
+    Gate: change a limit by hand on the remote and see it mirrored with a
+    mirrored_at timestamp; kill one integration and see the rest of the app
+    still work.
+
+S5  WRITE PATH. Remote-first provisioning, state machine, outbox +
+    reconciler, quota ledger inside the transaction, rollback on remote
+    rejection.
+    Gate: create -> confirm -> local row only after confirmation; a forced
+    remote failure leaves zero rows and zero quota consumed; a retried
+    request creates exactly one remote object.
+
+S6  COMMERCE. Offers, prices, manual payment state machine, orders,
+    confirm/reject/refund, audit fan-out, notifications on each transition.
+    Gate: illegal transitions refused and tested; every transition audited;
+    the customer sees the real order state.
+
+S7  COMMS + OPS. Chat (participant enforced server-side), notifications inbox,
+    audit screens with filters, dashboards fed by real data, saved views,
+    URL-backed filters.
+    Gate: a non-participant cannot read a thread (API test); every dashboard
+    number traces to an endpoint.
+
+S8  DELIVERY. Installer, Caddy, systemd, upgrade, backup + restore rehearsal,
+    packaged binary proof, final truth pass across README, PROCESS_MAP and
+    QA_REPORT.
+    Gate: install on a clean machine (or documented VM), ready 200, login
+    works, restore rehearsal recorded, all gates green at once.
+
+Every stage closes with a ledger entry: symptom -> fix -> test -> does the test
+catch the bug if reverted? -> gate commands and their real output -> ticked or
+not. Nothing advances on an unverified item.
+
+=========================================================================
+SECTION O - THINGS I EXPECT YOU TO GET RIGHT (hard-won lessons)
+=========================================================================
+ 1. Write the refusal test before the feature test. Most real bugs are a
+    missing refusal.
+ 2. For every fix, prove the test fails when the fix is reverted. A test that
+    passes both ways proves nothing.
+ 3. Never leave an unread/unknown state implicit. If a value could not be
+    read, say so with a flag, a reason and a timestamp.
+ 4. Do not let the docs grow faster than the code. Eight documents, each with
+    one question it answers.
+ 5. Do not keep stale artefacts (old DBs, old binaries, diagnostic dumps) in
+    the repo. They become the source of wrong diagnoses.
+ 6. Do not optimistically render a remote action as successful.
+ 7. Do not delete a customer's remote resource from the app, ever.
+ 8. Do not widen a permission to make a button "work". Ask the owner first.
+ 9. Prefer an explicit, boring implementation over a clever abstraction.
+10. When a live test is blocked (no VM, no live remote, no mail server), write
+    it down as BLOCKED with the reason instead of pretending it ran.
+
+=========================================================================
+SECTION P - DEFINITION OF DONE (per feature)
+=========================================================================
+A feature is done when ALL of the following are true, and the evidence is
+written in the ledger:
+ [ ] The UI calls a real endpoint; there is no mock data on any path.
+ [ ] The server enforces role + ownership; a refusal test exists.
+ [ ] The state change is persisted and survives a restart.
+ [ ] Failure paths are handled: remote down, remote slow, remote rejects,
+     concurrent request, retry, stale data.
+ [ ] Every privileged action wrote an audit row with no secrets.
+ [ ] A unit test exists for the rule, and it fails if the rule is reverted.
+ [ ] A live check was executed and its real output recorded.
+ [ ] The gates in Section J are green.
+ [ ] The relevant document was updated in the same change.
+
+=========================================================================
+SECTION Q - PLACEHOLDERS TO FILL
+=========================================================================
+{{APP_NAME}}                 product name (binary, db, dirs, module)
+{{APP}}                      short lowercase slug used in file/flag names
+{{MODULE_PATH}}              e.g. github.com/you/{{APP_NAME}}/backend
+{{GO_VERSION}}               e.g. 1.27
+{{ONE_LINE_PRODUCT_STATEMENT}}
+{{REMOTE_SYSTEM}}            e.g. 3X-UI 3.10.2 panel API
+{{REMOTE_TIMEOUT}}           e.g. 10s
+{{SYNC_INTERVAL}}            e.g. 60s
+{{DATA_DIR}}                 e.g. var/data
+{{LIST_YOUR_PRODUCT_RULES}}  the numbered business rules for your domain
+{{EXTRA_OUT_OF_SCOPE}}       things you explicitly do not want in v1
+
+=========================================================================
+END OF BRIEF
+=========================================================================

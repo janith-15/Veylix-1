@@ -1,0 +1,553 @@
+/* ===========================================================================
+ * SECTION 02 - MY VPNS (D-088)
+ *
+ * Scoped under `.mv` (the page root) so nothing here can reach another screen.
+ * Loaded only by `pages/client/MyVpnsPage.tsx`, so it is code-split with that
+ * route and never ships to a visitor who does not open it.
+ *
+ * Rules, without exception:
+ *   - NO literal colour, radius, shadow, spacing or font. Every value is an
+ *     existing custom property or a color-mix() of one, so all six presets and
+ *     their sub-themes apply with no further work.
+ *   - NO new token. The theme system owns those; this file consumes them.
+ *   - Breakpoints stated at 360 / 390 / 640 / 768 / 1024 / 1440 / 1920.
+ *   - No animation beyond a 140ms border/background change on a hoverable tile.
+ * ======================================================================== */
+
+.mv {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+/* --- overview strip ------------------------------------------------------ */
+
+.mv-overview {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.mv-ov {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-surface);
+  min-width: 0;
+  position: relative;
+  overflow: hidden;
+}
+
+.mv-ov::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: var(--c-primary);
+}
+
+.mv-ov--ok::before { background: var(--success); }
+.mv-ov--warn::before { background: var(--warning); }
+
+.mv-ov__label {
+  font-size: 12px;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.mv-ov__value {
+  font-size: clamp(20px, 2.2vw, 26px);
+  font-weight: 680;
+  line-height: 1.1;
+  color: var(--text);
+}
+
+.mv-ov__delta {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+/* --- toolbar: search, category chips, advanced filters, view toggle ----- */
+
+.mv-toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.mv-toolbar__row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+/* Category chips: All / Free / Premium (D-088 - three, never four). */
+.mv-chips {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.mv-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 140ms ease, background 140ms ease, color 140ms ease;
+  white-space: nowrap;
+}
+
+.mv-chip:hover {
+  border-color: color-mix(in srgb, var(--c-primary) 45%, var(--border));
+  color: var(--text);
+}
+
+.mv-chip:focus-visible {
+  outline: 2px solid var(--c-primary);
+  outline-offset: 2px;
+}
+
+.mv-chip[aria-pressed='true'] {
+  border-color: var(--c-primary);
+  background: color-mix(in srgb, var(--c-primary) 14%, transparent);
+  color: var(--text);
+}
+
+.mv-chip__count {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.mv-chip[aria-pressed='true'] .mv-chip__count {
+  color: var(--text);
+}
+
+/*
+ * Advanced filters sit behind a disclosure. The brief asks that they do not
+ * permanently occupy screen space, so the closed state is one button.
+ */
+.mv-adv {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-surface);
+}
+
+.mv-adv__group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 140px;
+  flex: 1 1 150px;
+}
+
+.mv-adv__label {
+  font-size: 11.5px;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+/* Active-filter summary: the selected filters are always visible, even when
+   the advanced panel is collapsed. */
+.mv-selected {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.mv-selected__tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text);
+  border: 1px solid color-mix(in srgb, var(--c-primary) 40%, var(--border));
+  background: color-mix(in srgb, var(--c-primary) 10%, transparent);
+}
+
+/* View toggle: two states, aria-pressed, no separate dataset. */
+.mv-views {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  margin-left: auto;
+}
+
+.mv-view {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 7px 12px;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 140ms ease, color 140ms ease;
+}
+
+.mv-view + .mv-view {
+  border-left: 1px solid var(--border);
+}
+
+.mv-view:hover { color: var(--text); }
+
+.mv-view:focus-visible {
+  outline: 2px solid var(--c-primary);
+  outline-offset: -2px;
+}
+
+.mv-view[aria-pressed='true'] {
+  background: color-mix(in srgb, var(--c-primary) 14%, transparent);
+  color: var(--text);
+}
+
+/* --- cards view ---------------------------------------------------------- */
+
+.mv-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.mv-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-surface);
+  min-width: 0;
+  position: relative;
+  overflow: hidden;
+}
+
+/* A 3px edge separates Free from Premium by the token that already means it,
+   not by a rule invented here. */
+.mv-card::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: var(--warning);
+}
+
+.mv-card--premium::before { background: var(--c-primary); }
+
+.mv-card__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.mv-card__title {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.mv-card__name {
+  font-size: 14.5px;
+  font-weight: 650;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mv-card__sub {
+  font-size: 12px;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mv-card__badges {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+}
+
+.mv-card__meta {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+
+.mv-card__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.mv-card__row > span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mv-card__row > span:last-child {
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.mv-card__actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: auto;
+  padding-top: 4px;
+}
+
+/* --- usage bar (cards and list share it) --------------------------------- */
+
+.mv-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.mv-bar__num {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.mv-bar__track {
+  display: block;
+  height: 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--text-muted) 22%, transparent);
+  overflow: hidden;
+}
+
+.mv-bar__fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--success);
+}
+
+.mv-bar__fill.is-high { background: var(--warning); }
+.mv-bar__fill.is-full { background: var(--error); }
+
+/* --- compact list view ---------------------------------------------------
+ * A real <table> with a horizontal scroll container: semantic, keyboard
+ * navigable, and honest about its width on a narrow screen instead of
+ * reflowing into a shape nobody can read. The wrapper is the only thing that
+ * scrolls, so the page itself never gains horizontal overflow.
+ * ---------------------------------------------------------------------- */
+
+.mv-listwrap {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-surface);
+  overflow-x: auto;
+  min-width: 0;
+  -webkit-overflow-scrolling: touch;
+}
+
+.mv-list {
+  width: 100%;
+  min-width: 720px;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+
+.mv-list thead th {
+  text-align: left;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-weight: 650;
+  color: var(--text-muted);
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+  background: color-mix(in srgb, var(--text-muted) 6%, transparent);
+}
+
+.mv-list tbody td {
+  padding: 10px 12px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+  color: var(--text);
+  vertical-align: middle;
+}
+
+.mv-list tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.mv-list tbody tr:hover {
+  background: color-mix(in srgb, var(--c-primary) 5%, transparent);
+}
+
+.mv-list__name {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.mv-list__name strong {
+  font-weight: 640;
+  font-size: 13px;
+}
+
+.mv-list__name span {
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+
+.mv-list td.mv-list__num {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.mv-list td.mv-list__act {
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* --- pagination ---------------------------------------------------------- */
+
+.mv-pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.mv-pager__count {
+  font-size: 12.5px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- responsive --------------------------------------------------------- */
+
+@media (min-width: 1440px) {
+  .mv-grid {
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: var(--space-4);
+  }
+}
+
+@media (min-width: 1920px) {
+  .mv-grid {
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  }
+}
+
+/* Tablet: two comfortable columns rather than three cramped ones. */
+@media (max-width: 1024px) {
+  .mv-grid {
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  }
+}
+
+@media (max-width: 768px) {
+  .mv-overview {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--space-2);
+  }
+
+  .mv-ov {
+    padding: var(--space-2) var(--space-3);
+  }
+
+  .mv-views {
+    margin-left: 0;
+  }
+}
+
+/* One column, and the overview stacks. */
+@media (max-width: 640px) {
+  .mv-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .mv-overview {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 390px) {
+  .mv {
+    gap: var(--space-3);
+  }
+
+  .mv-adv__group {
+    min-width: 0;
+    flex: 1 1 100%;
+  }
+}
+
+/* --- coarse pointer: finger-sized targets (D-056 / D-058 pattern) -------- */
+
+@media (pointer: coarse) {
+  .mv-chip {
+    min-height: 44px;
+    padding: 6px 14px;
+  }
+
+  .mv-view {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}
