@@ -20,6 +20,7 @@
     "verify:studio": "node scripts/verify-theme-studio.mjs",
     "verify:packages": "node scripts/verify-package-create.mjs",
     "verify:vpn": "node scripts/verify-vpn-detail.mjs",
+    "verify:client-vpns": "node scripts/verify-client-vpns.mjs",
     "verify:vpn-actions": "node scripts/verify-vpn-actions.mjs",
     "qr:selftest": "node --experimental-strip-types scripts/qr-selftest.mjs",
     "ping:selftest": "node --experimental-strip-types scripts/ping-selftest.mjs",

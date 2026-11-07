@@ -182,3 +182,51 @@ remote write, incorrect money · `P2` reliability, performance, maintainability 
   prevent.
 - **Status:** 🔶 **OPEN** (P2)
 
+---
+
+## DEV-011 · P1 · The client "My VPNs" page was never executed against a populated account — **FIXED**
+
+- **Date found:** 2026-11-08 (recorded in the S5 report as "populated state is NOT
+  PROVEN") · **Fixed:** 2026-11-08 (same day, once `DEV-001` unblocked it)
+- **Symptom — a verification gap, not a user-visible bug.** S5 shipped
+  `MyVpnsPage.tsx` with cards, a compact list, search, category chips, a filter
+  panel, sort and paging. Every one of those was type-checked and lint-checked, and
+  the CSS was probed by mounting a detached replica — but **none of it had ever run
+  against real rows**, because the seeded client owned zero VPNs.
+- **Root cause of the gap.** It was a chain, not a single fault: the seeded client
+  held no VPN → assigning one was refused (`409 panel_client_taken`) → creating a
+  FREE offer to claim was impossible because `POST /api/offers` returned **500**.
+  That last link is `DEV-001` / `LEGACY-I-36`. Once the inbound-id translation was
+  fixed, every link above it broke loose and the populated state became reachable.
+- **What was done.**
+  1. Three FREE offers created via `POST /api/offers` (**201** each): `Free 2GB
+     Standard` (inbound 53), `Free 5GB Hysteria` (inbound 54), and the existing
+     `Free 1GB Trial` (inbound 52).
+  2. Two claims via `POST /api/vpns` as the client (**201**, `ACTIVE`,
+     `confirmed:true`) — VPN **43** and **44**, alongside the existing VPN **42**.
+  3. **Both layers verified.** `cmd/panelprobe -server 11` reported `probe=FOUND`
+     for **all six** panel clients, including 42/43/44 — so these are real 3X-UI
+     clients, not local-only rows (INV-1).
+  4. `frontend/scripts/verify-client-vpns.mjs` written and registered as
+     `npm run verify:client-vpns`.
+- **The committed gate — 19 checks, `19/19 PASS`.**
+  Page h1 · every owned VPN rendered as a card · more than one card (so search and
+  sort are meaningful) · no empty state on a populated account · overview TOTAL
+  matches the real inventory · search narrows to one card · the search term reaches
+  the URL · a non-matching term empties the grid · the no-results copy appears · the
+  copy reassures the user their VPNs still exist · a Clear filters action exists ·
+  Clear filters restores every card · the List mode renders a real table · the table
+  lists every row · the table exposes VPN/STATUS/SERVER · the display mode reaches
+  the URL · a name-sort control exists · sorting keeps every row · the sort is
+  genuinely alphabetical.
+- **The gate refuses to lie.** Against an account that owns nothing it prints
+  `REFUSED … Reporting PASS here would be a false claim.` and exits **3**. Proven:
+  run as `reseller@veylix.test` (owns 0) → `REFUSED`, exit **3**. A regression that
+  empties the account therefore fails the gate instead of silently passing it.
+- **A correction made during this work, recorded rather than hidden.** My first
+  probe reported `sortable: []` and I nearly recorded "sort is missing". It is not:
+  sort lives in the **Filters** panel as a `<select>` (`SortKey = newest | name |
+  expiry`), not as sortable table headers. The first probe was looking in the wrong
+  place. Reading `MyVpnsPage.tsx` L563–570 settled it.
+- **Status:** ✅ **FIXED-VERIFIED**
+

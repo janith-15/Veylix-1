@@ -77,6 +77,7 @@ only that the code compiles.
 npm run verify:nav      # every route resolves for every role
 npm run verify:ui       # real DOM assertions over headless-Chrome CDP
 npm run verify:mobile   # responsive check
+npm run verify:client-vpns  # My VPNs against a populated account (refuses if it owns none)
 ```
 
 These are the **only** browser regression proof. An agent driving Playwright by hand

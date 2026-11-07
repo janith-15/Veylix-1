@@ -1,4 +1,4 @@
-﻿# VEYLIX — PROGRESS LOG
+# VEYLIX — PROGRESS LOG
 
 **Append-only.** New entries go at the bottom, newest last. Never edit or delete
 an earlier entry — a correction is a new entry that supersedes it.
@@ -1571,6 +1571,127 @@ Enumerating `http.Client{` / `http.NewRequest` across the tree gave the real ans
 The correction was written into the file rather than silently deleted, and `ADR-005`
 now makes the C/A/U markers mandatory precisely because confident prose hid a wrong
 claim for one edit cycle.
+
+
+---
+
+## 2026-11-08 · S5 closure — the populated "My VPNs" state is now PROVEN
+
+**Owner directive:** "client side eka balanna api anthimata nawaththapu thena" — go
+back to where the client work stopped. It stopped at **S5 (My VPNs)** with an honest
+`NOT PROVEN` caveat. This pass closes that caveat.
+
+### Why S5 could not finish before, and why it can now
+
+The S5 report recorded: *"Populated My VPNs state is NOT PROVEN. The seeded client
+(user 15) owns 0 VPNs… Creating a FREE offer to claim was impossible because
+`POST /api/offers` still returns 500."*
+
+That 500 **is** `DEV-001` / `LEGACY-I-36`, fixed in the previous pass. The whole
+blocking chain therefore dissolved:
+
+| Link | Before | Now |
+|---|---|---|
+| `POST /api/offers` | **500** | **201** |
+| Assign a panel client to user 15 | **409** `panel_client_taken` | not needed — a claim works |
+| Client owns a VPN | 0 | **3** |
+| Populated S5 state | unprovable | **proven, 19/19** |
+
+### What was created (development seed data — ADR-007)
+
+| Offer | kind | inbound | result |
+|---|---|---|---|
+| `Free 2GB Standard` (18) | FREE | 53 | **201** |
+| `Free 5GB Hysteria` (19) | FREE | 54 | **201** |
+| `Premium 50GB Monthly` (20) | PREMIUM, 250000 LKR | 52 | **201** |
+
+| VPN | panel email | result |
+|---|---|---|
+| 42 | `client@veylix.test_free_1` | pre-existing |
+| **43** | `client@veylix.test_free_2` | **201** `ACTIVE confirmed:true` |
+| **44** | `client@veylix.test_free_3` | **201** `ACTIVE confirmed:true` |
+
+**Second layer proven.** `cmd/panelprobe -server 11` → `probe=FOUND` for **6/6**
+panel clients (38, 39, 40, 42, 43, 44), panel `3.11.0`, xray `26.10.21` `running`.
+So 42/43/44 are real 3X-UI clients, not local-only rows (INV-1).
+
+### The new committed gate — `npm run verify:client-vpns`
+
+`frontend/scripts/verify-client-vpns.mjs`, **19 checks, 19/19 PASS**: page h1 · every
+owned VPN rendered · more than one card · no empty state on a populated account ·
+overview TOTAL matches inventory · search narrows to one card · search term reaches
+the URL · a non-matching term empties the grid · the no-results copy appears · the
+copy reassures the user their VPNs still exist · a Clear filters action exists ·
+Clear filters restores every card · List mode renders a real table · the table lists
+every row · the table exposes VPN/STATUS/SERVER · display mode reaches the URL · a
+name-sort control exists · sorting keeps every row · the sort is genuinely
+alphabetical (`["Free 1GB Trial","Free 2GB Standard","Free 5GB Hysteria"]`).
+
+### The gate refuses to lie — proven, not assumed
+
+Run as `reseller@veylix.test` (owns 0 VPNs):
+
+```
+REFUSED — the admin account owns 0 VPN(s), so the populated
+Reporting PASS here would be a false claim.
+exit=3
+```
+
+A gate that goes green on an empty account proves nothing. This one **exits 3** and
+says why. That refusal was executed and observed.
+
+### A wrong finding I caught mid-work — recorded, not hidden
+
+My first DOM probe returned `sortable: []` and I was one step from writing "the List
+view has no sort". **It does.** Sort lives in the collapsible **Filters** panel as a
+`<select>` (`SortKey = 'newest' | 'name' | 'expiry'`, `MyVpnsPage.tsx` L563–570), not
+as sortable table headers. The probe looked in the wrong place. Reading the source
+settled it, and the gate now asserts the control exists so a future silent removal
+fails loudly instead of passing vacuously.
+
+### Gates — all re-run on 2026-11-08 against this tree
+
+`go build` **PASS** · `go vet` **PASS** · `gofmt` clean · `go test ./... -count=1`
+**17/17 packages, 617 tests** · `npm run lint` 2 pre-existing warnings 0 errors ·
+`npm run build` 1.32 s · `npm run audit` **OK** · `docs:verify` **OK** (23 · 133 ·
+617/15) · `verify:nav` **74/74** · `verify:ui` `consoleErrors: []` ·
+`verify:client-vpns` **19/19** · refusal path **exit 3**.
+
+`go test -race` — **BLOCKED** (no C compiler). `npm run preflight` — **NOT RUN**
+(needs a live server). Neither is reported as PASS.
+
+### Files changed
+
+| File | Change |
+|---|---|
+| `frontend/scripts/verify-client-vpns.mjs` | **New** — 19-check committed gate with a refusal path |
+| `frontend/package.json` | `verify:client-vpns` added (a two-line collapse during editing was repaired and JSON-validated) |
+| `docs/new/DEVELOPMENT_LEDGER.md` | `DEV-011` added — the gap, its root-cause chain, the proof |
+| `docs/new/QA_TEST_REPORT.md` | rows 11–15 cite fresh runs, incl. the refusal path |
+| `docs/new/DEVELOPMENT_BASELINE.md` | the new gate listed under browser gates |
+
+**No production source changed.** `MyVpnsPage.tsx`, `client.css`, the router, the
+backend, the schema and the panel integration are untouched — this pass verified
+existing behaviour and wrote a test; it did not alter behaviour.
+
+### Where the client portal now stands
+
+| # | Section | Route | State |
+|---|---|---|---|
+| S4 | Dashboard (01) | `/client` | ✅ done, verified |
+| S5 | My VPNs (02) | `/client/vpns` | ✅ done, **now proven against real rows** |
+| **S6** | **Offers & Orders (03)** | `/client/offers` | 🔴 **next** — empty shell, needs the `D-089` route decision |
+| S7–S11 | Billing / Usage / Guides / Support / Notifications | `/client/*` | 🔴 empty shells |
+
+### Next
+
+**S6 needs one decision first.** The `/offers` collision is real but narrower than it
+first looked: `GET /api/offers` is already role-scoped (staff → full catalogue, client
+→ active FREE only), so it is **not** a backend defect. It is a **navigation**
+question — `/offers` renders the staff create/edit page, and it should almost
+certainly move under a staff-scoped path so a client can never be handed it. `D-089`
+was meant to record that choice; its text is lost (`KNOWN_LOSSES` `L-02`). Proposed
+fix: record it as `ADR-008` and point clients at `/client/offers`.
 
 ### Gates run in this pass
 

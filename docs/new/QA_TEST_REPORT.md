@@ -68,14 +68,21 @@ patterns.
 
 | # | Command | Result | Evidence |
 |---|---|---|---|
-| 11 | `npm run verify:nav` | **PASS** (prior run) | **74 passed, 0 failed** — every route resolves for every role |
-| 12 | `npm run verify:ui` | **PASS** (prior run) | `consoleErrors: []`, 1 table row, 4 cards, 0 empty states without action |
-| 13 | `npm run preflight` | **NOT RUN** | requires a running backend + seeded panel; the dev server was stopped to make the archive consistent. Must be run before any release claim. |
+| 11 | `npm run verify:nav` | **PASS** | `NAV OK — 74 passed, 0 failed` (re-run 2026-11-08 after the S5 proof) |
+| 12 | `npm run verify:ui` | **PASS** | `consoleErrors: []`, `tableRows: 1`, `cardCount: 4`, `emptyStates: 0` |
+| 13 | `npm run verify:client-vpns` | **PASS** | **19/19** against a populated account (client owns 3 VPNs) — see `DEV-011` |
+| 14 | `npm run verify:client-vpns` (refusal path) | **PASS** | run as an account owning 0 → `REFUSED … Reporting PASS here would be a false claim.`, exit **3** |
+| 15 | `npm run preflight` | **NOT RUN** | needs a running backend + seeded panel; must run before any release claim |
 
-`verify:nav` and `verify:ui` were executed earlier in this session against the
-same source tree (`MyVpnsPage`, `client.css`, `App.tsx`, `navModel.ts` unchanged
-since). **They are not re-run in this documentation pass**, and this report says so
-rather than implying a fresh execution.
+`verify:nav`, `verify:ui` and `verify:client-vpns` were all re-run on **2026-11-08**
+against this exact tree. `verify:client-vpns` is new in this pass: it is the
+committed proof that the client "My VPNs" page works against **real rows**, which
+the S5 report had honestly recorded as NOT PROVEN.
+
+**Row 14 matters as much as row 13.** A gate that passes on an empty account proves
+nothing, so the script refuses that case with exit **3** instead of reporting a green
+run. The refusal was executed and observed, not assumed.
+
 
 ---
 
