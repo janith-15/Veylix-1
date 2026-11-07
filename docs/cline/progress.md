@@ -1505,6 +1505,97 @@ Still to arrive, each with its own stage: **Offers & Orders** (S6, `/client/offe
 
 ### Everything working was preserved
 
+
+---
+
+## 2026-11-08 · Phase 3 complete — Git adopted, `docs/new/` written
+
+**Owner decision:** Option **A** (continuation) + **Git init yes**.
+
+### Git — ADR-002, `L-01` can never recur
+
+`git init` had never been run here. That absence is the direct cause of `L-01`: a
+ledger file was damaged and no earlier version existed anywhere on disk.
+
+- `git init` → branch renamed to `main`.
+- `.gitignore` already excluded `node_modules/`, `frontend/dist/`, `var/`,
+  `.veylix-secrets/`, `*.db`, `*.db-wal`, `*.db-shm`, `*.exe`, `records/_*`.
+- **Verified before committing:** a dry-run staging listed **717 files**, and a grep
+  for `veylix-secrets|\.db$|node_modules|frontend/dist|var/` returned **zero**
+  matches.
+- Commit `1b09553` — *baseline: import existing Veylix tree before the documented
+  restart* — **717 files, 165,391 insertions**.
+
+**It is an import, not a history.** Nothing before 2026-11-08 is individually
+recoverable; that loss is permanent and is recorded, not glossed.
+
+### Documentation — `docs/new/` · 10 files, clean UTF-8, no BOM, 0 × U+FFFD
+
+| File | Bytes | What it settles |
+|---|---|---|
+| `MASTER_SPEC.md` | 8,170 | supersedes the Bible; 8 product rules, 3 invariants, the VPN lifecycle, FREE caps, pricing, two login doors |
+| `ARCHITECTURE.md` | 9,937 | the **real** import graph (measured), 5 boundaries, and §6 — where the code breaks them |
+| `DATABASE.md` | 10,214 | 23 migrations, FK actions (38/34/14), 23 indexes, the `inbounds.id` vs `remote_id` trap |
+| `API_SPEC.md` | 12,924 | 127 routes from compiled registrations, roles, error codes, the `inbound_id` trap |
+| `DEVELOPMENT_LEDGER.md` | 9,893 | `DEV-001`–`DEV-010`; replaces five overlapping registers |
+| `DECISION_LOG.md` | 8,242 | `ADR-001`–`ADR-007` |
+| `QA_TEST_REPORT.md` | 5,452 | 16 gates with real output, plus an explicit "what this does NOT claim" |
+| `MIGRATION_PLAN.md` | 5,446 | archive manifest + a production-migration spec (no schema change needed) |
+| `DEVELOPMENT_BASELINE.md` | 6,304 | prerequisites, gates, data-safety rules, Git workflow |
+| `EVIDENCE_INDEX.md` | 6,440 | every claim → method → proof, plus a 10-minute re-verification script |
+
+### The finding that mattered most
+
+Measured, not assumed: **112 SQL statements live outside `store/`**, twelve of them
+inside `httpapi` — the transport layer the rule forbids outright
+(`usage_store.go` 7 · `vpn_lister.go` 2 · `vpn_lister_panel.go` 2 · `panel_cache.go`
+1).
+
+This is **not** a correctness bug; the code works and 617 tests pass. It is a
+maintainability finding, and the honest response is to record it rather than repeat a
+rule the code does not obey. Recorded as `DEV-003` + `Q-13` with two options; the
+recommendation is Option A for `httpapi` (bounded, low risk) and Option B for the
+service packages (extracting in-transaction queries is a large risk for no gain).
+
+### A fabricated finding I caught and corrected
+
+A first draft of `ARCHITECTURE.md` §6.2 asserted that `versioning/service.go` called
+the 3X-UI panel directly, bypassing the SSRF guard. **That was false.** Reading the
+file showed `/panel/api/server/update-check` appears **only in a comment** explaining
+the design idea; no request is issued.
+
+Enumerating `http.Client{` / `http.NewRequest` across the tree gave the real answer:
+`panel/client.go` (the panel — correct home), `versioning/github.go` (api.github.com),
+`auth/google/google.go` (OAuth). **Boundary 3 holds.**
+
+The correction was written into the file rather than silently deleted, and `ADR-005`
+now makes the C/A/U markers mandatory precisely because confident prose hid a wrong
+claim for one edit cycle.
+
+### Gates run in this pass
+
+`go build` exit 0 · `go vet` exit 0 · `gofmt -l` clean · `go test ./... -count=1`
+**17/17 packages ok** (617 tests) · `npm run lint` 2 warnings 0 errors ·
+`npm run build` 1.04 s · `npm run audit` OK · `audit:selftest` 8+/6− ·
+`docs:verify` OK (23 · 133 · 617/15).
+
+`go test -race` — **BLOCKED**, no C compiler. `npm run preflight` — **NOT RUN**,
+needs a live server. Neither is reported as PASS.
+
+### Resolved / newly raised
+
+- **`Q-12` RESOLVED** — `docs/new/MASTER_SPEC.md` governs; the Bible is archived and
+  retained in place as historical reference only (ADR-003).
+- **`Q-13` OPEN** — `httpapi` SQL: move the code, or change the rule?
+- **`Q-14` OPEN** — renumber `inbounds.id` to equal `remote_id`? Lean **no**: the
+  translation in `provisioning.panelInboundID` already fixes the defect, and
+  renumbering would break every existing `vpn_offers.inbound_id` foreign key.
+
+### Where this leaves it
+
+Phases 1–3 done. Phase 4 (baseline) and Phase 5 (development) are **not started**;
+both wait on the owner reading Phase 3 and deciding `Q-13`.
+
 - `/vpn/:id` **untouched** — QR, links, usage, protocol, ping, seller contacts,
   client ping. Proven by `verify:vpn` operator path **14/14, no console errors**.
 - `/buy` and `/history` **kept and still operational** — `path: /buy`,

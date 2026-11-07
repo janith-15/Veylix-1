@@ -33,7 +33,10 @@ Created 2026-11-08. Status values: `OPEN` · `RESOLVED` (with the answer) · `WA
 |---|---|---|---|
 | Q-10 | **Should `I-10`–`I-26` be reconstructed at all?** Their text is unrecoverable; only their existence is known. | Owner has said to defer. May be waived permanently. | **WAIVED** (owner, 2026-11-08) |
 | Q-11 | **Should `D-062`, `D-077`, `D-078`, `D-089` be re-created or formally retired?** | An unexplained gap in a decision log invites invented explanations later. | OPEN |
-| Q-12 | **Which documentation set is authoritative after Phase 3?** `MASTER_PRODUCT_BIBLE.md` (70 KB) and the proposed `MASTER_SPEC.md` would overlap. | Two sources of truth is exactly the failure this restart is meant to fix. | OPEN |
+| Q-12 | **Which documentation set is authoritative after Phase 3?** `MASTER_PRODUCT_BIBLE.md` (70 KB) and the proposed `MASTER_SPEC.md` would overlap. | Two sources of truth is exactly the failure this restart is meant to fix. | **RESOLVED 2026-11-08** — `docs/new/MASTER_SPEC.md` governs; the Bible is archived to `_veylix-archive\docs-legacy-2026-11-08\` and retained in place as historical reference only (ADR-003). |
+| Q-13 | **Does `httpapi` keep its 12 SQL statements, or does the rule change?** Measured: 112 SQL statements live outside `store/`, 12 of them in the transport layer (`usage_store.go` 7, `vpn_lister.go` 2, `vpn_lister_panel.go` 2, `panel_cache.go` 1). | The stated rule "only `store` writes SQL" is false as written. Either the code or the rule must move — leaving both is what lets a contributor trust a rule that isn't real. | OPEN — Option A (move the 12 queries into `store`) or Option B (rewrite the rule to describe reality). Recorded as `DEV-003`; recommended reading in `ARCHITECTURE.md` §6.1. |
+| Q-14 | **Should `inbounds.id` be renumbered to equal `remote_id`?** The dev rows are `id=52,53,54` with `remote_id=1,2,3`, which is what produced `DEV-001` / `LEGACY-I-36`. | Renumbering is superficially attractive but would break every existing `vpn_offers.inbound_id` foreign key and any recorded offer. The translation in `provisioning.panelInboundID` already fixes the defect without touching data. | OPEN — current lean **NO** (see `MIGRATION_PLAN.md` §6). |
+
 
 ---
 

@@ -1,103 +1,98 @@
-﻿# VEYLIX - ACTIVE CONTEXT
+# VEYLIX — ACTIVE CONTEXT
 
-**This file is a current-session summary.** It is rewritten at the end of each
-session, not appended to. History belongs in `./docs/cline/progress.md`.
-
-**Current session summary - rewritten 2026-11-08 (S5: Section 02 My VPNs).**
-Cline 4.1.26 has no Memory Bank, so this file plus `progress.md` are the memory.
-Read both at the start of a session.
+**Updated:** 2026-11-08 · **Baseline commit:** `1b09553` (main)
 
 ---
 
-## INTERRUPTION RECOVERY - read this first if resuming
+## Where the project stands
 
-| Field | Value |
+**Phases 1–3 of the 5-phase restart are complete.** Phase 4 (baseline) and Phase 5
+(development) have not started and are waiting on the owner reading Phase 3.
+
+| Phase | State |
 |---|---|
-| **Task in flight** | **Client Side, section by section.** Section 01 Dashboard **done**. **Section 02 My VPNs: DONE this pass.** Sections 03-09 **NOT STARTED**. |
-| **Last completed** | **S5 / Section 02 My VPNs.** `MyVpnsPage.tsx` rewritten (cards + compact list, overview, three category chips, collapsible filters, three sorts, paging). New `pages/client/vpns.css`. **D-088 + D-088.1 recorded.** |
-| **Verified this pass** | `tsc` **0** - `lint` **0 errors / 2 pre-existing** - `audit` **OK** - `audit:selftest` **8+6** - `docs:verify` **23/133/615/15** - `build` **exit 0** (13.66 kB JS + 7.28 kB CSS, route-split) - `verify:nav` **74/74** - `verify:ui` **`consoleErrors: []`** - `/client/vpns` **`consoleErrors: []`** - responsive **0 overflow at 360/390/640/768/1024/1440/1920** - light + dark tokens resolve - `inlineColourStyles: 0` |
-| **Known problems** | **Populated My VPNs NOT PROVEN** (client user 15 owns 0 VPNs) - **`POST /api/offers` 500** (pre-existing, blocks creating a FREE offer) - **S3-1 / S3-3 / S3-4 / S3-5 OPEN** - `go test -race` **BLOCKED** - custom package specs not displayable (not on the list row) - 16 legacy notifications - U18 / U21 / I-34 / I-35 unchanged |
-| **Next recommended action** | **Owner review of Section 02.** Do not start Section 03 until approved. Unblocking item: `POST /api/offers` 500, which is what makes the client catalogue empty and most populated-state verification impossible. |
+| 1 · PROTECT | ✅ **DONE** — archive at `H:\my apps\_veylix-archive\` |
+| 2 · AUDIT | ✅ **DONE** — `docs/restart/` (3 files) |
+| 3 · NEW DOCS | ✅ **DONE** — `docs/new/` (10 files, ~78 KB) |
+| 4 · BASELINE | ⏸ **NOT STARTED** — awaits owner review |
+| 5 · DEVELOPMENT | ⏸ **NOT STARTED** |
 
 ---
 
-## Section 02 My VPNs - what was built (D-088)
+## What changed in this session
 
-| Area | Behaviour |
+1. **Git adopted** (ADR-002). No version control existed before; that absence caused
+   the ledger loss `L-01`. `git init` → branch `main` → commit `1b09553`:
+   **717 files, 165,391 insertions**, with `node_modules/`, `dist/`, `var/`,
+   `.veylix-secrets/` and `*.db` verified excluded before committing.
+2. **`docs/new/` written** — 10 authoritative documents, all clean UTF-8, no BOM,
+   zero replacement characters.
+3. **A real architecture violation found and recorded, not hidden.** 112 SQL
+   statements live outside `store/`; **12 of them inside `httpapi`**, which the rule
+   forbids outright. Recorded as `DEV-003` / `Q-13` with two remediation options.
+4. **A fabricated finding caught and corrected.** A first draft of
+   `ARCHITECTURE.md` §6.2 claimed `versioning/service.go` called the 3X-UI panel. It
+   does not — the string appears only in a comment. Corrected, and the correction is
+   kept in the file per ADR-005.
+5. **`Q-12` resolved:** `docs/new/MASTER_SPEC.md` is authoritative; the Bible is
+   historical reference.
+
+---
+
+## Gates — actual state on 2026-11-08
+
+| Gate | Result |
 |---|---|
-| Categories | `All` / `Free` / `Premium` - **three**. Custom Premium is Premium. |
-| Overview | Total / Active / Needs attention over the **whole** inventory, hidden at 0. |
-| Search | Name, server, package name. Debounced, URL-backed. |
-| Advanced filters | Collapsible: Status (only statuses present, with counts), Server, Expiry. |
-| Active-filter tags | Always visible, individually removable, plus Clear filters. |
-| Sort | Newest first, Name A-Z, Expiry date (no-expiry **last**). |
-| Views | Cards and Compact List over the **same** slice; `view` in the URL; no extra request. |
-| Pagination | Nine per page, Previous/Next + numbers, `Showing X-Y of Z`, reset on filter change. |
-| Detail | `/vpn/:id` only. |
-
-### The rules a future edit must not break
-
-1. **Three categories, never four** (D-088). Custom Premium is a Premium VPN.
-2. **Overview counts are the whole inventory**, never `visible.length`.
-3. **No per-card usage request.** S3 fired one `GET /api/vpns/{id}/usage` per
-   card; that N+1 is gone and must not come back.
-4. **No usage number is rendered on this screen** (D-088.1). `GET /api/vpns`
-   sends no usage field; `used_bytes` belongs to `ApiAdminVPNRow`.
-5. **Card and list render the same `visible` slice.** Switching view must never
-   fetch.
-6. **Every `.mv-*` rule stays scoped under `.mv`**, and `vpns.css` is imported
-   only by `MyVpnsPage.tsx`.
-7. **No hardcoded colour.** Tokens and `color-mix()` only. The error token is
-   **`--error`**; there is no `--danger`.
+| `go build ./...` | **PASS** (exit 0) |
+| `go vet ./...` | **PASS** (exit 0) |
+| `gofmt -l internal\ cmd\` | **PASS** (no files listed) |
+| `go test ./... -count=1` | **PASS** — 17/17 packages ok, **617 tests** |
+| `go test -race` | **BLOCKED** — no C compiler. Never PASS, never FAIL. |
+| `npm run lint` | **PASS** — 2 pre-existing warnings, 0 errors |
+| `npm run build` | **PASS** — built in 1.04 s |
+| `npm run audit` | **PASS** |
+| `npm run audit:selftest` | **PASS** — 8 positive + 6 negative |
+| `npm run docs:verify` | **PASS** — 23 migrations · 133 routes · 617 tests / 15 packages |
+| `npm run preflight` | **NOT RUN** — needs a live server |
+| `verify:nav` / `verify:ui` | **PASS** earlier this session (74/74, 0 console errors); not re-run in the docs pass |
 
 ---
 
-## The decision records this pass touched
+## The five things that matter most right now
 
-- **D-088** - recorded on owner authorisation, because it did not exist
-  (`DECISIONS.md` jumped D-087 to D-090). Three categories, one list, two views,
-  page size nine.
-- **D-088.1** - a correction of a factual error inside D-088. D-088 claimed
-  `used_bytes` / `limit_bytes` / `usage_pct` were on every `GET /api/vpns` row;
-  they are on `ApiAdminVPNRow` (`/api/super/vpns`) instead. `tsc` proved it with
-  six `TS2339` errors. D-088 keeps its original text; D-088.1 governs.
-- **D-089 was not created.**
-
----
-
-## File map for the Client Side
-
-| Path | Role |
-|---|---|
-| `frontend/src/pages/ClientDashboardPage.tsx` | **Section 01 dashboard** (S4) |
-| `frontend/src/pages/client.css` | Shared client CSS; `SECTION 01` block at the end |
-| `frontend/src/pages/client/MyVpnsPage.tsx` | **Section 02 My VPNs** (this pass) |
-| `frontend/src/pages/client/vpns.css` | **New** - Section 02 CSS, `.mv`-scoped, route-split |
-| `frontend/src/components/client/ClientPage.tsx` | `ClientPage` + `ClientSection` frame (S3) |
-| `frontend/src/stores/vpnStore.ts` | `ClientVpn`, `toKind`, `vpnDisplayName`, `vpnServerLabel` |
-| `frontend/src/hooks/useListQuery.ts` | URL-as-truth list state, debounce, page reset |
-| `frontend/src/pages/client/Client*Page.tsx` | `/client/offers|billing|usage|guides|support|notifications` shells |
-| `frontend/src/components/layout/navModel.ts` | `CLIENT_NAV`, 11 destinations in 4 groups |
-| `frontend/src/App.tsx` | Client route block, lines ~390-415 |
+1. **`DEV-003` / `Q-13` is the one open architectural decision.** `httpapi` runs 12
+   SQL statements. Either move them into `store` (Option A) or rewrite the rule to
+   describe reality (Option B). Recommendation: **A for `httpapi`** — the layer with
+   the clearest prohibition — and **B for the service packages**, where extracting
+   in-transaction queries would be a large risk for no functional gain.
+2. **`DEV-001` / `LEGACY-I-36` is fixed and proven at both layers.** The panel was
+   asked with the right inbound number, and `cmd/panelprobe` confirmed `vpn_id=42 →
+   FOUND` **on the panel itself**, not merely in local rows.
+3. **The dev database is seed data, not production data** (ADR-007).
+   `.veylix-secrets\data\veylix.db`, 798,720 bytes, 23/23 migrations. No schema change
+   happened in this restart, so no database migration is required.
+4. **`go test -race` cannot run here.** No C compiler. Report `BLOCKED`.
+5. **Five P2 UI defects and two P3 cascade defects remain open** — `DEV-004`–`DEV-010`.
 
 ---
 
-## Open / not done
+## Open questions — none blocking, all needing an answer
 
-- **Section 02 populated state NOT PROVEN** - client user 15 owns 0 VPNs. Needs a
-  client-owned VPN, which needs either a FREE offer (blocked by the 500 below) or
-  a successful `assign` (refused `409 panel_client_taken` for the one free row).
-- **`POST /api/offers` returns 500** - pre-existing backend defect, logged as
-  `status:500` on `/api/offers`. This is the single biggest blocker to verifying
-  any client surface with real data.
-- **Custom package specifications are not displayed** - `GET /api/vpns` sends no
-  `is_custom` / `traffic_gb` / `duration_days` / `device_limit`. Backend change,
-  out of scope for Section 02.
-- **`auth-login.mjs:28-30`** lets `VEYLIX_EMAIL` override every role. Unset it
-  before any role-parameterised script or `verify:nav` fails on the admin case.
-- **S3-1 / S3-3 / S3-4 / S3-5** - unchanged, still open.
-- **U18** focus ring unverified; **U21** no frontend unit runner.
-- **I-34 / I-35** `ON DELETE CASCADE` (P3).
-- **16 legacy notifications** in the dev database.
-- `go test -race` **BLOCKED** - no C compiler.
-- 1 vCPU / 500 MB target only **ESTIMATED**.
+| Id | Question | Lean |
+|---|---|---|
+| `Q-02` | Migrate or discard the dev database? | Discard — ADR-007 |
+| `Q-03` | Does a production instance exist? | No evidence of one |
+| `Q-05` | Is chat in scope? Already built (7 routes, 3 tables) | Keep |
+| `Q-11` | Re-create or retire `D-062`, `D-077`, `D-078`, `D-089`? | Retire formally |
+| `Q-13` | `httpapi` SQL: move the code, or change the rule? | A for `httpapi`, B for services |
+| `Q-14` | Renumber `inbounds.id` to equal `remote_id`? | No — the translation already fixes it |
+
+---
+
+## Next action
+
+Read `docs/new/MASTER_SPEC.md` and `docs/new/ARCHITECTURE.md` §6, then decide
+**`Q-13`**. That decision gates Phase 4.
+
+**Before any release claim:** run `npm run preflight` against a live server. It is
+`NOT RUN`, not `PASS`.
