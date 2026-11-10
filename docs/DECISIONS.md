@@ -4551,3 +4551,515 @@ Deliberate properties:
 **Not verified here:** the full run. This machine has no `flock` and no `/run`, so
 the installer stops at its own guard - correctly. The first real install is the
 owner, on Linux.
+## D-121 - `uninstall --purge-data` means everything, and it ends with the way back
+
+**Date:** 2026-11-10 · **Status:** accepted · **Supersedes:** the purge scope in D-027.2
+
+**Context.** `--purge-data` deleted the database and the keys and stopped there.
+It left behind: the Caddy site (so the host kept answering on the domain with a
+404 for every path), `/var/backups/veylix` (a full copy of the database it had
+just deleted, which made the purge a lie), the `veylix` user and group, and
+`/run/veylix-install.lock`. An operator who said "remove it completely" got a
+host that still held the customer data and still pointed DNS-visible traffic at
+nothing.
+
+**Decision.**
+
+1. `--purge-data` removes backups too. A purge that leaves a copy of the
+   database behind is not a purge. The docs say plainly that a purge is
+   therefore the operator's last chance to take a copy off the host.
+2. The Caddy vhost is removed by **editing**, never by replacing the file.
+   A `Caddyfile.pre-veylix` backup is restored verbatim when it exists;
+   otherwise only the top-level site block whose address list contains the
+   configured domain is cut, by brace counting. Another site on the host is
+   not Veylix's business.
+3. The edited file is run through `caddy validate` **before** `systemctl
+   reload caddy`, and the original is restored if validation fails. A bad
+   Caddyfile is an outage for every site on the host, not just this one.
+4. The `veylix` user and group are deleted, best-effort. A missing account is
+   not a failure.
+5. The purge ends by printing the copy-pasteable re-install one-liner, with the
+   domain already filled in - read from `VEYLIX_PUBLIC_BASE_URL`, the same
+   source as the purge gate, so the banner cannot name a different host than
+   the one that was just removed.
+
+**Unchanged, deliberately.**
+
+- A purge never deletes a 3X-UI client (D-027.3). The banner says so out loud,
+  because an operator reading "completely removed" will assume otherwise.
+- The two gates stay: the flag, and the typed domain. `--dry-run` shows the
+  whole plan and touches nothing, including the Caddyfile - it must not block
+  on stdin, since it is what CI and a cautious operator run first.
+- A default uninstall still preserves data, keys and backups, and now says so
+  by printing the preserved paths.
+
+**Evidence.** `TestDryRunPurgeTouchesNothingOutsideTheTree`,
+`TestPurgeRemovesBackupsToo`, `TestReinstallBannerNamesTheExactCommand`,
+`TestDropSiteBlockKeepsAnotherSite`, `TestDropSiteBlockLeavesAnUnknownDomainAlone`
+- all pass. Negative control: neutering `dropSiteBlock` fails both drop tests
+with "the other site was damaged", and reverting passes them again.
+
+**Not verified.** No real install/uninstall has been executed on a Linux host
+with a second live Caddy site. The Caddyfile edit is proven against a
+representative file and guarded by `caddy validate` at runtime, but the first
+purge on a shared host should be supervised.
+
+## D-122 - `vpn-platformctl` with no arguments is the control menu
+
+**Date:** 2026-11-10 · **Status:** accepted
+
+**Context.** The owner asked for the 3X-UI install experience: run the installer,
+and the control menu is there - then type one short command to get it back.
+Veylix printed a wall of usage text instead, and had no `start`/`stop`/`restart`,
+no `logs`, no certificate check, and no way to recover a lost Super Admin
+password without reinstalling the platform.
+
+**Decision.**
+
+1. `vpn-platformctl` with **no arguments** opens a numbered control menu (19
+   commands + Exit). `help` still prints the usage text, unchanged for scripts.
+2. **The menu is DATA, not a switch.** `controlMenu` is a slice of items, each
+   naming the CLI verb it runs, and `dispatchTable` is the map run() dispatches
+   from. `TestEveryMenuVerbIsDispatched` asserts every menu item names a verb
+   that exists; `TestMenuKeysAreUniqueAndContiguous` asserts the keys run 1..n.
+   A menu item that runs nothing is a lie, and this makes it a build failure.
+3. **Every item delegates to `run()`.** The menu has no logic of its own, so it
+   cannot drift from the CLI and every `--dry-run` guarantee still applies.
+4. **No terminal, no menu.** When stdin is not a TTY the usage text is printed
+   instead of prompting. A menu that blocks forever under `| grep` is worse
+   than no menu. The installer uses the same `[ -t 0 ]` guard.
+5. The installer **prints** the menu unconditionally (so it survives a piped
+   install into a log) and only offers to open it at a real terminal.
+
+**New commands, each verifying its own result.**
+
+- `start` / `stop` / `restart` / `enable` / `disable` - `systemctl` returns 0 as
+  soon as a unit is queued, so each reads the state back and fails loudly if it
+  did not change. `restart` additionally requires `/api/ready` to answer.
+- `logs [-f] [-n N]` - journald, because `deploy/veylixd.service` sets
+  `StandardOutput=journal`. It says so rather than inventing a file path.
+- `cert` - dials the domain over TLS and reports the certificate actually
+  served. A Caddyfile that configures HTTPS is not proof one was issued.
+- `reset-admin` - the recovery path. Reuses `auth.HashPassword` and
+  `auth.ValidatePasswordPolicy`, so the password is byte-for-byte the same
+  shape as one set from the UI, and revokes every session exactly as
+  `auth.Service.ResetStaffPassword` does.
+- `downgrade <ver> --restore-backup <dir>` - a thin front door to
+  `update --allow-downgrade`, so the forward-only-migration guard lives in one
+  tested place.
+
+**Two defects found while building it.**
+
+- `store.Open` does not create the schema; `veylixd` calls `Migrate` separately.
+  `reset-admin` did not, so it failed with `no such table: users` on any
+  database the running service had not opened - exactly the state after a
+  restore. Fixed in the command.
+- `--dry-run` on `uninstall --purge-data` printed `VEYLIX has been completely
+  removed` over a tree it had not touched (D-121).
+
+**Evidence.** 10 new Go tests (4 menu, 6 reset-admin) all pass. Negative
+control: pointing one menu item at a non-existent verb fails
+`TestEveryMenuVerbIsDispatched` with the exact item named, and reverting passes.
+Builds for linux/amd64 and linux/arm64. `scripts/install.selftest.sh` T11 proves
+the shell menu prints, offers 1..19 + Exit, and does not prompt without a
+terminal - 68 PASS / 0 FAIL.
+
+**Not verified.** No real install on Linux; the interactive loop has not been
+driven by hand on a server console.
+
+---
+
+## D-123 · Veylix listens on configurable ports, and 3X-UI may keep 80/443
+
+**Status:** implemented · **Date:** 2026-11-10 · **Supersedes:** nothing
+
+**Problem.** The primary deployment target is a VPS that already runs 3X-UI.
+Xray's inbound normally holds `80` and `443`. `install.sh` checked exactly those
+two ports and `die`d when either was taken, with the advice *"stop the service
+holding it"* — which for Xray means **taking the operator's VPN offline to
+install a VPN platform**. The two products could not share a host, and the
+refusal recommended the one action that breaks the customer's existing service.
+
+**Decision.** All three listeners are configurable, and the defaults do not
+change.
+
+| Flag | Default | Role |
+|---|---|---|
+| `--https-port` | `443` | Caddy's TLS listener — **the port a customer types** |
+| `--http-port` | `80` | plain HTTP: the ACME challenge and the redirect |
+| `--app-port` | `8080` | loopback port `veylixd` binds; Caddy proxies to it |
+
+**Why `443` stays the default.** `https://vpn.example.com` with no port is what a
+customer expects and what every printed URL in this product already says. Making
+`8443` the default would move that burden onto 100% of installs to benefit the
+subset that shares a host. The shared-host operator already knows they are
+choosing something unusual and has a documented pairing:
+`--http-port 8080 --https-port 8443`.
+
+**Rules that follow, and their reasons.**
+
+1. **Ports are validated before anything is written.** A bad value discovered at
+   the Caddy phase leaves a host with a running service and no working HTTPS —
+   the worst of both. `validate_port` accepts `1..65535` only: `0` means "any
+   free port" to the kernel and would leave the listener somewhere nobody can
+   find, and leading zeros (`08`) are a shell octal trap.
+2. **The three ports must be distinct.** Two services on one port is a bind
+   failure; detecting it up front names the pair instead of surfacing
+   `address already in use` from Caddy two phases later.
+3. **The port conflict message names both remedies.** The old text offered only
+   "stop the service". It now offers the 3X-UI port flags *first*, because that
+   is the case that actually occurs, and keeps "stop the stray process" as the
+   second case. Advice that causes an outage is a defect, not a wording choice.
+4. **`--app-port` is not free to drift.** The port is written to
+   `VEYLIX_ADDR` in `veylix.env` and `vpn-platformctl` now **reads it back**
+   (`appPort()`). A hardcoded `:8080` probe would report a healthy service as
+   DOWN on any host installed with `--app-port 9090`. Only the port is read —
+   every probe stays loopback by design, so a `0.0.0.0` or stray host in
+   `VEYLIX_ADDR` cannot redirect the probe elsewhere.
+5. **The Caddyfile keeps an explicit `https://` scheme.** A bare
+   `vpn.example.com:8443` is parsed by Caddy as an **HTTP** site on 8443: it
+   serves plaintext and never attempts a certificate. The scheme is mandatory,
+   not decoration, and `install.selftest.sh` asserts it is present.
+6. **A rendered Caddyfile containing a leftover `__*PORT__` placeholder aborts
+   the install.** Template/installer drift would otherwise reach the live config
+   as literal text, producing a `caddy validate` error far from its cause.
+7. **The printed URL omits `:443` and includes any other port.** `public_url()`
+   keeps the report honest in both directions: `https://host` for 443,
+   `https://host:8443` otherwise.
+
+**The ACME caveat, stated rather than hidden.** Caddy's pre-authorized challenges
+need `80` (HTTP-01) or `443` (TLS-ALPN-01). If 3X-UI holds both, neither is
+available and automatic issuance will usually fail. The installer reports that as
+**exit 2 — installed but not publicly served** and prints `repair`; it never
+claims HTTPS works. DNS-01 would solve it without a free inbound port, but needs
+a provider plugin in Caddy and is a deliberate change, not a flag.
+
+**Not claimed.** Custom HTTPS port + a real Let's Encrypt certificate has **not**
+been verified against a live CA. `docs/INSTALL.md` §B.8 says so in those words.
+
+**Evidence.** 17 new Go subtests (`TestAppPort` ×14, `TestDefaultBaseURLFollowsAppPort`,
+`TestDefaultBaseURLIsAlwaysLoopback`) pass. `install.selftest.sh` T12 adds 18
+checks — 86 PASS / 0 FAIL overall. Negative control run twice: removing the
+`https://` scheme fails 2 named checks, removing the 3X-UI remedy from the
+conflict message fails its named check, and restoring returns green. Caddyfile
+render verified by hand for both `8080/8443/9090` and the `80/443/8080` default.
+
+
+---
+
+## D-124 · `[ -t 0 ]` was the wrong terminal test; ports are chosen on the way in
+
+**Status:** implemented · **Date:** 2026-11-10 · **Supersedes:** nothing
+
+**What the owner asked for.** `bash <(curl -Ls .../install.sh)` should offer a
+port choice as one step on the way in, Enter should take the defaults, and the
+control menu should have a section for changing ports.
+
+**The defect that had to be fixed first, and it is the important one.**
+
+The installer guarded every prompt with `[ -t 0 ]`. That test is **false under the
+documented invocation**:
+
+```bash
+bash <(curl -Ls .../install.sh)     # stdin is the pipe carrying the SCRIPT
+curl -Ls .../install.sh | bash      # same
+```
+
+`-t 0` asks "is *stdin* a terminal". Here stdin is the script itself, so on a
+perfectly interactive terminal it answers no. Two consequences, both shipped:
+
+1. The Super Admin prompt and the control-menu offer **never appeared** on a real
+   terminal reached this way — the code path was unreachable.
+2. Any `read` that did run consumed the **next line of `install.sh`** as the
+   answer, or blocked. A prompt reading its own script is a data-corruption bug
+   that looks like a hang.
+
+3X-UI's installer uses `-t 0` as well; copying it is what introduced this.
+
+**Decision.** Every prompt reads from **`/dev/tty`**, via three helpers in
+`scripts/lib/common.sh`:
+
+| Helper | Job |
+|---|---|
+| `has_tty` | is there a controlling terminal to ask in? |
+| `read_tty VAR` | read one line from `/dev/tty` |
+| `read_tty_secret VAR` | the same, without echo |
+
+`/dev/tty` is the operator's terminal regardless of what stdin is wired to, so
+the prompt works under `bash <(curl ...)` and under a normal `./install.sh` alike.
+
+**A controlling terminal is inherited.** A script that pipes a subprocess still
+hands it a working `/dev/tty`, so `VEYLIX_NONINTERACTIVE=1` forces `has_tty` to
+answer no. `scripts/install.selftest.sh` sets it. Without this the test suite
+blocked at a live prompt — which is how the gap was found, by running it.
+
+**The port step.** `choose_ports` runs in `main` before anything is written:
+
+- a port flag was passed → **no question** (they already answered);
+- `--dry-run` → **no question**, defaults, and it says so;
+- no terminal / `VEYLIX_NONINTERACTIVE=1` → defaults, and it says so;
+- otherwise a three-way choice: **1)** standard 443/80, **2)** the 3X-UI pairing
+  8443/8080 (with the certificate caveat printed beside it, not only in the
+  docs), **3)** type each port with Enter meaning that port's default.
+
+A typo at the custom prompt re-asks up to three times — one line, not the whole
+install — then falls back to the default.
+
+**The menu section.** `vpn-platformctl` gained `ports` (show) and `ports set`
+(change), and the menu lists it as item 16 under *DOMAIN & ACCESS*. It is a
+dispatch-table verb like every other, so `TestEveryMenuVerbIsDispatched` proves
+it is real; the shell menu is kept in step and T11 asserts 20 commands + Exit in
+both. `ports set` keeps any flag you do not pass, validates the trio (including
+the duplicate pairs), backs up the Caddyfile, runs `caddy validate` **before**
+reloading, rewrites `VEYLIX_ADDR` so the daemon moves with it, restarts, and then
+**probes `/api/ready` on the new port** — because `systemctl` returns 0 on
+queueing, and a command whose whole job is moving the listener must prove the
+listener moved.
+
+**One more page-or-button trap avoided.** `ports set` writes `VEYLIX_HTTPS_PORT`
+and `VEYLIX_HTTP_PORT` into `veylix.env`; without them `ports` could report a
+configuration the Caddyfile no longer matches. Reads fall back to 443/80 when the
+keys are absent, which is what a pre-D-123 install is.
+
+**Not claimed.** Nothing here has run on Linux. The interactive picker has been
+exercised only for its no-terminal paths (no blocking, defaults kept); nobody has
+pressed `2` on a server console. Real certificate issuance on a non-standard
+HTTPS port remains untested (D-123).
+
+**Evidence.** 8 new Go tests (`TestValidatePort`, `TestPortSetValidate`,
+`TestPortSetFromEnv`, `TestSetEnvKey`, `TestRenderPortsFromPlaceholders`,
+`TestRenderPortsFromRenderedFile`, `TestPublicURL`) pass; 17/17 packages
+green. `install.selftest.sh` T13 adds 11 checks — **98 PASS / 0 FAIL**. Negative
+control: restoring a plain `read -r` fails T13 with *"1 prompt(s) still read from
+stdin and would hang under bash <(curl ...)"*, and reverting returns green.
+
+
+---
+
+## D-125 · DNS-01 through Cloudflare: the challenge that needs no inbound port
+
+**Status:** implemented, plugin-gated · **Date:** 2026-11-10 · **Supersedes:** nothing
+
+**What the owner asked for.** A menu flow: ask for the domain, ask for the
+Cloudflare API token, issue the certificate, make the URL permanent, and show
+that URL in the Super Admin settings.
+
+**Why it is the right shape.** D-123 gave Veylix its own ports so it could sit
+beside 3X-UI, but left the certificate unsolved: with Xray holding 80 and 443,
+**both** pre-authorized ACME challenges are unavailable — HTTP-01 needs 80,
+TLS-ALPN-01 needs 443. DNS-01 is the only challenge that needs no inbound port at
+all, so it is the one that actually resolves the shared-host case.
+
+**The constraint that shapes the whole design.** Caddy's official packages
+*build only the standard modules* — their own install page says so. The
+`dns.providers.cloudflare` module is a plugin and is **absent from a stock
+Caddy**. A Caddyfile naming `dns cloudflare` on a stock binary fails to load.
+Therefore:
+
+1. `domain-set --dns-provider cloudflare --cf-token <token>` **asks the binary
+   what it contains** (`caddy list-modules`) before writing anything. A docker
+   image, a distro package and an xcaddy build all answer truthfully; guessing
+   from the install method would not.
+2. If the module is absent, the command **refuses with the download URL and the
+   xcaddy command**, and changes nothing. It never writes a Caddyfile that will
+   not load, and never reports HTTPS success it cannot deliver.
+3. `caddy list-modules` failing is reported as *cannot tell*, not as *absent* —
+   the two lead to opposite actions.
+
+**Decisions inside it.**
+
+- **The token gets its own file, not a line in `veylix.env`.** `veylix.env` is
+  loaded into the daemon's environment and is readable via `systemctl show`; a
+  DNS-provider token there would be a credential leak. It goes to
+  `/etc/veylix/caddy-dns-cloudflare.token` at 0600 and nowhere else. The
+  **provider name** (not secret) is recorded as `VEYLIX_DNS_PROVIDER`.
+- **The token is validated by shape before being written** — Cloudflare tokens
+  are ~40 characters of `[A-Za-z0-9_-]`. A token with a trailing space is refused
+  rather than silently trimmed, because a trimmed token that fails produces a
+  Cloudflare *permissions* error, which sends the operator looking in the wrong
+  place. Validity is never checked here: this CLI makes no outbound request it
+  does not explain, and Caddy's own error at issuance is better than anything
+  invented.
+- **The Caddyfile block is marked and replaced, never appended.** `tls { dns … }`
+  is written between `# BEGIN veylix-dns` and `# END veylix-dns`, so a second run
+  replaces it instead of producing two `tls` blocks (a parse error) or leaving a
+  rotated-away token that looks configured. The insert skips the global options
+  block, where a `tls` directive is invalid.
+- **DNS-01 skips the A-record precheck.** It proves control through a TXT record,
+  so requiring an A record would be requiring something the challenge does not
+  use. The skip is printed, not silent.
+- **The Super Admin page shows the origin of the request**, via
+  `GET /api/super/settings/public-url`. A stored URL would drift from the
+  Caddyfile after a `domain-set`; `schemeHost` is the same origin the CSRF guard
+  already trusts, so the card cannot display an address the server does not
+  answer at. It is Super-Admin-only and returns `http` on a plain loopback
+  request rather than a flattering `https`.
+
+**Not done, and deliberately.** The Cloudflare plugin binary is **not installed
+or replaced by Veylix**. Replacing `/usr/bin/caddy` is a privileged, destructive
+act on a package-managed file, and doing it automatically from a menu item would
+contradict D-119's rule that the installer does not fight the package manager.
+The command tells the operator exactly how, with both routes and their trade-offs.
+A `--install-plugin` flag is the obvious next step and needs its own decision.
+
+**Not verified.** No real certificate has been issued through Cloudflare, no
+real token has been used, and the plugin path has never run on a host that has
+the module. The block renderer, the token handling and the gate are unit-tested;
+the ACME round trip is not.
+
+**Evidence.** 8 new Go tests in `dns_test.go` (`TestDNSProviderFor`,
+`TestValidateCloudflareToken` ×9 subtests, `TestRenderDNSChallenge`,
+`TestRenderDNSChallengeWithoutASiteBlock`, `TestTokenFileIsOwnerOnly`,
+`TestRestoreTokenFileRemovesANewFile`, `TestDNSConfigRoundTrip`) and 4 in
+`settings_routes_test.go` (`TestPublicURL*`) — all pass, 17/17 packages green.
+`npm run lint` 0 errors, build OK, `audit` OK, `docs:verify` OK after the route
+and test counts were corrected (144 routes, 709 tests).
+
+**A defect found by the tests I wrote.** `validateCloudflareToken` trimmed before
+validating, so a token with a trailing space was *accepted* — the exact paste
+error the check existed to catch. Fixed to refuse trailing whitespace explicitly.
+
+
+---
+
+## D-126 · `vey` — the short launcher, measured against 3X-UI
+
+**Status:** implemented · **Date:** 2026-11-10 · **Supersedes:** nothing
+
+**How this was found.** The owner asked for the 3X-UI experience. Reading 3X-UI's
+`install.sh` and its `x-ui.sh` side by side shows what Veylix was missing, and it
+is not a feature — it is a **command name**.
+
+**What 3X-UI actually does**, verified in its source:
+
+| 3X-UI | Veylix before this |
+|---|---|
+| installation downloads `x-ui.sh` and installs it as **`/usr/bin/x-ui`** | only `/usr/local/bin/vpn-platformctl` |
+| `x-ui` with no args runs `show_menu` | `vpn-platformctl` with no args runs the menu |
+| the installer's closing banner lists `x-ui start / stop / log / update …` | the banner listed `vpn-platformctl …` |
+| the menu is a **separate script**, not the installer | the menu is compile-time in the Go binary (better) |
+
+So 3X-UI's operator types **eight characters**. Veylix's typed **sixteen**, and
+had to know that the menu lived behind a `menu` argument that (see below) did not
+exist as a dispatched verb. That is a support ticket on the very first command
+anyone runs.
+
+**Decision.** `install.sh` writes **`/usr/local/bin/vey`**.
+
+- A **script written by the installer**, not a symlink and not a downloaded
+  asset: it cannot be missing from a release bundle, and it cannot drift from the
+  binary it launches.
+- It `exec`s `vpn-platformctl` with whatever arguments it was given, so
+  `vey`, `vey status`, `vey logs -n 50` and `vey domain-set …` all work, and
+  there is exactly one implementation of every command.
+- It refuses to source or eval anything. It runs as root from a fixed path; a
+  launcher that could be influenced by its environment would be an injection
+  path.
+- If the binary is absent it says so in one line and exits 1, instead of bash
+  printing `No such file or directory` for a path the operator cannot see.
+- A **script** rather than a symlink also survives `vpn-platformctl update`,
+  which replaces the target by rename.
+
+**The `menu` verb that was missing.** The installer offered the menu through
+`vpn-platformctl menu`, but `menu` was never a dispatched verb — the offer was
+dead. Adding it to the `dispatchTable` literal is a compile error
+(`dispatchTable → cmdMenu → showMenu → menu → runFromMenu → run →
+dispatchTable` is an initialization cycle), so it is assigned in `init()`
+alongside the service verbs, with the cycle documented where the assignment is.
+`menu_test.go` still proves every menu item names a dispatched verb.
+
+**The banner now teaches the short name** — `sudo vey` as step 3, with the long
+form kept as the alternative rather than the instruction.
+
+**A note on `-t 0`, revisited.** D-124 called 3X-UI's `-t 0` guard a bug. Reading
+their source again: it guards only the **install** flow
+(`XUI_NONINTERACTIVE=1 || ! -t 0`). Their **menu** lives in a separate script
+with no such guard, because by the time it runs stdin is a terminal. The
+conclusion stands for `bash <(curl …)`, but the attribution to 3X-UI was too
+strong and the ledger entry (DEV-050) says so. `/dev/tty` remains the right
+answer for the installer.
+
+**Not verified.** No Linux install has been run. The launcher is proven by
+extraction and `bash -n` plus a real execution with the binary missing, which is
+the only path that can be exercised here.
+
+**Evidence.** `install.selftest.sh` T14 adds 11 checks — **109 PASS / 0 FAIL**.
+Negative control: removing `install_launcher` and replacing `sudo vey` with
+`vpn-platformctl` fails 4 checks by name; restoring returns green. `go build`,
+`go vet`, `gofmt` clean; 17/17 packages pass.
+
+---
+
+## D-127 · The one-liner could not start: `$HERE` under process substitution
+
+**Status:** fixed and pushed. **Reported by:** the owner, on a real Ubuntu host.
+
+**What happened.** The documented install line, run verbatim on a VPS:
+
+```
+root@host:~# bash <(curl -Ls https://raw.githubusercontent.com/…/install.sh)
+/dev/fd/63: line 35: /dev/fd/scripts/lib/common.sh: No such file or directory
+```
+
+It failed before a single phase ran. The message is not a missing file on
+GitHub — `scripts/lib/common.sh` returns 200 — it is the installer resolving its
+own location wrongly.
+
+**Cause.** `bash <(file)`, `bash <(curl …)` and `curl … | bash` all hand bash a
+**pipe**, not a path. `BASH_SOURCE[0]` is then `/dev/fd/63`, and
+
+```bash
+HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)   # → /dev/fd
+. "$HERE/scripts/lib/common.sh"                       # → /dev/fd/scripts/… nope
+```
+
+`dirname` of the pipe is `/dev/fd`, a real directory that holds no checkout.
+Every sibling path built from `$HERE` was therefore wrong — `common.sh` first,
+and `$HERE/deploy/` in `resolve_deploy_dir()` next.
+
+**Why it shipped.** `install.selftest.sh` invoked `install.sh` **as a file**
+(`bash "$ROOT/install.sh"`), where `$HERE` is correct. 109 green checks proved
+the file-run path and never proved the documented path. The documented path is
+the one the owner uses. That gap was the defect, not the `dirname` line itself.
+
+**The fix, in two parts.**
+
+1. **Location resolution.** If `$HERE` has no `scripts/lib/common.sh`, treat the
+   run as a bootstrap: fetch `common.sh` from `$VEYLIX_RAW_BASE` (default the
+   project's raw `main`) into a `mktemp -d` tree, trap its removal, and continue
+   from there. A real checkout never takes this branch, so `./install.sh` and
+   `sudo bash install.sh` are byte-for-byte unchanged in behaviour.
+
+2. **Deployment templates.** `resolve_deploy_dir()` gains a fourth source, the
+   raw repository's `deploy/`. Without it the bootstrap run would resolve no
+   Caddyfile and no systemd unit, print a warning, and **continue** — installing
+   a host with no HTTPS site and no backup and calling that success. That
+   warning-and-continue is now a **refusal** (`return 1`), which is what the
+   function already claimed to do. A source that cannot supply the unit and the
+   Caddyfile is not a source.
+
+**What this deliberately does not do.** It does not inline `common.sh` into
+`install.sh`. Inlining would remove the round trip but make `install.sh` a
+generated file: `common.sh` would then exist twice with no rule saying which is
+authoritative. One definition, fetched at run time, keeps one home for the
+shared shell helpers — the same principle as the rest of this project.
+
+**Evidence.**
+
+| Check | Result |
+|---|---|
+| `bash <(cat install.sh) --help` (the failing path) | reaches the CLI, no `/dev/fd` error |
+| The **old** remote `install.sh`, same command | reproduces `/dev/fd/63: line 35` verbatim |
+| `install.selftest.sh` | **110 PASS / 0 FAIL** (was 109; +1 for the raw route) |
+| Negative control: strip `$VEYLIX_RAW_BASE/deploy` | T10 fails by name, rc 1 |
+| `install.sh` / `common.sh` encoding | mojibake 0, U+FFFD 0 |
+
+**Not verified.** `flock` and `/run` do not exist on this Windows machine, so the
+dry-run still stops at phase 1 here. The bootstrap branch itself is proven; a
+Linux end-to-end run remains outstanding, as it was under D-120 to D-126.
+
+**The lesson recorded for future work.** A selftest must invoke the installer
+the way the documentation tells a user to. Any test that only runs the file
+directly cannot see this class of defect.
+
+

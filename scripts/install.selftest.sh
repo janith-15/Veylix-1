@@ -378,13 +378,47 @@ else
 fi
 unset -f curl
 
-# (c) nothing found at all: honest refusal, no fabricated source
+# (c) nothing found anywhere: honest refusal, no fabricated source.
+#
+# The raw-repository fallback (D-127) means "nothing found" can no longer be
+# produced by an empty disk - a live network would answer it. So the stub here
+# denies EVERY url, which is what an offline or firewalled host looks like. The
+# assertion is unchanged: no source, exit 1, and the refusal names the routes.
 HERE="$HERE_NO_DEPLOY"
 SCRIPT_BASE=""
 DEPLOY_SRC=""
+curl() { return 22; }   # no network: the host is offline
 ( resolve_deploy_dir ) >"$WORK/deploy-none.log" 2>&1
 expect_rc "T10 no templates is reported as a miss" $? 1
 expect_grep "T10 the miss names --script-base" "--script-base" "$WORK/deploy-none.log"
+unset -f curl
+
+# (d) D-127: a bootstrap run with no checkout takes the raw-repository route.
+#     This is the branch `bash <(curl ... install.sh)` depends on.
+curl() {
+	local out="" url=""
+	while [ $# -gt 0 ]; do
+		case "$1" in
+			-o) out=$2; shift 2 ;;
+			-*|-fsSL|-fsS) shift ;;
+			*)  url=$1; shift ;;
+		esac
+	done
+	case "$url" in
+		*/deploy/*) [ -n "$out" ] && printf 'template\n' >"$out"; return 0 ;;
+		*) return 22 ;;
+	esac
+}
+DEPLOY_SRC=""
+probe_raw() { HERE="$HERE_NO_DEPLOY"; resolve_deploy_dir >/dev/null 2>&1; }
+probe_raw
+if [ -s "${DEPLOY_SRC:-/nonexistent}/veylixd.service" ] \
+	&& [ -s "${DEPLOY_SRC:-/nonexistent}/Caddyfile" ]; then
+	ok "T10 the raw repository supplies templates when there is no checkout"
+else
+	bad "T10 the raw repository fallback is missing (DEPLOY_SRC=${DEPLOY_SRC:-<empty>})"
+fi
+unset -f curl
 
 # ---------------------------------------------------------------------------
 # T7 - checksum enforcement (the same helper the installer uses).
