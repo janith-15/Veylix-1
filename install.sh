@@ -30,6 +30,42 @@
 
 set -euo pipefail
 
+# A guard for the invocation that cannot work, placed before anything else so it
+# is the FIRST thing an operator sees.
+#
+#   sudo bash <(curl -Ls .../install.sh)     <- broken
+#
+# Process substitution is expanded by the CALLING shell into /dev/fd/63, a
+# descriptor owned by that non-root shell. `sudo` closes it (it closes every fd
+# above 2 unless told otherwise), so the child bash opens a path that no longer
+# points at anything and dies with "bash: /dev/fd/63: No such file or directory".
+# Reproduced on Ubuntu 24.04 against the live URL: exit 127, one line, no
+# installer output at all. Nothing inside install.sh can fix this, because the
+# failure happens before a single line of it runs -- so the honest fix is to
+# detect the shape and name the two forms that DO work.
+#
+# Detection: we only reach this line if bash started, and $0 tells us how. Under
+# `sudo bash <(...)` the script is /dev/fd/N and SUDO_* is set by sudo itself, so
+# this branch fires only for that mistake. A plain `sudo bash install.sh` has a
+# real $0 and is untouched.
+case "${0:-}" in
+/dev/fd/* | /proc/*/fd/*)
+	if [ "$(id -u)" -eq 0 ] && [ -n "${SUDO_USER:-}" ]; then
+		echo "install.sh: ERROR: 'sudo bash <(curl ...)' cannot work." >&2
+		echo "install.sh:" >&2
+		echo "install.sh:   sudo closes the /dev/fd pipe that <(curl ...) creates," >&2
+		echo "install.sh:   so bash starts with no script to read. This is a shell" >&2
+		echo "install.sh:   limitation, not an installer failure - nothing ran." >&2
+		echo "install.sh:" >&2
+		echo "install.sh:   Use either of these instead:" >&2
+		echo "install.sh:     curl -Ls https://raw.githubusercontent.com/janith-15/Veylix-1/main/install.sh | sudo bash" >&2
+		echo "install.sh:     sudo bash -c \"\$(curl -Ls https://raw.githubusercontent.com/janith-15/Veylix-1/main/install.sh)\"" >&2
+		exit 1
+	fi
+	;;
+esac
+
+
 # Where this script physically is.
 #
 # Under the documented one-liner, `bash <(curl -Ls .../install.sh)`, bash reads
@@ -612,22 +648,45 @@ preflight() {
 	if [ "$SKIP_PORTS" -eq 1 ]; then
 		skip "ports $HTTP_PORT/$HTTPS_PORT" "--skip-ports was passed; Caddy may fail to bind"
 	else
-		local p
-		for p in "$HTTP_PORT" "$HTTPS_PORT"; do
+		local p ports_to_check
+		# --http binds ONE public port (80, or its fallback). There is no TLS
+		# listener, so 443 is not ours and 3X-UI legitimately holds it. Checking
+		# it refused the documented 3X-UI coexistence case with "port 443 is
+		# already in use" - on precisely the host this mode exists for. Reported
+		# from a live 3X-UI box, where that stopped the install outright.
+		if [ "$HTTP_MODE" -eq 1 ]; then
+			ports_to_check=$HTTP_PORT
+		else
+			ports_to_check="$HTTP_PORT $HTTPS_PORT"
+		fi
+		for p in $ports_to_check; do
 			if port_in_use "$p"; then
 				# The old message said "stop the service holding it". That is
 				# correct for a stray process and WRONG for 3X-UI, which the
 				# operator needs running - it is what serves their VPN clients.
 				# Naming both remedies is the difference between a fix and an
 				# outage.
-				die "port $p is already in use.
+				#
+				# The fix command is printed WITH a domain only when one was
+				# given. A --domain-less run used to print an empty flag
+				# ("--domain  --http-port 8080"), which cannot be pasted, so the
+				# one line that was supposed to rescue the install was unusable.
+				if [ -n "$DOMAIN" ]; then
+					die "port $p is already in use.
        If it is 3X-UI (Xray) and you need it running, give Veylix its own ports:
          sudo ./install.sh --domain $DOMAIN --http-port 8080 --https-port 8443
        If it is a stray process you do not need, stop it and re-run.
        Then reach Veylix at https://$DOMAIN:8443 (note the port)."
+				else
+					die "port $p is already in use.
+       If it is 3X-UI (Xray) and you need it running, give Veylix its own ports:
+         sudo bash install.sh --http --http-port 8080 --app-port 9090
+       If it is a stray process you do not need, stop it and re-run.
+       Then reach Veylix at http://<this-host>:$HTTP_PORT (note the port)."
+				fi
 			fi
 		done
-		say "ports: $HTTP_PORT and $HTTPS_PORT are free"
+		say "ports: $ports_to_check free"
 	fi
 
 	if [ "$HTTP_MODE" -eq 1 ]; then
@@ -1553,6 +1612,16 @@ main() {
 	fi
 
 	export DRY_RUN
+
+	# Root FIRST, lock SECOND. The lock lives in /run, which is root-owned
+	# drwxr-xr-x, so a non-root run fails on "cannot open lock file
+	# /run/veylix-install.lock: Permission denied" -- a message about a file the
+	# operator has never heard of, for a problem that is simply "you forgot
+	# sudo". Reported from a live host where `bash <(curl ...)` as the default
+	# cloud user produced exactly that and nothing else. The check is cheap,
+	# side-effect free and names the real fix, so it goes before anything that
+	# needs privileges.
+	need_root
 
 	acquire_lock "$LOCK_PATH"
 

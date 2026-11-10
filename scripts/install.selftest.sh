@@ -1125,6 +1125,65 @@ expect_grep "T20 a failed bootstrap names the URL" \
 	"could not download \$_veylix_url" "$ROOT/install.sh"
 
 
+# ---------------------------------------------------------------------------
+# T21 - the three live-host failures, found on a real 3X-UI VPS.
+#
+# All three were found by running the documented one-liner on Ubuntu 24.04 with
+# 3X-UI already installed, not by reading the code. Each one stopped the install
+# with a message that did not name the fix, so each gets a gate here.
+# ---------------------------------------------------------------------------
+
+# (a) `sudo bash <(curl ...)` - sudo closes the /dev/fd pipe and bash dies with
+#     "No such file or directory" before this script runs. It cannot be fixed
+#     from inside, only DETECTED, so the gate checks the detection exists and
+#     that it names a working alternative rather than just erroring.
+expect_grep "T21 sudo + process substitution is detected" \
+	'case "${0:-}" in' "$ROOT/install.sh"
+# expect_grep is grep -F (fixed string), so the pattern is literal - no glob.
+expect_grep "T21 the /dev/fd invocation is recognised" \
+	'/dev/fd/*' "$ROOT/install.sh"
+# A guard with no fix in it is still a dead end: it must offer BOTH forms.
+expect_grep "T21 the guard offers the pipe form" \
+	'| sudo bash' "$ROOT/install.sh"
+expect_grep "T21 the guard offers the bash -c form" \
+	'sudo bash -c' "$ROOT/install.sh"
+
+# (b) need_root must run BEFORE the lock. The lock lives in root-owned /run, so
+#     a non-root run otherwise fails on "Permission denied" for a file the
+#     operator has never heard of, when the actual problem is "forgot sudo".
+T21_main=$(awk '/^main\(\)/{f=1} f' "$ROOT/install.sh" 2>/dev/null)
+T21_root_at=$(printf '%s\n' "$T21_main" | grep -n '[[:space:]]need_root$' | head -1 | cut -d: -f1)
+T21_lock_at=$(printf '%s\n' "$T21_main" | grep -n 'acquire_lock' | head -1 | cut -d: -f1)
+if [ -z "$T21_root_at" ] || [ -z "$T21_lock_at" ]; then
+	bad "T21 the root check precedes the lock" \
+		"need_root (got '$T21_root_at') or acquire_lock (got '$T21_lock_at') not found in main()"
+elif [ "$T21_root_at" -lt "$T21_lock_at" ]; then
+	ok "T21 the root check precedes the lock (line $T21_root_at < $T21_lock_at)"
+else
+	bad "T21 the root check precedes the lock" \
+		"need_root is at $T21_root_at, AFTER acquire_lock at $T21_lock_at - a non-root run fails on /run permissions instead of saying 're-run with sudo'"
+fi
+
+# (c) --http mode binds ONE public port. Checking 443 refused the documented
+#     3X-UI coexistence case, because 3X-UI/Xray holds 443 itself.
+if grep -q 'ports_to_check=$HTTP_PORT$' "$ROOT/install.sh"; then
+	ok "T21 --http checks only its own public port"
+else
+	bad "T21 --http checks only its own public port" \
+		"--http mode still validates the HTTPS port, which 3X-UI owns"
+fi
+
+# (d) The port-clash fix command must be PASTEABLE. It used to interpolate an
+#     empty $DOMAIN, printing "--domain  --http-port 8080" - a command that
+#     errors when run, in the one message meant to rescue the install.
+if grep -q 'if \[ -n "\$DOMAIN" \]; then' "$ROOT/install.sh"; then
+	ok "T21 the port-clash fix command is pasteable without a domain"
+else
+	bad "T21 the port-clash fix command is pasteable without a domain" \
+		"the die message still interpolates \$DOMAIN unconditionally, so a --http run prints an empty --domain"
+fi
+
+
 printf '\n'
 if [ "$fail" -eq 0 ]; then
 	printf 'install.sh: all guard checks passed\n'
