@@ -18,8 +18,11 @@ that is the remaining gap, and §F says so precisely.
 ## B0. The one-line install (no flags needed)
 
 **You do not need a domain.** With no options the installer serves the app over
-**plain HTTP on port 80, reached by IP address** — the same shape 3X-UI installs
-in. Add TLS later from the control menu.
+**plain HTTP, reached by IP address** — the same shape 3X-UI installs in. Add TLS
+later from the control menu.
+
+**It asks you nothing.** Ports are probed and chosen automatically, so one
+command is the whole install:
 
 ```bash
 # As root already (the usual case: `sudo -i` first)
@@ -31,6 +34,20 @@ bash <(curl -Ls https://raw.githubusercontent.com/janith-15/Veylix-1/main/instal
 curl -Ls https://raw.githubusercontent.com/janith-15/Veylix-1/main/install.sh -o /tmp/veylix.sh
 sudo bash /tmp/veylix.sh
 ```
+
+### How the ports are chosen
+
+Nothing is asked, because a question you can answer wrongly is worse than a
+probe you cannot:
+
+| Port | Tries, in order | Why |
+|---|---|---|
+| public HTTP | `80`, `8080`, `8081`, `8880`, `2080` | 80 needs no colon in a browser; the rest step around a 3X-UI that already holds it |
+| HTTPS | `443`, `8443`, `9443` | only for a `--domain` install |
+| app (internal) | `8080`, `18080`, `28080`, `38080` | **always differs from the public port**, so Caddy and veylixd cannot fight over one number |
+
+Nothing free? The install stops and names the flag that fixes it. It never
+prints a warning and then quietly refuses.
 
 Afterwards it prints the address to open, and this warning, in full:
 
@@ -48,6 +65,12 @@ sudo vey domain-set <your-domain> --dns-provider cloudflare --cf-token <token>
 sudo vey cert
 ```
 
+**Change the ports later** — the installer is not run again:
+
+```bash
+sudo vey          # 16) Change ports
+```
+
 ### Which form works
 
 | Form | Works? | Why |
@@ -63,8 +86,9 @@ sudo vey cert
 
 | You pass | You get | Needs |
 |---|---|---|
-| nothing | **HTTP on :80, by IP** | nothing |
+| nothing | **HTTP by IP, ports auto-chosen** | nothing |
 | `--http` | same, said explicitly | nothing |
+| `--http-port 2231 --app-port 2232` | HTTP on a port you chose | those ports free |
 | `--domain example.com` | HTTPS on :443 with a real certificate | a domain whose A record points here, and free 80/443 |
 | `--domain … --http-port 8090 --https-port 9443` | HTTPS on 9443 | those ports free |
 | `--skip-caddy` | loopback only, no proxy | nothing — for a host where another proxy already exists |

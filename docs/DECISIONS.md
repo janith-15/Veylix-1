@@ -5300,6 +5300,88 @@ version.
 the template, not against `caddy validate` on a live host, and nothing here
 proves that a browser reaches port 80 through an external firewall.
 
+---
+
+## D-131 · 3X-UI asks nothing, so Veylix must ask nothing: ports are probed
+
+**Status:** implemented. **Asked for by:** the owner, bluntly, after four failed
+attempts:
+
+> "3X-UI doesn't have this much trouble. Just make it work properly."
+
+They were right and the comparison was fair. `x-ui`'s installer asks nothing,
+installs, and prints a menu. Ours asked three questions and then refused the
+answer.
+
+**What actually happened on the host.** The picker was answered `3`, then
+`Port to serve on: 2231` and `App port: 2231` — the same number twice. That is
+the natural thing to type when nobody has explained the difference, and the
+installer's reply was:
+
+```
+install.sh: WARNING: --app-port and --http-port are both 2231. Pick another --app-port,
+install.sh: WARNING, or Veylix will fight Caddy for it.
+```
+
+and then it stopped. **A WARNING followed by a silent stop** reads as "noted,
+carrying on", so the operator ran it again, hit the lock (see below), and had no
+idea what to change. Three separate defects stacked into one dead end.
+
+**Defect 1 - it asked at all.** A prompt is an opportunity to answer wrongly, and
+the installer then has to reject the answer, which is exactly the confusion
+above. Removed. `choose_ports()` now probes:
+
+| Port | Candidates, in order |
+|---|---|
+| public HTTP | `80` `8080` `8081` `8880` `2080` |
+| HTTPS | `443` `8443` `9443` |
+| app (internal) | `8080` `18080` `28080` `38080`, and re-picked if it equals either Caddy port |
+
+The app port cannot collide with the public port **by construction**, so the
+collision that stopped the run is not reachable. If nothing is free the install
+dies naming `--http-port` — never a warning alone.
+
+`port_is_free()` deliberately reports BUSY when it cannot tell (no `ss`, no
+`netstat`, no readable `/proc/net/tcp`). Claiming a port is free on a guess ends
+as "address already in use" three phases later, far from the cause.
+
+**Defect 2 - the lock outlived a suspended run.** `^Z` stopped the process with
+descriptor 9 still open, so the `flock` stayed held. Every later run answered
+`another veylix install/upgrade is running` and there was nothing to clean up,
+because the process was merely **stopped**, not dead. `acquire_lock` now traps
+`EXIT`, `INT`, `TERM` and `TSTP` and calls `release_lock`, which closes fd 9
+(that is what actually releases a `flock`) and removes the file. A stopped
+installer is not going to finish, so `TSTP` releases and exits rather than
+pretending the mutex is still ours.
+
+**Defect 3 - a predicate that could not say no.** `validate_ports_for_install`
+is called by the selftest as a function, so it must return 1, not `exit`. The
+first attempt at Defect 1 put `die` inside it and killed the test runner at
+check 75. It now sets `PORT_CLASH` and returns; **`main`** prints
+`ERROR:` plus the exact command that fixes it. One place decides, one place
+speaks.
+
+**Evidence.**
+
+| Check | Before | After |
+|---|---|---|
+| `bash install.sh` | 3 prompts, then a WARNING and a stop | **no prompt**; `ports: HTTP 80, app 8080` |
+| app port = public port | reachable, via typing | **impossible** — chosen from a disjoint list |
+| nothing free | WARNING, then stop | `ERROR` naming `--http-port` |
+| `^Z` then re-run | lock held forever | lock released |
+
+| Gate | Result |
+|---|---|
+| `install.selftest.sh` | **140 PASS / 0 FAIL** (was 132) |
+| T19, new | 9 checks: detection, 3X-UI on 80, exhaustion, flag precedence, lock traps |
+| Negative control: re-add the prompt | **7 checks fail**, 4 of them T19 by name |
+| T13 (superseded assertion) | replaced: asserts the installer no longer prompts |
+
+**Not verified.** `ss` is stubbed in T19 because this machine has no Linux
+sockets to probe; the real probe path is exercised only by the host itself. No
+Linux install has run.
+
+
 
 
 

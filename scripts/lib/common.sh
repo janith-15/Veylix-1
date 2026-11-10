@@ -183,8 +183,36 @@ acquire_lock() {
 	# `exec 9>` truncates; that is fine because flock is the mutex, not the file.
 	exec 9>"$lock" || die "cannot open lock file $lock"
 	flock -n 9 || die "another veylix install/upgrade is running (lock: $lock)"
+
+	# Release on ANY exit path, including Ctrl+C and Ctrl+Z.
+	#
+	# Without this a suspended run (^Z) kept fd 9 open and the lock held forever:
+	# every later run answered "another veylix install is running" and there was
+	# nothing to clean up, because the process was merely stopped. TSTP is
+	# handled by releasing the lock and then re-stopping, so resuming the job
+	# would run on without the mutex - which is why the handler un-suspends and
+	# exits instead. A stopped installer is not going to finish; making that
+	# explicit is better than leaving the host wedged.
+	# shellcheck disable=SC2064
+	trap '' HUP
+	trap "release_lock '$lock'" EXIT INT TERM
+	trap "release_lock '$lock'; exit 130" TSTP
+
 	say "lock acquired: $lock"
 }
+
+# release_lock LOCKFILE - idempotent. Called from the trap and safe to call twice.
+release_lock() {
+	local lock=${1:-}
+	# Close the fd first: flock is released when the descriptor closes, and
+	# failing to do so is exactly the bug this function exists to prevent.
+	exec 9>&- 2>/dev/null || true
+	if [ -n "$lock" ]; then
+		rm -f "$lock" 2>/dev/null || true
+	fi
+	return 0
+}
+
 
 # ---------------------------------------------------------------------------
 # Secrets
@@ -374,6 +402,28 @@ port_in_use() {
 	hex=$(printf '%04X' "$port")
 	awk -v p=":$hex" 'NR>1 && $2 ~ p {found=1} END {exit !found}' /proc/net/tcp 2>/dev/null
 }
+
+# port_is_free PORT -> 0 when nothing is listening on it right now.
+#
+# The complement of port_in_use, and the only thing choose_ports() needs: the
+# installer looks for a free port instead of asking the operator for one.
+# Deliberately prefers a definite answer: when ss AND netstat are both absent it
+# falls through to /proc/net/tcp, and if that is unreadable too it reports the
+# port as BUSY rather than free. Claiming a port is free when we cannot tell is
+# how an install ends in "address already in use" three phases later.
+port_is_free() {
+	local port=$1
+	if port_in_use "$port"; then
+		return 1
+	fi
+	# port_in_use returns 1 both for "free" and "cannot tell". Distinguish them
+	# when we have no probe at all: then we must not promise the port.
+	if ! have ss && ! have netstat && [ ! -r /proc/net/tcp ]; then
+		return 1
+	fi
+	return 0
+}
+
 
 # resolve_host HOST -> the first IPv4 address, or nothing.
 resolve_host() {

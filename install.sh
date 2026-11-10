@@ -150,6 +150,10 @@ HTTP_MODE=0
 # switches it to all interfaces, which is the whole point of that mode.
 HTTP_BIND=127.0.0.1
 
+# Set by validate_ports_for_install() when two ports collide, so main() can
+# print the exact command that fixes it. Empty when the trio is usable.
+PORT_CLASH=""
+
 # Ports. The defaults are the conventional ones, so an ordinary install on a bare
 # host is unchanged by this feature existing.
 #
@@ -393,89 +397,78 @@ list_versions() {
 # nothing has been written yet. Every failure prints the CORRECTION.
 # ---------------------------------------------------------------------------
 
-# choose_ports -> asks the operator which ports to use, unless they already said.
+# choose_ports -> pick the ports automatically. NO PROMPT.
 #
-# This is the step the owner asked for: `bash <(curl ... install.sh)` should ask
-# about ports on the way in, with Enter meaning "the normal ones".
+# 3X-UI installs without asking anything, and that is the bar: one command, one
+# working URL at the end. The prompt this replaces asked three questions and
+# then refused the answer - an operator typed the same number for the public
+# port and the internal one and the install stopped on a WARNING.
 #
-# Three cases, and each one is deliberate:
-#   1. A port flag was passed        -> no question. They already answered.
-#   2. --dry-run                     -> no question. A dry run must not block or
-#                                       change what the printed plan is based on;
-#                                       it reports the defaults.
-#   3. No terminal (/dev/tty absent) -> no question, keep the defaults, and SAY
-#                                       so. Prompting into the void is how an
-#                                       automated install hangs forever.
+# So the installer looks instead of asking:
+#   1. A port flag was passed        -> that is the answer, use it.
+#   2. Otherwise PROBE the host      -> the first free port from a short list.
+#   3. Nothing free                  -> die, naming --http-port.
+#
+# The app port is chosen to be DIFFERENT from the public one by construction,
+# so the clash that stopped the last run cannot happen at all.
+#
+# --dry-run still probes (it is read-only) so the printed plan is the real plan.
 choose_ports() {
 	if [ "$PORTS_FROM_FLAGS" -eq 1 ]; then
-		return 0
-	fi
-	if [ "$DRY_RUN" -eq 1 ]; then
-		say "ports: using the defaults ($HTTP_PORT/$HTTPS_PORT, app $APP_PORT) - --dry-run does not prompt"
-		return 0
-	fi
-	if ! has_tty; then
-		say "ports: no terminal, so using the defaults ($HTTP_PORT/$HTTPS_PORT, app $APP_PORT)"
-		say "       to change them: --http-port 8080 --https-port 8443"
-		return 0
-	fi
-
-	cat >/dev/tty <<EOF
-
-Ports. The defaults suit a server that is not already using 80 and 443.
-
-  1) Standard   - serve on port 80            $(if [ -z "$DOMAIN" ]; then echo "(http://<your-ip>)"; else echo "(https://<domain>)"; fi)
-  2) 3X-UI host - serve on port 8080          $(if [ -z "$DOMAIN" ]; then echo "(http://<your-ip>:8080)"; else echo "(https://<domain>:8443)"; fi)
-                  use this when 3X-UI is already on this VPS
-  3) Custom     - type your own
-
-EOF
-	printf 'Choose [1]: ' >/dev/tty
-	local choice
-	if ! read_tty choice; then
-		choice=""
-	fi
-
-	# With no domain there is no TLS to place, so "HTTPS port" is a meaningless
-	# question and the picker must not pretend otherwise.
-	case "${choice:-1}" in
-	1)
-		HTTP_PORT=80
-		HTTPS_PORT=443
-		APP_PORT=8080
-		;;
-	2)
-		HTTP_PORT=8080
-		HTTPS_PORT=8443
-		APP_PORT=9090
-		# The caveat belongs next to the choice, not only in the docs: with
-		# 3X-UI holding 80 and 443 the certificate cannot be issued without
-		# one of them, and the operator should learn that now.
-		if [ "$HTTP_MODE" -eq 0 ]; then
-			printf '\n  Note: for a certificate, port 80 or 443 must be free unless you use DNS-01.\n' >/dev/tty
-			printf '  If 3X-UI holds both, HTTPS issuance will fail and the installer will say so\n' >/dev/tty
-			printf '  (exit 2) rather than claim success.\n\n' >/dev/tty
+		# The operator answered with flags. Only fill in what they left out.
+		if [ "$HTTP_MODE" -eq 1 ] && [ "$APP_PORT" = "$HTTP_PORT" ]; then
+			APP_PORT=$(pick_free_port "app (loopback only)" 8080 18080 28080)
 		fi
-		;;
-	3)
-		if [ "$HTTP_MODE" -eq 1 ]; then
-			ask_one_port "Port to serve on (reached by IP)" 80 HTTP_PORT || return 1
-		else
-			ask_one_port "HTTPS port (what customers type)" 443 HTTPS_PORT || return 1
-			ask_one_port "HTTP port (ACME + redirect)" 80 HTTP_PORT || return 1
-		fi
-		ask_one_port "App port (loopback only)" 8080 APP_PORT || return 1
-		;;
-	*)
-		warn "'$choice' is not 1, 2 or 3 - using the standard ports"
-		HTTP_PORT=80
-		HTTPS_PORT=443
-		APP_PORT=8080
-		;;
-	esac
+		say "ports: $([ "$HTTP_MODE" -eq 1 ] && echo "HTTP $HTTP_PORT" || echo "HTTPS $HTTPS_PORT / HTTP $HTTP_PORT"), app $APP_PORT (127.0.0.1)"
+		return 0
+	fi
 
-	say "ports: HTTPS $HTTPS_PORT, HTTP $HTTP_PORT, app $APP_PORT (127.0.0.1)"
+	if [ "$HTTP_MODE" -eq 1 ]; then
+		# Public listener first: 80 is what a browser assumes, so it is the only
+		# port a customer can type without a colon.
+		HTTP_PORT=$(pick_free_port "http" 80 8080 8081 8880 2080) || return 1
+		HTTPS_PORT=443
+	else
+		# A domain install needs both 80 (ACME) and 443 (the site).
+		HTTP_PORT=$(pick_free_port "acme" 80 8080 8081 8880 2080) || return 1
+		HTTPS_PORT=$(pick_free_port "https" 443 8443 9443) || return 1
+	fi
+
+	# The app MUST differ from whatever Caddy took. Asking for a different port
+	# list rather than reusing the public one is what guarantees it.
+	APP_PORT=$(pick_free_port "app (loopback only)" 8080 18080 28080 38080) || return 1
+	if [ "$APP_PORT" = "$HTTP_PORT" ] || [ "$APP_PORT" = "$HTTPS_PORT" ]; then
+		APP_PORT=$(pick_free_port "app (loopback only)" 18080 28080 38080) || return 1
+	fi
+
+	if [ "$HTTP_MODE" -eq 1 ]; then
+		say "ports: HTTP $HTTP_PORT, app $APP_PORT (127.0.0.1) - no prompt; change with: vey ports set"
+	else
+		say "ports: HTTPS $HTTPS_PORT, HTTP $HTTP_PORT, app $APP_PORT (127.0.0.1) - no prompt; change with: vey ports set"
+	fi
 	return 0
+}
+
+# pick_free_port LABEL CANDIDATES... -> the first candidate nothing is bound to.
+#
+# Probes with `ss` (iproute2, present on every supported distribution) and falls
+# back to a connect attempt. A dry run probes too: the probe is read-only, and a
+# plan that named ports the host does not have would be a plan for a different
+# install. When nothing is free it dies with the flag that fixes it, rather than
+# printing a WARNING and then refusing - which is what confused the last run.
+pick_free_port() {
+	local label=$1
+	shift
+	local p
+	for p in "$@"; do
+		if port_is_free "$p"; then
+			printf '%s' "$p"
+			return 0
+		fi
+	done
+	warn "every candidate port for $label is already in use: $*"
+	die "no free $label port. Free one of them, or pass it yourself:
+         sudo ./install.sh --http-port <port> --app-port <port>" 1
 }
 
 # ask_one_port LABEL DEFAULT VARNAME -> one validated port, Enter for the default.
@@ -532,16 +525,19 @@ validate_ports_for_install() {
 	if [ "$HTTP_PORT" = "$HTTPS_PORT" ]; then
 		warn "--http-port and --https-port are both $HTTP_PORT. They must differ: one is"
 		warn "the ACME challenge and redirect listener, the other is HTTPS itself."
+		PORT_CLASH="http=https"
 		return 1
 	fi
 	if [ "$APP_PORT" = "$HTTPS_PORT" ]; then
 		warn "--app-port and --https-port are both $APP_PORT. Caddy cannot front a service"
-		warn "that is on the same port Caddy already listens on. Pick another --app-port."
+		warn "that is on the same port Caddy already listens on."
+		PORT_CLASH="app=https"
 		return 1
 	fi
 	if [ "$APP_PORT" = "$HTTP_PORT" ]; then
-		warn "--app-port and --http-port are both $APP_PORT. Pick another --app-port,"
-		warn "or Veylix will fight Caddy for it."
+		warn "--http-port and --app-port are both $APP_PORT."
+		warn "The app port is internal (127.0.0.1 only) and must differ from the public one."
+		PORT_CLASH="app=http"
 		return 1
 	fi
 	return 0
@@ -1495,7 +1491,31 @@ main() {
 	# Ports are validated BEFORE anything is written, and before any download.
 	# A bad port discovered at the Caddy phase would leave a host with an
 	# installed service and no working HTTPS, which is the worst of both.
-	validate_ports_for_install || exit 2
+	#
+	# The function prints the specific problem. This line makes it an ERROR with
+	# the command that fixes it, because a WARNING followed by a silent stop is
+	# what confused the owner: it read as "fine, continuing".
+	if ! validate_ports_for_install; then
+		err "the install stopped: the ports above cannot be used together."
+		case "${PORT_CLASH:-}" in
+		app=http)
+			err "fix it with a different internal port, for example:"
+			err "  sudo ./install.sh --http-port $HTTP_PORT --app-port 18080"
+			;;
+		app=https)
+			err "fix it with a different internal port, for example:"
+			err "  sudo ./install.sh --https-port $HTTPS_PORT --app-port 18080"
+			;;
+		http=https)
+			err "fix it by giving the two listeners different ports, for example:"
+			err "  sudo ./install.sh --http-port 8080 --https-port 8443"
+			;;
+		*)
+			err "re-run with --http-port, --https-port and --app-port set explicitly."
+			;;
+		esac
+		exit 2
+	fi
 
 	# Refuse a bogus repo slug BEFORE downloading anything: a 404 from a
 	# placeholder is otherwise reported as a network failure and sends an

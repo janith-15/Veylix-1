@@ -685,12 +685,15 @@ fi
 # A port flag answers the question, so the prompt must not run at all.
 expect_grep "T13 parse_args records that a port flag was given" 'PORTS_FROM_FLAGS=1' "$ROOT/install.sh"
 
-# Enter at the prompt must mean "the standard ports": that is the whole point of
-# a picker with a default.
-expect_grep "T13 the port picker defaults to choice 1" 'Choose [1]: ' "$ROOT/install.sh"
-expect_grep "T13 the picker offers the 3X-UI pairing" 'https://<domain>:8443' "$ROOT/install.sh"
-
-
+# D-131 replaced the picker with auto-detection. The old assertions named the
+# prompt text; they are superseded by T19, which checks the behaviour that
+# replaced it. What still matters here is that nothing PROMPTS: a prompt is what
+# made a one-command install ask three questions and then refuse the answer.
+if grep -qE 'Choose \[1\]:|read_tty choice' "$ROOT/install.sh"; then
+	bad "T13 the installer no longer asks the operator for ports"
+else
+	ok "T13 the installer no longer asks the operator for ports"
+fi
 
 
 # ---------------------------------------------------------------------------
@@ -954,6 +957,119 @@ if [ -n "$T17_footgun" ]; then
 else
 	ok "T17 no bare test-and-command can abort a run under set -e"
 fi
+
+
+# ---------------------------------------------------------------------------
+# T19 - ports are DETECTED, not asked for (D-131).
+#
+# The owner's last run asked three questions and then refused the answer: the
+# same number typed for the public port and the internal one produced
+# "WARNING: ... both 2231" followed by a stop, which read as "fine, going on".
+# 3X-UI asks nothing, so this must ask nothing either.
+#
+# Each case stubs `ss` so a port set is "in use", which is the only way to test
+# a probing function offline. The real `ss` path is exercised on a live host.
+# ---------------------------------------------------------------------------
+t19_probe() {
+	local busy=$1
+	shift
+	bash -c '
+	set +e
+		VEYLIX_HERE="'"$ROOT"'"
+		. "'"$WORK/guards.sh"'"
+		# Stand in for the host: these ports answer, everything else is free.
+		have() { [ "$1" = ss ]; }
+		ss() {
+			case "$*" in
+				*"sport = :$BUSY_PORTS"*) return 0 ;;
+			esac
+			# Only report a hit when one of the busy ports was asked for.
+			local p
+			for p in $BUSY_PORTS; do
+				case "$*" in *":$p"*) return 0 ;; esac
+			done
+			return 1
+		}
+		port_is_free() {
+			local p=$1 b
+			for b in $BUSY_PORTS; do [ "$p" = "$b" ] && return 1; done
+			return 0
+		}
+		HTTP_MODE=1; PORTS_FROM_FLAGS=0; DRY_RUN=1
+		HTTP_PORT=80; HTTPS_PORT=443; APP_PORT=8080
+		choose_ports >/dev/null 2>&1
+		echo "HTTP_PORT=$HTTP_PORT APP_PORT=$APP_PORT"
+	' _ "$@" 2>&1 | tail -1
+}
+t19_case() {
+	local name=$1 busy=$2 want=$3
+	local out
+	out=$(BUSY_PORTS="$busy" t19_probe "$busy")
+	if printf '%s' "$out" | grep -q -- "$want"; then
+		ok "T19 $name"
+	else
+		bad "T19 $name (wanted '$want', got '$out')"
+	fi
+}
+
+# Nothing in use: the standard port, and an app port that differs from it.
+t19_case "a bare host gets port 80 and a distinct app port" "" "HTTP_PORT=80 APP_PORT=8080"
+# 3X-UI holds 80: step to the next candidate rather than dying or prompting.
+t19_case "3X-UI on 80 moves to 8080" "80" "HTTP_PORT=8080"
+# 80 and 8080 both taken: still finds one, and never reuses the public port.
+t19_case "80 and 8080 taken still finds a port" "80 8080" "HTTP_PORT=8081"
+# The exact bug: the app port must never equal the public port.
+o=$(BUSY_PORTS="80 8080 8081 8880" t19_probe "80 8080 8081 8880")
+hp=$(printf '%s' "$o" | sed -n 's/.*HTTP_PORT=\([0-9]*\).*/\1/p')
+ap=$(printf '%s' "$o" | sed -n 's/.*APP_PORT=\([0-9]*\).*/\1/p')
+if [ -n "$hp" ] && [ "$hp" != "$ap" ]; then
+	ok "T19 the app port never equals the public port"
+else
+	bad "T19 the app port never equals the public port (http=$hp app=$ap)"
+fi
+
+# A port flag is the answer: detection must not override it.
+out=$(BUSY_PORTS="80" bash -c '
+	set +e
+	VEYLIX_HERE="'"$ROOT"'"
+	. "'"$WORK/guards.sh"'"
+	port_is_free() { return 0; }
+	HTTP_MODE=1; PORTS_FROM_FLAGS=1; DRY_RUN=1
+	HTTP_PORT=2231; HTTPS_PORT=443; APP_PORT=18080
+	choose_ports >/dev/null 2>&1
+	echo "HTTP_PORT=$HTTP_PORT APP_PORT=$APP_PORT"
+' 2>&1 | tail -1)
+if printf '%s' "$out" | grep -q 'HTTP_PORT=2231 APP_PORT=18080'; then
+	ok "T19 a port flag is honoured and detection stays out of the way"
+else
+	bad "T19 a port flag is honoured (got '$out')"
+fi
+
+# Nothing free at all: die with the flag that fixes it, never a WARNING alone.
+out=$(BUSY_PORTS="80 8080 8081 8880 2080 18080 28080 38080" bash -c '
+	set +e
+	VEYLIX_HERE="'"$ROOT"'"
+	. "'"$WORK/guards.sh"'"
+	port_is_free() { return 1; }
+	HTTP_MODE=1; PORTS_FROM_FLAGS=0; DRY_RUN=1
+	HTTP_PORT=80; HTTPS_PORT=443; APP_PORT=8080
+	choose_ports
+	echo "REACHED-END"
+' 2>&1)
+if printf '%s' "$out" | grep -q 'REACHED-END'; then
+	bad "T19 an exhausted port list stops the install"
+else
+	case "$out" in
+		*--http-port*) ok "T19 an exhausted port list stops the install and names --http-port" ;;
+		*) bad "T19 an exhausted port list stops the install (got '$out')" ;;
+	esac
+fi
+
+# The lock must be released on suspension. Without it a ^Z left the lock held
+# and every later run answered "another veylix install is running".
+expect_grep "T19 the lock is released on exit" "trap \"release_lock" "$ROOT/scripts/lib/common.sh"
+expect_grep "T19 the lock is released on suspension" "TSTP" "$ROOT/scripts/lib/common.sh"
+expect_grep "T19 release_lock closes the descriptor" "exec 9>&-" "$ROOT/scripts/lib/common.sh"
 
 
 printf '\n'
