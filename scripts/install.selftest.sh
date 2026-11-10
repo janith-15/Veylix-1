@@ -789,6 +789,58 @@ fi
 
 
 
+# ---------------------------------------------------------------------------
+# T16 - the installer MUST SAY SOMETHING when it refuses.
+#
+# D-129: `bash install.sh` with no arguments exited 1 having printed ZERO bytes
+# to stdout and stderr. parse_args ended on `[ "$DRY_RUN" -eq 1 ] && DRY_RUN=1`,
+# which is false for a normal run, so the FUNCTION returned 1; main calls
+# parse_args as a bare command, so `set -e` killed the script before any message.
+# Every previous test passed --domain or --help, and --help exits at parse time,
+# so nothing ever exercised the documented no-flag invocation.
+#
+# A refusal is fine. A SILENT refusal is the defect: the operator cannot tell a
+# bug from a hang. This asserts a message reaches the operator either way.
+# ---------------------------------------------------------------------------
+
+# (a) no arguments at all: must not exit silently
+o=$(bash "$ROOT/install.sh" </dev/null 2>&1)
+rc=$?
+if [ "$rc" -ne 0 ] && [ -z "$o" ]; then
+	bad "T16 a no-argument run says something before exiting (exit $rc, no output)"
+else
+	ok "T16 a no-argument run says something before exiting"
+fi
+printf '%s\n' "$o" >"$WORK/t16a.log"
+expect_grep "T16 the no-argument message names --domain" "--domain" "$WORK/t16a.log"
+
+# (b) every function must end on a statement that cannot return non-zero.
+#     `set -e` turns a bare-command function returning 1 into a silent death.
+T16_risk=$(awk '
+	/^[a-zA-Z_][a-zA-Z_0-9]*\(\)[[:space:]]*\{/ { fn = $1; last = ""; next }
+	fn != "" && /^\}/ {
+		if (last ~ /^[[:space:]]*\[/ || last ~ /&&/) { print fn }
+		fn = ""; next
+	}
+	fn != "" && $0 !~ /^[[:space:]]*#/ && $0 !~ /^[[:space:]]*$/ { last = $0 }
+' "$ROOT/install.sh")
+if [ -n "$T16_risk" ]; then
+	bad "T16 no function ends on a test that can return non-zero" "$T16_risk"
+else
+	ok "T16 no function ends on a test that can return non-zero"
+fi
+
+# (c) parse_args itself must report success with no arguments. This is the
+#     precise defect, not a proxy for it.
+sed -e '/^main "\$@"$/d' "$ROOT/install.sh" >"$WORK/pa.sh" 2>/dev/null
+o=$(bash -c 'set -euo pipefail; . "'"$WORK"'/pa.sh"; parse_args; echo "parse_args rc=$?"' 2>&1 | tail -1)
+if printf '%s' "$o" | grep -q 'parse_args rc=0'; then
+	ok "T16 parse_args returns 0 when given no arguments"
+else
+	bad "T16 parse_args returns 0 when given no arguments" "$o"
+fi
+
+
 printf '\n'
 if [ "$fail" -eq 0 ]; then
 	printf 'install.sh: all guard checks passed\n'

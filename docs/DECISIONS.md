@@ -5135,5 +5135,82 @@ from a test here. The four non-sudo forms are tested.
 **Still outstanding.** No Linux end-to-end install has run. D-120 through D-128
 are all Windows-verified against a real host only at the "does it start" level.
 
+---
+
+## D-129 · The installer refused in total silence when given no flags
+
+**Status:** fixed and pushed. **Reported by:** the owner, after D-128.
+
+**What happened.** Running the documented line with no options:
+
+```
+root@dnj-vm-3:~# bash <(curl -Ls https://raw.githubusercontent.com/.../install.sh)
+root@dnj-vm-3:~#                                  <- not one line of output
+```
+
+Exit status 1, **zero bytes on stdout, zero bytes on stderr**. Nothing to read,
+nothing to search for, no hint that anything had happened at all.
+
+**Cause — one line.** `parse_args()` ended with:
+
+```bash
+[ "$DRY_RUN" -eq 1 ] && DRY_RUN=1
+```
+
+That statement is a no-op (it assigns `DRY_RUN` its own value), and it is also
+the function's **last** statement. For an ordinary run `DRY_RUN` is `0`, the
+test is false, so the `&&` chain evaluates to **1** and the *function returns
+1*. `main` calls `parse_args "$@"` as a **bare command**, so under `set -e`
+bash aborted the entire script at that point — before `--domain is required`
+could be printed, before the usage block, before anything.
+
+Reproduced on its own to be sure it was the mechanism and not a guess:
+
+| Snippet, under `set -e` | Prints `AFTER`? |
+|---|---|
+| `f() { [ 0 -eq 1 ] && :; }; f; echo AFTER` | **no** — script dies |
+| `f() { [ 0 -eq 1 ] && :; return 0; }; f; echo AFTER` | yes |
+
+**Why every test missed it.** Not one test ever invoked the installer the way
+the owner does — with no arguments. The suite passed `--domain`, which skips
+past this line, or `--help`, which exits *inside* `parse_args` at `--help)` and
+so never returns from the function. 115 green checks and the one path an
+operator actually walks was untested. That is the same failure of imagination
+as D-127 and D-128, in a third disguise: **the tests exercised convenient
+invocations, not the documented one.**
+
+**The fix.** Delete the no-op and end the function explicitly:
+
+```bash
+	esac
+	done
+	# a trailing `[ cond ] && something` that is false makes the FUNCTION
+	# return 1, and `set -e` then kills the caller silently (D-129).
+	return 0
+}
+```
+
+A scan of every function in `install.sh` for the same shape (last statement is
+a `[` test or an `&&` chain) now comes back empty, so this is not a pattern
+waiting to recur elsewhere.
+
+**Evidence.**
+
+| Check | Result |
+|---|---|
+| `bash install.sh` with no args, before | **exit 1, stdout 0 bytes, stderr 0 bytes** |
+| `bash install.sh` with no args, after | exit 2, stderr **2003 bytes** — usage + `--domain is required` |
+| `install.selftest.sh` | **119 PASS / 0 FAIL** (was 115) |
+| Negative control: re-add the `&&` line | T16 fails **4 checks by name**, one naming `parse_args()` |
+| Function-ending scan over `install.sh` | no other occurrence |
+
+**T16** is the new gate. It asserts three things: a no-argument run must print
+something before it exits; no function may end on a test that can return
+non-zero; and `parse_args` itself must return 0 when given nothing.
+
+**Not verified.** Still no Linux end-to-end install. The no-argument path is now
+proven to *speak*, which is all this change claims.
+
+
 
 

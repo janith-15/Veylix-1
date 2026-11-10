@@ -217,7 +217,11 @@ parse_args() {
 			*)            usage >&2; die "unknown argument: $1" 2 ;;
 		esac
 	done
-	[ "$DRY_RUN" -eq 1 ] && DRY_RUN=1
+	# NOTE: this function must end with `return 0`. Under `set -e`, a trailing
+	# `[ cond ] && something` that is false makes the FUNCTION return 1, and
+	# `main` calls `parse_args "$@"` as a bare command - so the whole installer
+	# died silently with no message whenever no flag was passed (D-129).
+	return 0
 }
 
 release_base() {
