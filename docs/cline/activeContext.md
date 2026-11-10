@@ -7,10 +7,11 @@ defects fixed: the startup log advertised the dev seeder, and the missing
 **Earlier:** D-117 (every operator list sorts/searches/filters), D-116 (orders +
 cap stated), D-115, D-114 (D12 closed)
 
-**Install status:** commit `2dbbeee`, tag `v1.0.0`. **No git remote exists yet**,
-so nothing is pushed and the install URL does not resolve — the owner must create
-the repository. `go test -race` is BLOCKED (no C compiler) and no Linux run has
-ever happened; both are reported as blocked, never as pass.
+**Install status:** 🟢 **v1.0.0 IS READY TO INSTALL.**
+Repo `janith-15/Veylix-1` · commit `b3a3396` · tag `v1.0.0` · **CI green** (race
+detector included — the first time it ever ran) · release assets 6/6 · install
+URL verified (28017 bytes, CR=0). Fresh installs carry **no dev data**: an empty
+database, and the first account comes from `/api/setup/bootstrap`.
 
 
 sorted, filtered and searched** — `Placed by`/`Package`/`Reference` were not

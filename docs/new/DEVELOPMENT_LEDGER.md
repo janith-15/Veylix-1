@@ -4,6 +4,56 @@
 
 ## DEV-041 · D12 CLOSED — real-panel provisioning proven; suspend had no confirmation (D-114)
 ## DEV-043 · D-116 — the order list can now be sorted, filtered and searched
+## DEV-046 · CI green end to end — the race detector ran for the first time
+
+**How the failure was found.** The owner asked whether *I* could look at the CI
+log myself. The git credential held a 40-character `gho_` OAuth token — valid
+for git, **401 for the API**, and no `gh` CLI, no config dirs. Artifact
+downloads need a token, so the evidence was unreachable.
+
+**Fix that made the build readable.** A failing backend job now pushes its log
+to an **orphan `ci-logs` branch** (`contents: write`). Anyone who can read the
+repo can read the failure. The first attempt (artifact upload) did not help —
+artifact downloads also require a token.
+
+**The log named three distinct defects, none visible from Windows:**
+
+| # | Defect | Cause |
+|---|---|---|
+| 1 | `publish` failed with "bundle is missing deploy/veylixd.service" | the job had **no `actions/checkout`** — a workflow has no working tree until it checks one out |
+| 2 | `TestRemoveAllRefusesSuspiciousPaths` failed | asserted `removeAll("C:\\")` is refused; on Linux that is an ordinary directory name, so the test asserted the **runner's OS** |
+| 3 | `TestQuotaIsEnforcedUnderConcurrency` reported `ok=1 quotaErr=0` | the switch counted `nil` and `ErrQuotaExceeded` and **silently dropped everything else** — the losing request did fail, just not with the error under test |
+
+**Also fixed:** `time/tzdata` is now imported by `veylixd` and by the `config`
+test package. `time.LoadLocation` reads the *host's* tz database; a slim image
+has none, so every screen would render UTC while the config still claimed
+`Asia/Colombo`.
+
+**Verified — the CI run that matters:**
+
+```
+ci -> completed / SUCCESS
+  backend (race detector)                     success
+  backend (build . vet . test)                success
+  frontend (typecheck . lint . audit . build) success
+release -> completed / SUCCESS  (tag v1.0.0, rebuilt on b3a3396)
+```
+
+**`go test -race` now PASSES.** It had been reported BLOCKED in every previous
+session — it cannot run locally (`CGO_ENABLED=0`, no C compiler) and had never
+been executed anywhere. Running with `-race` is not proof of absence of races in
+general, but this is the first execution of that detector against this code, and
+it is green.
+
+**Release assets, all 200 OK:** `SHA256SUMS` 447 B · `veylixd-linux-amd64` 15.8 MB ·
+`veylixd-linux-arm64` 15.0 MB · `vpn-platformctl-linux-amd64` 7.2 MB ·
+`vpn-platformctl-linux-arm64` 6.7 MB · `veylix-deploy.tar.gz` 5.0 KB.
+
+**`install.sh` served from the repo: 28017 bytes, 0 CR bytes** — read from the
+raw byte stream, because PowerShell text pipelines re-add CRLF and reported a
+false CRLF twice earlier in this work.
+
+
 ## DEV-045 · v1.0.0 tagged — fresh installs carry NO dev data; installer was CRLF-broken
 
 **The owner's question, answered with evidence (not assertion).** "Install

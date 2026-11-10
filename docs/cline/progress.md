@@ -3850,3 +3850,52 @@ pass `--repo`).
 - **No Linux execution.** The selftest proves the installer's guards, not a real
   server run. The first real install is his.
 
+
+
+---
+
+## S38 — CI went green; the race detector ran for the first time (2026-11-10)
+
+**Owner's question:** "can't *you* look at it yourself?" — about the red CI.
+
+**My earlier answer was wrong.** I said I had no token. The git credential
+actually held a 40-char `gho_` OAuth token — git-only, **401 on the API**, no
+`gh` CLI, no config dirs. Artifact downloads also need a token, so the log was
+genuinely unreachable by that route. I did not check enough before giving up.
+
+**The fix that made the build readable:** a failing backend job pushes its log
+to an orphan **`ci-logs` branch**. First fetch, first read, and the failure named
+itself immediately.
+
+**Three defects, none visible from Windows:**
+
+1. **`publish` had no `actions/checkout`** — both builds succeeded, then the
+   deploy-template bundle died with "bundle is missing deploy/veylixd.service",
+   which blames the wrong thing. A workflow has no working tree until it checks
+   one out.
+2. **`TestRemoveAllRefusesSuspiciousPaths` asserted the runner's OS** —
+   `removeAll("C:\\")` is an ordinary path on Linux, not a drive root.
+3. **`TestQuotaIsEnforcedUnderConcurrency` hid its own cause** — `ok=1
+   quotaErr=0` with nothing else. Its switch counted `nil` and
+   `ErrQuotaExceeded` and dropped everything else; the losing request *did*
+   fail, just not with the expected error. Now captured and printed.
+
+Also: **`time/tzdata` embedded** in `veylixd` and in the `config` tests. A slim
+image has no tz database, so screens would render UTC while the config said
+`Asia/Colombo`.
+
+**Result — the CI run:**
+```
+ci      -> completed / SUCCESS   (race + build/vet/test + frontend)
+release -> completed / SUCCESS   (tag v1.0.0 on b3a3396)
+```
+
+**`go test -race` PASSES.** Carried as BLOCKED for this entire project — no C
+compiler locally, never executed anywhere. It has now run, and it is green.
+
+**Assets 6/6 200 OK.** `install.sh` = 28017 bytes, **CR=0** (raw byte stream;
+PowerShell pipelines re-added CRLF and gave a false answer twice).
+
+**Lesson worth keeping:** three of my hypotheses before reading the log were
+wrong (timeout, permissions, symlinks). A red gate you cannot read produces
+guesses, not fixes — so making it readable *is* the fix, not a detour.

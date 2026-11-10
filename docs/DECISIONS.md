@@ -4423,3 +4423,64 @@ the blob stream, not a PowerShell text pipeline.
 `install.sh`'s `PLACEHOLDER_REPO` is now `janith-15/Veylix-1`; the value is still
 refused as input so a fork must pass its own `--repo`.
 
+
+
+---
+
+## D-119 · CI is the platform's clock, and a failing build must be readable
+
+**Status:** implemented · **Recorded:** 2026-11-10 · **Requested by:** the owner
+("oyatama eka balanna widihak nedda" — can *you* look at it)
+
+### What was actually broken
+
+`v1.0.0` shipped, the release built, and the install URL resolved — while the
+`ci` workflow was **red on Linux and green on Windows**. Three defects were
+found, none of them visible from the Windows machine:
+
+1. **The `publish` job had no `actions/checkout`.** Both `build` jobs succeeded,
+   then the deploy-template bundle failed with *"the bundle is missing
+   deploy/veylixd.service"* — naming the wrong cause entirely. A workflow has no
+   working tree until it checks one out; `download-artifact` only supplied the
+   binaries.
+2. **`TestRemoveAllRefusesSuspiciousPaths` asserted the runner's OS.** It
+   expected `removeAll("C:\\")` to be refused. On Linux that is an ordinary
+   directory name, not a drive root. The Windows spellings now run only on
+   Windows; every cross-platform root still runs everywhere.
+3. **`TestQuotaIsEnforcedUnderConcurrency` hid its own failure.** It counted
+   `nil` and `ErrQuotaExceeded` in a switch and silently dropped anything else,
+   so the report read `ok=1 quotaErr=0` with no cause. The losing request *did*
+   fail — just not with the error under test. A third outcome is now captured
+   and printed.
+
+### The decision
+
+**A failing build on a public repository must be readable without a credential.**
+The first attempt uploaded the log as an artifact; artifact downloads require a
+token, so the evidence was still invisible. A failing backend job now pushes its
+log to an **orphan `ci-logs` branch** (`contents: write`, scoped to the
+workflow). Anyone who can read the repo can read the failure.
+
+This matters beyond convenience: the agent fixing the build had no credential
+that could read the log, and *guessing* three times cost three round trips and
+produced three wrong hypotheses. The gate that cannot be read produces suspicion,
+not fixes.
+
+### Verified
+
+```
+ci -> completed / SUCCESS
+  backend (race detector)                     success
+  backend (build . vet . test)                success
+  frontend (typecheck . lint . audit . build) success
+release -> completed / SUCCESS   (tag v1.0.0)
+```
+
+**The race detector passes**, which settles the question this project had
+carried as *BLOCKED* since the first session: it could not run locally
+(`CGO_ENABLED=0`, no C compiler) and had never been executed anywhere. It now
+runs on every push and is green.
+
+`install.sh` served from the repository is **28017 bytes with 0 CR bytes** —
+checked by reading the raw byte stream, not a PowerShell text pipeline, because
+those two pipelines re-add CRLF and did report a false CRLF twice.
