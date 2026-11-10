@@ -13,7 +13,12 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  # `write` is required by the "publish the ... log to the ci-logs branch" steps
+  # in the backend jobs. Those exist because an artifact download needs a token,
+  # so a failing build on a public repo was unreadable to anyone without one —
+  # including the agent fixing it. Scoped at workflow level because a job-level
+  # grant cannot be narrower than the branch push it performs.
+  contents: write
 
 env:
   GO_VERSION: '1.27'
@@ -72,6 +77,23 @@ jobs:
           path: /tmp/test.log
           if-no-files-found: warn
 
+      # Artifact downloads require an authenticated token, so an agent or a
+      # collaborator without one cannot read the failure. Committing the log to
+      # a dedicated branch makes the evidence readable by anyone who can read
+      # the repo — which is the point of a public build.
+      - name: publish the test log to the ci-logs branch
+        if: failure()
+        run: |
+          set -euo pipefail
+          git config user.name  'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git fetch origin ci-logs 2>/dev/null && git checkout ci-logs || git checkout --orphan ci-logs
+          mkdir -p ci-logs
+          cp /tmp/test.log ci-logs/backend-test.log
+          git add -f ci-logs/backend-test.log
+          git commit -m "ci: backend test log for ${{ github.sha }}" || echo "no change to commit"
+          git push --force origin HEAD:ci-logs
+
   race:
     name: backend (race detector)
     runs-on: ubuntu-latest
@@ -106,6 +128,19 @@ jobs:
           name: backend-race-log
           path: /tmp/race.log
           if-no-files-found: warn
+
+      - name: publish the race log to the ci-logs branch
+        if: failure()
+        run: |
+          set -euo pipefail
+          git config user.name  'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git fetch origin ci-logs 2>/dev/null && git checkout ci-logs || git checkout --orphan ci-logs
+          mkdir -p ci-logs
+          cp /tmp/race.log ci-logs/backend-race.log
+          git add -f ci-logs/backend-race.log
+          git commit -m "ci: backend race log for ${{ github.sha }}" || echo "no change"
+          git push --force origin HEAD:ci-logs
 
   frontend:
     name: frontend (typecheck · lint · audit · build)
