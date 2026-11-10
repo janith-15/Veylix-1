@@ -1069,7 +1069,16 @@ EOF
 	ui=$(ready_field ui)
 	schema=$(ready_field schema_version)
 	say "ready: schema_version=$schema ui=$ui"
-	[ "$ui" = "not_embedded" ] && die "this binary has no embedded UI; the wrong artifact was installed"
+	# `||`, never `&&`. As `[ test ] && die`, a FALSE test makes the compound
+	# command exit 1, and under `set -e` that aborts the installer with no
+	# message - die never runs. This exact line killed the install immediately
+	# after printing "ready: schema_version=29 ui=embedded:114_files", which
+	# looks like a successful phase and is followed by total silence. That is the
+	# third instance of this shape (D-129, D-130) and the first one that got
+	# THROUGH the gate, because the gate excused `&& die`.
+	if [ "$ui" = "not_embedded" ]; then
+		die "this binary has no embedded UI; the wrong artifact was installed"
+	fi
 	return 0
 }
 

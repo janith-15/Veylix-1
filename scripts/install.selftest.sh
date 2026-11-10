@@ -948,10 +948,18 @@ expect_grep "T17 the report names the plaintext risk" \
 # (e) No bare `[ ... ] && ...` at statement position. Under `set -e` a false
 #     test there aborts the whole script - D-129 killed the no-flag run this
 #     way, and D-130 found a second one that ended every --dry-run early.
-#     A test whose right-hand side is `die`/`exit` is intentional: it is meant
-#     to stop.
-T17_footgun=$(grep -nE '^[[:space:]]*\[[^]]*\][[:space:]]*&&' "$ROOT/install.sh" |
-	grep -vE '&&[[:space:]]*(die|exit)[[:space:]]' || true)
+#
+#     The gate used to EXCUSE `&& die`, reasoning that a right-hand side of
+#     die/exit means "it is meant to stop". That reasoning is wrong, and it let
+#     a third instance through to production: `[ "$ui" = "not_embedded" ] && die`
+#     aborts the install on the SUCCESS path, because the false test makes the
+#     compound command exit 1 and die never runs - so nothing is printed and the
+#     installer dies in silence right after "ready: schema_version=29".
+#
+#     There is no safe `&&` form. The deliberate-stop idiom is `[ test ] || die`,
+#     which runs die when the test FAILS. So the gate now flags every bare
+#     test-and-command, with no exceptions.
+T17_footgun=$(grep -nE '^[[:space:]]*\[[^]]*\][[:space:]]*&&' "$ROOT/install.sh" || true)
 if [ -n "$T17_footgun" ]; then
 	bad "T17 no bare test-and-command can abort a run under set -e" "$T17_footgun"
 else
