@@ -1216,6 +1216,16 @@ else
 	ok "T21 no backtick inside an unquoted heredoc"
 fi
 
+# The Caddyfile render is verified POSITIVELY. "No leftover placeholders" is not
+# proof: the released v1.0.0 bundle shipped a template with none at all, so the
+# render was a no-op, the leftover check passed, caddy validate accepted it, and
+# a site for an unconfigured domain went live while the installer printed
+# "VEYLIX is installed". The live host served Caddy's default page on :80.
+expect_grep "T21 the rendered Caddyfile address is asserted" \
+	'want_addr=' "$ROOT/install.sh"
+expect_grep "T21 a mismatched template is refused" \
+	'the release bundle and this installer are not the same version' "$ROOT/install.sh"
+
 
 printf '\n'
 if [ "$fail" -eq 0 ]; then

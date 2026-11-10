@@ -1268,6 +1268,36 @@ install_caddy() {
 				printf '  %s\n' $leftovers
 				die "the deployment template and this installer disagree. Nothing was changed." 1
 			fi
+
+			# A POSITIVE check, because "no leftovers" is not proof of success.
+			#
+			# The released v1.0.0 bundle shipped a Caddyfile that predates the
+			# __PORT__ contract: no placeholders at all, and a bare
+			# `vpn.example.com {` as the site address. Rendering that file is a
+			# no-op, so it contained no leftovers, passed the check above, was
+			# accepted by `caddy validate`, and shipped a site Caddy served for a
+			# domain nobody configured. Measured on the live host: port 80
+			# answered "<title>Caddy works!</title>" - the default page - while
+			# the installer had already printed "VEYLIX is installed".
+			#
+			# So: assert the address we intended is the address that came out.
+			# Any template that cannot express the install we just planned is a
+			# mismatched artifact, and saying so is the only honest outcome.
+			local want_addr
+			if [ "$HTTP_MODE" -eq 1 ]; then
+				want_addr="http://$HTTP_BIND:$HTTP_PORT"
+			else
+				want_addr="https://$DOMAIN:$HTTPS_PORT"
+			fi
+			if ! grep -qF "$want_addr" "$CADDYFILE.veylix-new" 2>/dev/null; then
+				warn "the deployment template did not render the site address this install needs."
+				warn "  expected to find: $want_addr"
+				warn "  template:         $CADDY_SRC"
+				warn "  This template predates the port/address contract - the released"
+				warn "  veylix-deploy.tar.gz is older than install.sh. Nothing was changed."
+				rm -f "$CADDYFILE.veylix-new"
+				die "the release bundle and this installer are not the same version. Publish a new release (or pass --script-base to a matching bundle)." 1
+			fi
 		else
 			out "[dry-run] render $CADDYFILE from $CADDY_SRC with domain $DOMAIN, ports $HTTP_PORT/$HTTPS_PORT -> 127.0.0.1:$APP_PORT"
 		fi
