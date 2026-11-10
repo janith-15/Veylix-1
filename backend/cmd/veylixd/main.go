@@ -16,6 +16,18 @@ import (
 	"os/signal"
 	"syscall"
 	"time"
+	// Embeds the IANA tz database into the binary. The display timezone
+	// ("Asia/Colombo" by default) is resolved with time.LoadLocation, which
+	// reads tzdata from the HOST. A minimal Linux image (scratch, distroless,
+	// many slim/Alpine builds without tzdata) has none of it, so every screen
+	// would silently render UTC while the config still claimed Colombo — a
+	// correct-by-construction failure, but a wrong clock for the customer.
+	//
+	// Importing this package for its side effect makes the binary independent of
+	// whichever host it lands on, and is ~450 KB. The alternative — documenting
+	// "please install tzdata" — is a step that gets skipped on the one host that
+	// matters.
+	_ "time/tzdata"
 
 	"veylix/backend/internal/audit"
 	"veylix/backend/internal/auth"
