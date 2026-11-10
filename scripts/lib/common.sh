@@ -291,10 +291,14 @@ verify_checksum() {
 	[ -f "$sums" ]     || die "verify_checksum: $sums not found"
 
 	local expected actual
-	expected=$(awk -v n="$name" '$2 == n || $2 == "*"n { print $1; exit }' "$sums")
+	# `|| true` on both: awk and sha256sum are the LAST command in the
+	# substitution, so a no-match awk exits 1 and the assignment inherits it.
+	# Under `set -e` that aborts the installer instead of reaching the honest
+	# "no entry for X" message one line below.
+	expected=$(awk -v n="$name" '$2 == n || $2 == "*"n { print $1; exit }' "$sums" || true)
 	[ -n "$expected" ] || die "verify_checksum: no entry for $name in $sums"
 
-	actual=$(sha256sum "$artifact" | awk '{print $1}')
+	actual=$(sha256sum "$artifact" | awk '{print $1}' || true)
 	if [ "$expected" != "$actual" ]; then
 		rm -f "$artifact"
 		die "checksum mismatch for $name (expected ${expected:0:12}..., got ${actual:0:12}...) - artifact deleted"
@@ -375,7 +379,7 @@ detect_arch() {
 detect_os() {
 	if [ -r /etc/os-release ]; then
 		local id
-		id=$(sed -n 's/^ID=["]*\([^"]*\)["]*$/\1/p' /etc/os-release | head -n1)
+		id=$(sed -n 's/^ID=["]*\([^"]*\)["]*$/\1/p' /etc/os-release | head -n1 || true)
 		# `if`, not `[ -n "$id" ] && { ...; return; }`: when the ID is empty the
 		# &&-chain leaves the compound at status 1, and this file is sourced into
 		# install.sh under `set -e`, so the CALLER aborts with no message.
@@ -394,7 +398,7 @@ detect_os() {
 # check_disk PATH MB -> 0 when at least MB is free.
 check_disk() {
 	local path=$1 need_mb=$2 avail_mb
-	avail_mb=$(df -Pm "$path" 2>/dev/null | awk 'NR==2 {print $4}')
+	avail_mb=$(df -Pm "$path" 2>/dev/null | awk 'NR==2 {print $4}' || true)
 	[ -n "${avail_mb:-}" ] || return 1
 	[ "$avail_mb" -ge "$need_mb" ]
 }
@@ -404,7 +408,7 @@ check_disk() {
 # correctly sized host must not be refused.
 check_ram() {
 	local need_mb=$1 total_kb
-	total_kb=$(awk '/^MemTotal:/ {print $2}' /proc/meminfo 2>/dev/null)
+	total_kb=$(awk '/^MemTotal:/ {print $2}' /proc/meminfo 2>/dev/null || true)
 	[ -n "${total_kb:-}" ] || return 1
 	[ $((total_kb / 1024)) -ge "$need_mb" ]
 }

@@ -990,6 +990,21 @@ else
 	ok "T17 no helper hardcodes the app port"
 fi
 
+# (g) A command substitution whose LAST command is a filter must tolerate a
+#     no-match exit. `var=$(grep x file)` fails with status 1 when there is no
+#     match - which is usually the GOOD outcome - and under `set -e` that kills
+#     the installer. Traced live: `leftovers=$(grep -o '__PORT__' ...)` aborted
+#     install.sh immediately after the sed that wrote the Caddyfile, so a
+#     correct render was reported as a silent death.
+T17_unguarded=$(grep -nE '=\$\(.*\|[[:space:]]*(grep|sort|head|awk|sed)[^)]*\)[[:space:]]*$' \
+	"$ROOT/install.sh" "$ROOT/scripts/lib/common.sh" 2>/dev/null \
+	| grep -v '||' | grep -v 'if !' || true)
+if [ -n "$T17_unguarded" ]; then
+	bad "T17 a filter in a substitution tolerates no match" "$T17_unguarded"
+else
+	ok "T17 a filter in a substitution tolerates no match"
+fi
+
 
 # ---------------------------------------------------------------------------
 # T19 - ports are DETECTED, not asked for (D-131).

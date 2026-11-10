@@ -441,7 +441,7 @@ list_versions() {
 	tags=$(curl -fsSL --connect-timeout "$VEYLIX_CONNECT_TIMEOUT" --max-time "$VEYLIX_MAX_TIME" \
 		"$RELEASE_API/repos/$REPO/releases?per_page=100" 2>/dev/null \
 		| grep -o '"tag_name"[[:space:]]*:[[:space:]]*"[^"]*"' \
-		| sed -E 's/.*"([^"]*)"$/\1/') || true
+		| sed -E 's/.*"([^"]*)"$/\1/' || true)
 	if [ -z "$tags" ]; then
 		die "could not read any releases for $REPO (wrong repo, no releases yet, or the API is unreachable)." 1
 	fi
@@ -1271,7 +1271,13 @@ install_caddy() {
 			# `__APP_PORT__`, which caddy validate rejects with an unhelpful
 			# message far from the cause.
 			local leftovers
-			leftovers=$(grep -o '__[A-Z_]*PORT__' "$CADDYFILE.veylix-new" 2>/dev/null | sort -u)
+			# `|| true`: grep exits 1 when nothing matches, and that is the GOOD
+			# case here. As the last command in a command substitution the status
+			# becomes the assignment's status, so under `set -e` an empty match
+			# aborted the installer - traced live, immediately after the sed that
+			# wrote the Caddyfile. A check for leftovers must not die when there
+			# are none.
+			leftovers=$(grep -o '__[A-Z_]*PORT__' "$CADDYFILE.veylix-new" 2>/dev/null | sort -u || true)
 			if [ -n "$leftovers" ]; then
 				rm -f "$CADDYFILE.veylix-new"
 				warn "the Caddyfile template still contained a port placeholder after rendering:"
