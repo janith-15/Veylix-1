@@ -4352,3 +4352,74 @@ has never been observed failing is a claim, not a check (D-115).
 untouched rather than widened silently; they follow the same pattern when
 touched (D-116).
 
+
+---
+
+## D-118 · v1.0.0 ships with an empty database, and `.gitattributes` is load-bearing
+
+**Status:** implemented · **Recorded:** 2026-11-10 · **Requested by:** the owner
+("install weddi dev data enne na needa, database eka aluthinma hedenne")
+
+### The owner's question, answered with evidence
+
+The owner asked whether a fresh install carries development data. **It does
+not**, and this is now proven three independent ways rather than asserted:
+
+1. **Static.** `go list -deps ./cmd/veylixd` contains no seed package. The
+   seeding tools are separate binaries (`cmd/seedacct`, `cmd/seeddemo`,
+   `cmd/seedpremium`) and `veylixd` imports none of them.
+2. **Empirical.** `veylixd` run against an empty directory creates
+   `veylix.db` (4096 bytes → migrated schema) and exits having written **no
+   accounts**: `users`, `auth_identities`, `server_integrations`,
+   `vpn_offers`, `vpn_instances`, `payment_records` all 0 rows.
+3. **Log-spotless.** The isolated run's logs mention no `@veylix.test`
+   address at all.
+
+The first account therefore comes from `/api/setup/bootstrap`, which already
+refuses once any user exists. There is no default password.
+
+### DEFECT FIXED — the startup log advertised the dev seed
+
+`cmd/veylixd/main.go` printed:
+
+```
+sign in at /login (seeded accounts: cmd/seeddemo)
+```
+
+On a production host that is advice that **cannot work** and that invites an
+operator to go looking for a developer tool. It now reads
+`(first run: create the Super Admin via /api/setup/bootstrap)`. The comment
+above it records why `veylixd` must never import a seeder.
+
+### DEFECT FIXED — `.gitattributes` was missing, so the installer would not run
+
+This tree is developed on Windows with `core.autocrlf=true` and deployed on
+Linux. Without an attributes file, every `git checkout` rewrites `install.sh`
+to CRLF and the server fails with:
+
+```
+/usr/bin/env: 'bash\r': No such file or directory
+```
+
+which reads like a missing interpreter and is a stray `\r` in the shebang. A
+`.gitattributes` now pins `* text=auto eol=lf` plus explicit `eol=lf` for
+`*.sh`, `*.bash`, `*.service` and `Caddyfile`.
+
+**Verified by bytes, not by assumption:** the `v1.0.0` tag's `install.sh` blob
+is 28015 bytes with **0 CR bytes**. Two earlier "checks" in this session
+reported CRLF and were wrong — both piped git output through PowerShell
+(`Out-String`, `Out-File`, `>`), which re-adds CRLF. The measurement must read
+the blob stream, not a PowerShell text pipeline.
+
+### Two honest limits recorded at release time
+
+- **`go test -race` is BLOCKED** on this machine (no C compiler). It is
+  reported blocked, never pass.
+- **No shell execution on Linux has happened here.** `install.sh` was checked
+  with `bash -n` and `scripts/install.selftest.sh` (59 PASS / 0 FAIL) under Git
+  Bash on Windows. That proves the guards, not the server run; the first real
+  install is the owner's.
+
+`install.sh`'s `PLACEHOLDER_REPO` is now `janith-15/veylix`; the value is still
+refused as input so a fork must pass its own `--repo`.
+

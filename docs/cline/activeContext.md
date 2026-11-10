@@ -1,10 +1,16 @@
 # VEYLIX — ACTIVE CONTEXT
 
-**Updated:** 2026-11-10 · **Mode:** Act · **Last shipped:** D-117 (**every operator
-list now sorts, searches and filters** — VPNs, Clients and Payments still sorted
-on `undefined` and had no filter at all; new `verify:tables` 28/28) ·
-**Earlier:** D-116 (orders interrogable + cap stated), D-115 (gates fixed),
-D-114 (D12 closed), D-113, D-112
+**Updated:** 2026-11-10 · **Mode:** Act · **Last shipped:** D-118 (**v1.0.0 tagged**
+— fresh installs proven to carry **no dev data** and an **empty** database; two
+defects fixed: the startup log advertised the dev seeder, and the missing
+`.gitattributes` made `install.sh` CRLF and unrunnable on Linux) ·
+**Earlier:** D-117 (every operator list sorts/searches/filters), D-116 (orders +
+cap stated), D-115, D-114 (D12 closed)
+
+**Install status:** commit `2dbbeee`, tag `v1.0.0`. **No git remote exists yet**,
+so nothing is pushed and the install URL does not resolve — the owner must create
+the repository. `go test -race` is BLOCKED (no C compiler) and no Linux run has
+ever happened; both are reported as blocked, never as pass.
 
 
 sorted, filtered and searched** — `Placed by`/`Package`/`Reference` were not

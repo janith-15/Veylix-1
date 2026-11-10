@@ -3795,3 +3795,58 @@ gate has been observed failing, so a green run means something.
 **NOT covered, stated openly:** `AdminsPage`, `OffersPage`, `PackagesPage`,
 audit and retail lists — smaller lists, left alone rather than widened
 silently. `go test -race` remains **BLOCKED** (no C compiler).
+
+---
+
+## S37 — v1.0.0 tagged; the owner's "does it ship dev data?" answered (2026-11-10)
+
+**Asked:** "version 1 stable da, okkema perfect da? git link eken install karama
+dev data enne nethi widihata use karanna puluwanda."
+
+**The straight answer I gave first, before doing anything:** *not perfect, and
+not proven stable.* `go test -race` is BLOCKED and nothing had ever run on
+Linux. Saying "yes it's ready" would have been the easy lie.
+
+**Then I proved the part he actually cared about.** Dev data does **not** ship:
+
+- `go list -deps ./cmd/veylixd` → **no seed package imported** (0)
+- isolated run against an empty dir → `veylix.db` 4096 B, **every table 0 rows**
+  (`users`, `auth_identities`, `server_integrations`, `vpn_offers`,
+  `vpn_instances`, `payment_records`)
+- log scan → **0** occurrences of `@veylix.test`
+
+The seeders are separate binaries (`cmd/seedacct/seeddemo/seedpremium`). First
+account is created via `/api/setup/bootstrap`, which refuses when a user exists.
+**No default password.**
+
+**Two real defects found while answering it:**
+
+1. **`main.go` advertised the dev seeder on every production start** —
+   `(seeded accounts: cmd/seeddemo)`. Advice that cannot work on a customer
+   host. Replaced with the bootstrap pointer.
+2. **The installer would have failed on Linux.** No `.gitattributes`, and this
+   box has `core.autocrlf=true`, so `git checkout` rewrote `install.sh` to CRLF
+   → `/usr/bin/env: 'bash\r': No such file or directory`. Added
+   `* text=auto eol=lf` + explicit LF for `*.sh`/`*.bash`/`*.service`/`Caddyfile`.
+
+**I got the CRLF measurement wrong twice before getting it right.** Both
+`git show :file | Out-String` and `cat-file | Out-File -Encoding ascii` reported
+CRLF; **both re-add CRLF themselves**. Only reading the raw blob byte stream is
+valid. Final truth: tagged `install.sh` blob = 28015 bytes, **0 CR bytes**. This
+is exactly the "a probe must not invent a defect" rule, pointed at my own tooling.
+
+**Verified with Git Bash (bash is NOT on PATH in PowerShell):**
+`bash -n install.sh` OK · `scripts/install.selftest.sh` **59 PASS / 0 FAIL**.
+`PLACEHOLDER_REPO` → `janith-15/veylix` (still refused as input, so a fork must
+pass `--repo`).
+
+**Shipped:** commit `2dbbeee`, tag `v1.0.0` (annotated), 216 files staged.
+
+**BLOCKED / still true after this session:**
+- `go test -race` — BLOCKED, no C compiler. Never reported PASS.
+- **No remote configured → nothing pushed.** The install URL does not resolve
+  until the owner creates the GitHub repository; that is the one step only he
+  can do.
+- **No Linux execution.** The selftest proves the installer's guards, not a real
+  server run. The first real install is his.
+

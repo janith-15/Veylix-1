@@ -4,6 +4,52 @@
 
 ## DEV-041 · D12 CLOSED — real-panel provisioning proven; suspend had no confirmation (D-114)
 ## DEV-043 · D-116 — the order list can now be sorted, filtered and searched
+## DEV-045 · v1.0.0 tagged — fresh installs carry NO dev data; installer was CRLF-broken
+
+**The owner's question, answered with evidence (not assertion).** "Install
+weddi dev data enne na needa, database eka aluthinma hedenne?"
+
+| Method | Result |
+|---|---|
+| `go list -deps ./cmd/veylixd` | **no seed package** — 0 imports |
+| isolated run, empty dir | `veylix.db` created (4096 B), **all tables 0 rows** |
+| log scan | **0** mentions of `@veylix.test` |
+
+Flow is `EnsureDataDir` → `store.Open` → `Migrate`. The seeders are separate
+binaries (`cmd/seedacct`, `cmd/seeddemo`, `cmd/seedpremium`); `veylixd` imports
+none. First account comes from `/api/setup/bootstrap`, which refuses once any
+user exists. **No default password exists.**
+
+**DEFECT — startup log advertised the dev seeder.** `main.go` said
+`(seeded accounts: cmd/seeddemo)` on every production start. Now
+`(first run: create the Super Admin via /api/setup/bootstrap)`.
+
+**DEFECT — the installer would not have run on Linux.** No `.gitattributes`, and
+`core.autocrlf=true` on Windows rewrote `install.sh` to CRLF → server failure
+`/usr/bin/env: 'bash\r': No such file or directory`. Added
+`* text=auto eol=lf` + explicit `eol=lf` for `*.sh`/`*.bash`/`*.service`/
+`Caddyfile`. **Proven by bytes:** the `v1.0.0` tag's `install.sh` blob is 28015
+bytes with **0 CR bytes**.
+
+**Two measurements in this session were WRONG and are recorded as such.** Both
+`git show :install.sh | Out-String` and `cat-file | Out-File` reported CRLF;
+both re-add CRLF themselves. Only reading the raw blob stream is valid.
+
+**`PLACEHOLDER_REPO` → `janith-15/veylix`**, still refused as input so a fork
+must pass its own `--repo`.
+
+**Gates:** `gofmt` clean · `go build`/`go vet` clean · `go test ./...` no FAIL ·
+lint 0 errors · `docs:verify` OK · `bash -n install.sh` OK ·
+`scripts/install.selftest.sh` **59 PASS / 0 FAIL** (Git Bash).
+**Reported honestly, not glossed:** `go test -race` BLOCKED (no C compiler) ·
+**no Linux execution happened here** — the selftest proves the guards, not the
+server run. The first real install is the owner's.
+
+**Commit `2dbbeee`, tag `v1.0.0`.** No remote is configured, so nothing is
+pushed yet; the install URL does not resolve until the owner creates the
+repository.
+
+
 ## DEV-044 · D-117 — the other three operator lists now sort, search and filter (28/28)
 
 **Scope.** `VpnsPage`, `ClientsPage`, `PaymentsPage` gained `sortValue`,
