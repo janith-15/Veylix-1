@@ -1,0 +1,497 @@
+﻿/* ============================================================
+   VEYLIX VPN — Per-theme UI languages
+   Every component class in ui.css / layout.css is re-skinned here
+   by [data-ui] (set on <html> by ThemeProvider). Switching preset
+   therefore changes the *interface itself*, not just the colours.
+
+   data-ui values: soft | glass | editorial | flat | neon
+   data-shell:     floating | edge | hud | ruled
+   ============================================================ */
+
+/* Theme switches should read as a deliberate change, not a glitch. */
+.app-shell,
+.ui-card,
+.ui-btn,
+.ui-input,
+.ui-table-wrap,
+.ui-badge,
+.ui-tabs,
+.app-sidebar,
+.app-topbar {
+  transition:
+    background-color var(--transition-med),
+    border-color var(--transition-med),
+    box-shadow var(--transition-med),
+    border-radius var(--transition-med),
+    color var(--transition-med);
+}
+
+/* ============================================================
+   1. SOFT — Modern: layered, rounded, floaty
+   ============================================================ */
+[data-ui='soft'] .ui-card {
+  border-radius: var(--radius-lg);
+  border-color: transparent;
+  box-shadow:
+    0 1px 2px rgba(15, 15, 40, 0.05),
+    0 10px 24px -12px color-mix(in srgb, var(--c-primary) 55%, transparent);
+}
+[data-ui='soft'] .ui-card--hover:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    0 1px 2px rgba(15, 15, 40, 0.06),
+    0 18px 34px -14px color-mix(in srgb, var(--c-primary) 60%, transparent);
+}
+
+/* ============================================================
+   1A. Component skinning - every primitive follows the theme
+   Shapes come from --cmp-* tokens so Theme Studio controls them.
+   ============================================================ */
+
+/* ---------- Buttons: shape + glow from tokens ---------- */
+.ui-btn {
+  border-radius: var(--cmp-radius-button, var(--radius-sm));
+  text-transform: var(--cmp-btn-uppercase, none);
+}
+[data-btn='wide'] .ui-btn { letter-spacing: 0.06em; }
+.ui-btn--primary,
+.ui-btn--secondary,
+.ui-btn--danger {
+  box-shadow: 0 8px 20px -10px color-mix(in srgb, currentColor calc(var(--cmp-glow-alpha, 0.4) * 70%), transparent);
+}
+.ui-btn:active { transform: scale(0.97); }
+
+/* Clipped HUD shape (Gaming) */
+[data-btn-shape='clipped'] .ui-btn {
+  clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px);
+  border-radius: 0;
+}
+
+/* ---------- Badges: shape + dot ---------- */
+.ui-badge { border-radius: var(--cmp-radius-badge, 999px); }
+.ui-badge--dot { gap: 6px; }
+.ui-badge__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 8px currentColor;
+  flex-shrink: 0;
+}
+
+/* ---------- Notifications (toast): 3 attachment styles ---------- */
+.toast {
+  border-radius: var(--cmp-radius-toast, var(--radius-sm));
+  position: relative;
+  overflow: hidden;
+}
+[data-toast-style='bar'] .toast { border-left-width: 4px; }
+[data-toast-style='line'] .toast {
+  border-left-width: var(--border-weight);
+  padding-top: 14px;
+}
+[data-toast-style='line'] .toast::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 3px;
+  background: currentColor;
+  opacity: 0.9;
+}
+[data-toast-style='badge'] .toast {
+  border-left-width: var(--border-weight);
+  border-color: color-mix(in srgb, currentColor 45%, var(--border));
+}
+[data-toast-style='badge'] .toast-icon {
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  background: color-mix(in srgb, currentColor 18%, transparent);
+  flex-shrink: 0;
+}
+
+/* Toast viewport position */
+[data-toast-pos='tr'] .toast-viewport { top: var(--space-4); right: var(--space-4); bottom: auto; left: auto; }
+[data-toast-pos='tl'] .toast-viewport { top: var(--space-4); left: var(--space-4); bottom: auto; right: auto; }
+[data-toast-pos='br'] .toast-viewport { bottom: var(--space-4); right: var(--space-4); top: auto; left: auto; }
+[data-toast-pos='bl'] .toast-viewport { bottom: var(--space-4); left: var(--space-4); top: auto; right: auto; }
+[data-toast-pos='tl'] .toast,
+[data-toast-pos='bl'] .toast { animation-name: ui-toast-in-left; }
+@keyframes ui-toast-in-left {
+  from { opacity: 0; transform: translateX(-10px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* ---------- Dialog / Dropdown / Tooltip / Pagination ---------- */
+.ui-dialog { border-radius: var(--radius-card-lg, var(--radius-lg)); }
+.ui-dialog-overlay { animation: ui-fade-in 180ms ease; }
+.ui-dropdown__menu { border-radius: var(--cmp-radius-button, var(--radius-sm)); animation: ui-menu-in 140ms ease; }
+.ui-tooltip__tip { border-radius: var(--cmp-radius-button, var(--radius-sm)); }
+.ui-pagination__btn { border-radius: var(--cmp-radius-button, var(--radius-sm)); }
+@keyframes ui-fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes ui-menu-in {
+  from { opacity: 0; transform: translateY(-4px) scale(0.98); }
+  to { opacity: 1; transform: none; }
+}
+
+/* ============================================================
+   2. GLASS — Dark: deep glass, hairline neon edges
+   ============================================================ */
+[data-ui='glass'] .ui-card {
+  border-radius: var(--radius-lg);
+  /* 78%: readable text while the scene still tints the surface. */
+  background: color-mix(in srgb, var(--bg-card) 78%, transparent) !important;
+  border: 1px solid color-mix(in srgb, var(--c-primary) 30%, var(--border));
+  box-shadow:
+    0 1px 0 color-mix(in srgb, #ffffff 10%, transparent) inset,
+    0 24px 48px -24px rgba(0, 0, 0, 0.85);
+  -webkit-backdrop-filter: blur(16px) saturate(1.4);
+  backdrop-filter: blur(16px) saturate(1.4);
+}
+[data-ui='glass'] .ui-card--hover:hover {
+  border-color: color-mix(in srgb, var(--c-primary) 65%, transparent);
+  box-shadow:
+    0 1px 0 color-mix(in srgb, #ffffff 14%, transparent) inset,
+    0 0 26px -8px color-mix(in srgb, var(--c-primary) 75%, transparent),
+    0 28px 56px -26px rgba(0, 0, 0, 0.9);
+}
+[data-ui='glass'] .ui-card__title { color: var(--text-strong); letter-spacing: 0.01em; }
+
+[data-ui='glass'] .ui-btn { border-radius: var(--radius-sm); }
+[data-ui='glass'] .ui-btn--primary {
+  box-shadow:
+    0 1px 0 color-mix(in srgb, #ffffff 22%, transparent) inset,
+    0 0 20px -4px color-mix(in srgb, var(--c-primary) 85%, transparent);
+}
+[data-ui='glass'] .ui-input {
+  background: color-mix(in srgb, var(--bg-input) 65%, transparent);
+  border-color: color-mix(in srgb, var(--c-primary) 26%, var(--border-strong));
+}
+[data-ui='glass'] .ui-badge { -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
+[data-ui='glass'] .ui-table-wrap { box-shadow: 0 0 26px -14px color-mix(in srgb, var(--c-primary) 80%, transparent); }
+[data-ui='glass'] .ui-table tbody tr:hover td { background: color-mix(in srgb, var(--c-primary) 10%, transparent); }
+
+/* Glass skin danger stays ghost/outline — the pale accent pinks of the
+   community palettes (Dracula, Tokyo Night, Catppuccin) cannot carry
+   white text on a solid fill, and their official hexes stay untouched. */
+[data-ui='glass'] .ui-btn--danger {
+  background: color-mix(in srgb, var(--error) 14%, transparent);
+  color: var(--error);
+  border: 1px solid color-mix(in srgb, var(--error) 45%, transparent);
+  box-shadow: none;
+}
+
+/* ============================================================
+   3. EDITORIAL — Light: crisp rules, top accent bar, no shadow
+   ============================================================ */
+[data-ui='editorial'] .ui-card {
+  border-radius: 2px;
+  border: 1px solid var(--border);
+  border-top: 3px solid var(--c-primary);
+  box-shadow: none;
+  background: var(--bg-card);
+}
+[data-ui='editorial'] .ui-card--hover:hover { border-top-color: var(--c-secondary); box-shadow: none; }
+[data-ui='editorial'] .ui-card__header {
+  border-bottom: 1px solid var(--border);
+  padding-bottom: var(--space-2);
+}
+[data-ui='editorial'] .ui-card__title {
+  font-size: 0.78rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+[data-ui='editorial'] .ui-btn {
+  border-radius: 2px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-size: 12px;
+  box-shadow: none !important;
+}
+[data-ui='editorial'] .ui-input { border-radius: 2px; border-width: 1px; }
+[data-ui='editorial'] .ui-input:focus-visible { box-shadow: none; border-width: 2px; }
+[data-ui='editorial'] .ui-badge { border-radius: 3px; letter-spacing: 0.04em; text-transform: uppercase; font-size: 11px; }
+[data-ui='editorial'] .ui-table-wrap { border-radius: 0; box-shadow: none; border-width: 1px; }
+[data-ui='editorial'] .ui-table th {
+  background: transparent;
+  color: var(--text-strong);
+  border-bottom: 2px solid var(--text-strong);
+  letter-spacing: 0.08em;
+}
+[data-ui='editorial'] .ui-tabs { border-radius: 0; border-width: 0 0 1px 0; background: transparent; padding: 0; }
+[data-ui='editorial'] .ui-tabs__item { border-radius: 0; border-bottom: 2px solid transparent; }
+[data-ui='editorial'] .ui-tabs__item--active { box-shadow: none; border-bottom-color: var(--c-primary); }
+
+[data-ui='soft'] .ui-card__title { font-size: 1.02rem; letter-spacing: -0.01em; }
+
+/* Radius contract: cards stay soft, controls use the theme step (no pills —
+   the sidebar and dropdown are square in this shell). */
+[data-ui='soft'] .ui-btn { border-radius: var(--radius-sm); }
+[data-ui='soft'] .ui-btn--primary { box-shadow: 0 8px 18px -8px color-mix(in srgb, var(--c-primary) 85%, transparent); }
+[data-ui='soft'] .ui-input { border-radius: var(--radius-sm); padding-left: 12px; padding-right: 12px; }
+[data-ui='soft'] textarea.ui-input { border-radius: var(--radius); }
+[data-ui='soft'] .ui-table-wrap { border: none; box-shadow: var(--shadow-md); }
+[data-ui='soft'] .ui-table th { background: transparent; }
+[data-ui='soft'] .ui-tabs { border: none; background: color-mix(in srgb, var(--c-primary) 10%, transparent); }
+[data-ui='soft'] .ui-tabs__item--active { border-radius: var(--radius-sm); }
+
+/* ---- Modern (soft): radius contract ----
+   Sidebar, dropdown, dialog and palette all share the same control step so
+   the shell never mixes pills with hard squares. */
+[data-ui='soft'] .ui-dropdown__menu { border-radius: var(--radius-sm); }
+[data-ui='soft'] .ui-dropdown__item { border-radius: 0; }
+/* ============================================================
+   4. FLAT — Classic: dense, squared, zero decoration
+   ============================================================ */
+[data-ui='flat'] .ui-card {
+  border-radius: 0;
+  box-shadow: none;
+  background: var(--bg-card);
+  padding: var(--space-3);
+}
+[data-ui='flat'] .ui-card--hover:hover { box-shadow: none; border-color: var(--border-strong); }
+[data-ui='flat'] .ui-card__header { margin-bottom: var(--space-2); }
+[data-ui='flat'] .ui-card__title { font-size: 0.92rem; }
+
+[data-ui='flat'] .ui-btn { border-radius: 0; letter-spacing: 0; box-shadow: none !important; }
+[data-ui='flat'] .ui-btn--sm { padding: 3px 8px; font-size: 12px; }
+[data-ui='flat'] .ui-input { border-radius: 0; padding: 6px 8px; }
+[data-ui='flat'] .ui-input:focus-visible { box-shadow: none; outline: 2px solid var(--focus); outline-offset: -2px; }
+[data-ui='flat'] .ui-badge { border-radius: 0; }
+[data-ui='flat'] .ui-table-wrap { border-radius: 0; }
+[data-ui='flat'] .ui-table th,
+[data-ui='flat'] .ui-table td { padding: 6px 10px; }
+[data-ui='flat'] .ui-tabs { border-radius: 0; padding: 0; gap: 0; background: transparent; border-width: 0 0 1px 0; }
+[data-ui='flat'] .ui-tabs__item { border-radius: 0; }
+[data-ui='flat'] .ui-tabs__item--active { box-shadow: none; background: var(--bg-hover); }
+[data-ui='flat'] .ui-switch { width: 34px; height: 18px; border-radius: 2px; }
+[data-ui='flat'] .ui-switch__thumb {
+  width: 14px;
+  height: 14px;
+  top: 2px;
+  left: 2px;
+  border-radius: 1px;
+}
+[data-ui='flat'] .ui-switch[data-on='true'] .ui-switch__thumb { transform: translateX(16px); }
+
+/* ============================================================
+   5. NEON — Gaming: HUD corners, glow, clipped edges
+   ============================================================ */
+[data-ui='neon'] .ui-card {
+  --clip: 16px;
+  border-radius: 4px;
+  clip-path: polygon(
+    var(--clip) 0, 100% 0, 100% calc(100% - var(--clip)),
+    calc(100% - var(--clip)) 100%, 0 100%, 0 var(--clip)
+  );
+  border: 1px solid color-mix(in srgb, var(--c-primary) 55%, transparent);
+  background: linear-gradient(160deg, color-mix(in srgb, var(--c-primary) 10%, var(--bg-card)), var(--bg-card) 55%);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--c-primary) 18%, transparent) inset,
+    0 0 30px -12px color-mix(in srgb, var(--c-primary) 90%, transparent);
+}
+[data-ui='neon'] .ui-card--hover:hover {
+  border-color: var(--c-primary);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--c-primary) 35%, transparent) inset,
+    0 0 44px -10px color-mix(in srgb, var(--c-primary) 95%, transparent),
+    0 0 70px -30px color-mix(in srgb, var(--c-secondary) 90%, transparent);
+}
+[data-ui='neon'] .ui-card__header {
+  border-bottom: 1px solid color-mix(in srgb, var(--c-primary) 22%, transparent);
+  padding-bottom: var(--space-2);
+}
+[data-ui='neon'] .ui-card__title {
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  font-size: 0.8rem;
+  color: var(--c-primary);
+  text-shadow: 0 0 12px color-mix(in srgb, var(--c-primary) 70%, transparent);
+}
+[data-ui='neon'] .ui-btn {
+  border-radius: 3px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-size: 12px;
+}
+[data-ui='neon'] .ui-btn--primary {
+  background: color-mix(in srgb, var(--c-primary) 18%, transparent);
+  color: var(--c-primary);
+  border: 1px solid var(--c-primary);
+  box-shadow:
+    0 0 18px -4px color-mix(in srgb, var(--c-primary) 90%, transparent),
+    0 0 0 1px color-mix(in srgb, var(--c-primary) 25%, transparent) inset;
+}
+[data-ui='neon'] .ui-btn--primary:hover { background: color-mix(in srgb, var(--c-primary) 30%, transparent); }
+[data-ui='neon'] .ui-btn--danger {
+  background: color-mix(in srgb, var(--error) 16%, transparent);
+  color: var(--error);
+  border: 1px solid var(--error);
+  box-shadow: 0 0 18px -6px var(--error);
+}
+[data-ui='neon'] .ui-input {
+  background: color-mix(in srgb, var(--bg-input) 80%, transparent);
+  border-color: color-mix(in srgb, var(--c-primary) 45%, transparent);
+  border-radius: 3px;
+  font-family: var(--font-mono);
+}
+[data-ui='neon'] .ui-input:focus-visible {
+  box-shadow: 0 0 0 1px var(--c-primary), 0 0 22px -4px color-mix(in srgb, var(--c-primary) 95%, transparent);
+}
+[data-ui='neon'] .ui-badge {
+  border-radius: 3px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-family: var(--font-mono);
+  border-color: currentColor;
+  box-shadow: 0 0 12px -4px currentColor;
+}
+[data-ui='neon'] .ui-table-wrap { border-radius: 4px; box-shadow: 0 0 26px -14px color-mix(in srgb, var(--c-primary) 95%, transparent); }
+[data-ui='neon'] .ui-table th {
+  font-family: var(--font-mono);
+  color: var(--c-primary);
+  letter-spacing: 0.12em;
+}
+[data-ui='neon'] .ui-table tbody tr:hover td { background: color-mix(in srgb, var(--c-primary) 12%, transparent); }
+[data-ui='neon'] .ui-tabs { border-radius: 4px; border-color: color-mix(in srgb, var(--c-primary) 35%, transparent); }
+[data-ui='neon'] .ui-tabs__item { border-radius: 2px; text-transform: uppercase; letter-spacing: 0.08em; font-size: 11px; }
+[data-ui='neon'] .ui-tabs__item--active {
+  background: color-mix(in srgb, var(--c-primary) 20%, transparent);
+  color: var(--c-primary);
+  box-shadow: none;
+}
+[data-ui='neon'] .ui-metric__value { text-shadow: 0 0 22px color-mix(in srgb, var(--c-primary) 65%, transparent); }
+
+
+
+/* ============================================================
+   6. Shell shapes (data-shell)
+   ============================================================ */
+/* The floating shell sits inset from the viewport edge: the sidebar shifts
+   right by this offset AND the content column follows it (single variable). */
+[data-shell='floating'] { --sidebar-offset: var(--space-3); }
+
+[data-shell='floating'] .app-sidebar {
+  /* Offsets now come from .app-sidebar (top/bottom/left use --sidebar-offset). */
+  /* Proportional rounding so the panel reads as a card, not a slab. */
+  border-radius: var(--radius-sm);
+  border-right: none;
+  border: 1px solid color-mix(in srgb, var(--c-primary) 16%, var(--border));
+  box-shadow: 0 18px 40px -24px rgba(15, 15, 40, 0.45);
+}
+[data-shell='floating'] .app-topbar {
+  border-bottom: none;
+  /* Same rounding step as the floating sidebar so the chrome reads as one set. */
+  border-radius: var(--radius-sm);
+  border: 1px solid color-mix(in srgb, var(--c-primary) 12%, var(--border));
+}
+
+[data-shell='hud'] .app-sidebar {
+  border-right: 1px solid color-mix(in srgb, var(--c-primary) 35%, transparent);
+  box-shadow: 0 0 40px -18px color-mix(in srgb, var(--c-primary) 95%, transparent);
+}
+[data-shell='hud'] .app-sidebar__brand {
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  border-bottom: 1px solid color-mix(in srgb, var(--c-primary) 25%, transparent);
+}
+[data-shell='hud'] .app-nav__group-label {
+  color: color-mix(in srgb, var(--c-primary) 85%, var(--text-muted));
+  font-family: var(--font-mono);
+  letter-spacing: 0.18em;
+}
+[data-shell='hud'] .app-nav__item {
+  border-radius: 3px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 12px;
+}
+[data-shell='hud'] .app-nav__item--active {
+  background: color-mix(in srgb, var(--c-primary) 18%, transparent);
+  box-shadow: inset 3px 0 0 var(--c-primary), 0 0 22px -10px var(--c-primary);
+}
+[data-shell='hud'] .app-topbar {
+  background: color-mix(in srgb, var(--bg-sidebar) 80%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--c-primary) 30%, transparent);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+}
+
+[data-shell='ruled'] .app-sidebar { border-right: 1px solid var(--border); }
+[data-shell='ruled'] .app-sidebar__brand {
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  font-size: 14px;
+  border-bottom: 2px solid var(--text-strong);
+}
+[data-shell='ruled'] .app-nav__item { border-radius: 0; border-left: 3px solid transparent; }
+[data-shell='ruled'] .app-nav__item--active {
+  background: transparent;
+  border-left-color: var(--c-primary);
+  color: var(--text-strong);
+}
+[data-shell='ruled'] .app-topbar { border-bottom: 1px solid var(--text-strong); }
+
+/* ============================================================
+   POPUP RADIUS CONTRACT (all themes)
+   Dialog · dropdown · notification modal · command palette · Theme Studio
+   One shape language per UI variant — never mix square and pill.
+   ============================================================ */
+[data-ui='soft'] :is(.ui-dialog, .ui-dropdown__menu, .notif-modal, .palette, .studio) {
+  border-radius: var(--radius-sm);
+}
+[data-ui='glass'] :is(.ui-dialog, .ui-dropdown__menu, .notif-modal, .palette, .studio) {
+  border-radius: var(--radius);
+}
+[data-ui='editorial'] :is(.ui-dialog, .ui-dropdown__menu, .notif-modal, .palette, .studio) {
+  border-radius: 2px;
+}
+[data-ui='flat'] :is(.ui-dialog, .ui-dropdown__menu, .notif-modal, .palette, .studio) {
+  border-radius: 0;
+}
+[data-ui='neon'] :is(.ui-dialog, .ui-dropdown__menu, .notif-modal, .palette, .studio) {
+  border-radius: 3px;
+}
+
+/* ============================================================
+   Per-shell density: one spacing system, four personalities
+   ============================================================ */
+[data-shell='floating'] .app-content { padding: var(--space-5); }   /* 20px — floaty */
+[data-shell='edge'] .app-content { padding: var(--space-5); }       /* 20px — glassy */
+[data-shell='hud'] .app-content { padding: var(--space-4); }        /* 16px — dense HUD */
+[data-shell='ruled'] .app-content { padding: var(--space-6); }      /* 24px — editorial */
+/* Classic rides the edge shell but stays dense like its cards. */
+[data-theme='classic'] .app-content { padding: var(--space-4); }    /* 16px — dense admin */
+
+/* Gaming: cap the 3D depth on narrow screens so tiles cannot overlap. */
+@media (max-width: 1100px) {
+  [data-theme='gaming'] { --3d-depth: 22px; }
+}
+
+/* ============================================================
+   7. Theme switch veil — makes the change read clearly
+   ============================================================ */
+html.theme-switching .app-shell { animation: theme-veil 380ms ease; }
+/* Opacity-only: a `filter` on an ancestor would create a containing block and
+   break `position: fixed` for the sidebar. */
+@keyframes theme-veil {
+  0% { opacity: 1; }
+  35% { opacity: 0.72; }
+  100% { opacity: 1; }
+}
+
+/* Guards */
+@media (prefers-reduced-motion: reduce) {
+  html.theme-switching .app-shell { animation: none; }
+}
+@media (max-width: 1023px) {
+  [data-shell='floating'] .app-sidebar { margin: 0; height: 100vh; border-radius: 0; }
+  /* NOTE: no .app-main margin override here — the tablet/phone blocks in
+     layout.css own the responsive offsets (direct calc, single source). */
+}
+html.low-resource .app-shell,
+html.low-resource [data-ui] .ui-btn,
+html.low-resource [data-ui] .ui-card { transition: none !important; }
+

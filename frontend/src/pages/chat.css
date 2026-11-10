@@ -1,0 +1,1281 @@
+﻿/* ============================================================
+   Internal chat — Client ↔ seller / platform support
+   Token-driven only (no hard-coded hexes) so every theme,
+   sub-theme and style variant recolours it automatically.
+   ============================================================ */
+
+.chat-layout {
+  display: grid;
+  grid-template-columns: minmax(228px, 300px) minmax(0, 1fr);
+  gap: var(--space-4, 16px);
+  align-items: stretch;
+}
+
+/* ---------- Thread list (inbox) ---------- */
+.chat-list {
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--radius-card, var(--radius-lg));
+  overflow: hidden;
+  /* Must match `.chat-panel` exactly, or the two columns end at different heights. */
+  height: clamp(440px, calc(100dvh - 195px), 900px);
+}
+.chat-list__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+.chat-list__items {
+  list-style: none;
+  margin: 0;
+  padding: var(--space-2);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.chat-list__item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm, var(--radius));
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color var(--dur-fast, 120ms) var(--ease, ease),
+    border-color var(--dur-fast, 120ms) var(--ease, ease);
+}
+.chat-list__item:hover { background: var(--bg-hover); }
+.chat-list__item:focus-visible {
+  outline: 2px solid var(--c-primary);
+  outline-offset: 1px;
+}
+.chat-list__item--active {
+  background: color-mix(in srgb, var(--c-primary) 12%, transparent);
+  border-color: color-mix(in srgb, var(--c-primary) 30%, var(--border));
+}
+.chat-list__text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.chat-list__row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+.chat-list__title {
+  flex: 1;
+  min-width: 0;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-strong);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.chat-list__time {
+  flex-shrink: 0;
+  font-size: calc(10.5px * var(--font-size-scale, 1));
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+.chat-list__preview {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.chat-list__item--unread .chat-list__preview { color: var(--text); }
+/* Unread is a stronger signal than "this was written by me": an unread row is
+   bold, so the two states cannot be confused even if a theme makes their colours
+   identical. */
+.chat-list__item--unread .chat-list__preview { font-weight: 600; }
+.chat-list__badge {
+  flex-shrink: 0;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--c-primary);
+  color: var(--c-primary-contrast, #fff);
+  font-size: calc(10.5px * var(--font-size-scale, 1));
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Shared initials avatar */
+.chat-avatar {
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: var(--cmp-radius-badge, 999px);
+  background: color-mix(in srgb, var(--c-primary) 16%, transparent);
+  color: var(--c-primary);
+  font-size: 12px;
+  font-weight: 700;
+  user-select: none;
+}
+
+/* ---------- Conversation panel ---------- */
+.chat-panel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 440px;
+  /*
+   * The panel used to be capped at `clamp(440px, 62dvh, 720px)`, which left it
+   * 499px tall on a 900px viewport — measured, only 64% of it was transcript and
+   * the rest was chrome. A chat should use the height it is given, so it now
+   * fills the viewport minus the shell (topbar 58 + page header 47 + page
+   * padding + gap ≈− 195px), keeping the old ceiling only for very tall screens.
+   */
+  height: clamp(440px, calc(100dvh - 195px), 900px);
+  border-radius: var(--radius-card, var(--radius-lg));
+  overflow: hidden;
+}
+.chat-panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+.chat-panel__head-main {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+.chat-panel__back {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  /* 28px was below the 40px touch minimum, on the ONE control a phone user
+     needs to leave a conversation. */
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm, var(--radius));
+  background: none;
+  color: var(--text);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.chat-panel__back:hover { background: var(--bg-hover); }
+.chat-panel__title {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.chat-panel__title strong {
+  color: var(--text-strong);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* The subtitle must not wrap: on a phone it pushed the header to 91px (taller
+   than on a desktop) and took the space from the transcript. */
+.chat-panel__meta {
+  font-size: calc(11px * var(--font-size-scale, 1));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.chat-panel__count {
+  flex-shrink: 0;
+  font-size: calc(10.5px * var(--font-size-scale, 1));
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 1px 8px;
+}
+
+.chat-panel__msg-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 14px 14px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.chat-panel__msg-list:focus-visible {
+  outline: 2px solid var(--c-primary);
+  outline-offset: -2px;
+}
+.chat-panel__empty {
+  margin: auto;
+  text-align: center;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+/* Day separator — Today / Yesterday / 12 Oct */
+.chat-day {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin: 12px 0 8px;
+  color: var(--text-muted);
+  font-size: calc(10.5px * var(--font-size-scale, 1));
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.chat-day::before,
+.chat-day::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+/* ---------- Bubbles ---------- */
+/*
+ * Layout contract:
+ *   Â· the other participant's messages hug the LEFT edge, mine hug the RIGHT
+ *   Â· the corner nearest the edge is "clipped" on the first/last bubble of a
+ *     run, so consecutive messages from one author read as a single block
+ *   Â· the action toolbar floats ABOVE the bubble (absolute) so revealing it on
+ *     hover never reflows the conversation
+ * A single `.chat-msg--mine` rule decides the side; it must keep
+ * `justify-content: flex-end` together with `row-reverse`, because the row is
+ * the flex container — without it the bubble snaps back to the left.
+ */
+/*
+ * The row is a positioning canvas, not a layout box. Both children are taken
+ * out of flow:
+ *   Â· the bubble is pinned to the author's side,
+ *   Â· the toolbar floats inside the bubble's outer corner.
+ * This is deliberate. A flex row that contained the (hidden) toolbar sized
+ * itself from it — the bubble then stopped 70px short of the edge instead of
+ * 14px — and a `* { margin: 0 }` reset (base.css) prevents the auto-margin
+ * trick that would otherwise absorb the free space. Absolute positioning is the
+ * only arrangement where "my message hugs the right edge" cannot be broken by
+ * the action toolbar.
+ */
+.chat-msg {
+  position: relative;
+  display: block;
+  width: 100%;
+  /* 40px of headroom: the action toolbar is absolutely positioned at this
+     offset, so it always sits in the space ABOVE its own bubble and can never
+     cover the message's text. It is reserved unconditionally, so revealing the
+     toolbar never shifts the conversation. */
+  padding-top: 40px;
+  margin-top: -36px;
+}
+.chat-msg--first { margin-top: var(--space-2); }
+/*
+ * Two consecutive messages from the same author are still two messages.
+ *
+ * This used to be `margin-top: 2px`, which made a run of your own messages read
+ * as ONE message with several paragraphs — the exact confusion reported as
+ * "sent and received look the same". 6px keeps them visually related while
+ * making the break unmistakable.
+ */
+.chat-msg + .chat-msg:not(.chat-msg--first) { margin-top: 3px; }
+
+.chat-msg__body {
+  /* `static`, not `relative`: the per-message toolbar must be measured against
+     the full-width ROW (`.chat-msg`), never against this fit-content bubble. On
+     a short message the bubble is ~50px wide, and a toolbar laid out inside it
+     collapsed into a stacked column (see `.chat-msg__actions.has-labels`). */
+  position: static;
+  width: fit-content;
+  max-width: min(72%, 640px);
+  padding: var(--space-2) var(--space-3);
+  border-radius: 14px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 13px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+  box-shadow: 0 1px 1px color-mix(in srgb, var(--text) 6%, transparent);
+}
+/* Their message sits on the left… */
+.chat-msg:not(.chat-msg--mine) .chat-msg__body { margin-right: auto; }
+/* …mine on the right. */
+.chat-msg--mine .chat-msg__body { margin-left: auto; }
+.chat-msg__text {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.chat-msg--mine .chat-msg__body {
+  background: var(--tint-primary, color-mix(in srgb, var(--c-primary) 14%, transparent));
+  border-color: color-mix(in srgb, var(--c-primary) 30%, var(--border));
+}
+
+/* ---------- Tail: the corner nearest the chat edge is clipped ---------- */
+.chat-msg--first .chat-msg__body { border-top-left-radius: 5px; }
+.chat-msg--last .chat-msg__body { border-bottom-left-radius: 5px; }
+.chat-msg--mine.chat-msg--first .chat-msg__body {
+  border-top-left-radius: 14px;
+  border-top-right-radius: 5px;
+}
+.chat-msg--mine.chat-msg--last .chat-msg__body {
+  border-bottom-left-radius: 14px;
+  border-bottom-right-radius: 5px;
+}
+/* A one-line message is both first and last: clip the outer corner only. */
+.chat-msg--mine.chat-msg--first.chat-msg--last .chat-msg__body {
+  border-top-left-radius: 14px;
+  border-bottom-left-radius: 14px;
+  border-top-right-radius: 5px;
+  border-bottom-right-radius: 5px;
+}
+.chat-msg:not(.chat-msg--mine).chat-msg--first.chat-msg--last .chat-msg__body {
+  border-top-right-radius: 14px;
+  border-bottom-right-radius: 14px;
+  border-top-left-radius: 5px;
+  border-bottom-left-radius: 5px;
+}
+
+.chat-msg__name {
+  font-size: calc(11px * var(--font-size-scale, 1));
+  font-weight: 700;
+  color: var(--c-primary);
+  letter-spacing: 0.02em;
+  margin-bottom: 1px;
+}
+/* "You" — same weight, but loud enough that the eye reads the bubble's owner
+   before it reads the words. */
+.chat-msg__name--mine {
+  color: var(--text-strong);
+  text-align: right;
+}
+.chat-msg__name--mine::after {
+  content: ' Â· me';
+  font-weight: 500;
+  color: var(--text-muted);
+  letter-spacing: 0;
+}
+/* An outgoing edge on my bubbles: the side survives greyscale, colour-blindness
+   and any theme whose primary tint is too faint to read as "different". */
+.chat-msg--mine .chat-msg__body {
+  box-shadow:
+    inset -3px 0 0 color-mix(in srgb, var(--c-primary) 70%, transparent),
+    0 1px 1px color-mix(in srgb, var(--text) 6%, transparent);
+}
+.chat-msg__time {
+  font-size: calc(10.5px * var(--font-size-scale, 1));
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+/* Mine: the timestamp hangs outside the bubble, like a receipt. */
+.chat-msg--mine .chat-msg__time { justify-self: flex-end; }
+
+/* ---------- Composer ---------- */
+.chat-panel__input {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-2);
+  padding: 10px 12px;
+  border-top: 1px solid var(--border);
+  background: color-mix(in srgb, var(--bg-card) 60%, transparent);
+}
+.chat-panel__input textarea {
+  flex: 1;
+  min-height: 34px;
+  max-height: 120px;
+  resize: none;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm, var(--radius));
+  background: var(--bg-input, var(--bg-surface));
+  color: var(--text);
+  font: inherit;
+  font-size: 13.5px;
+  line-height: 1.4;
+  transition: border-color var(--dur-fast, 120ms) var(--ease, ease);
+}
+.chat-panel__input textarea::placeholder { color: var(--text-muted); }
+.chat-panel__input textarea:hover { border-color: var(--border-strong); }
+.chat-panel__input textarea:focus-visible {
+  outline: none;
+  border-color: var(--c-primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--c-primary) 22%, transparent);
+}
+.chat-panel__send {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+/* The Send button is the primary action: it gets the 40px touch height on
+   touch, and never falls below the 32px floor on a desktop. */
+.chat-panel__send button { min-height: 36px; }
+@media (hover: none), (max-width: 900px) {
+  .chat-panel__send button { min-height: 40px; }
+}
+.chat-panel__counter {
+  /* Reserved: the counter appearing must never nudge the Send button. */
+  min-width: 34px;
+  text-align: right;
+  font-size: calc(10.5px * var(--font-size-scale, 1));
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+}
+.chat-panel__counter.is-low { color: var(--warning, var(--text-muted)); font-weight: 700; }
+
+/* "New messages" jump pill — shown only while reading history */
+.chat-jump {
+  position: absolute;
+  left: 50%;
+  bottom: 62px;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 12px;
+  border: 1px solid color-mix(in srgb, var(--c-primary) 35%, var(--border));
+  border-radius: 999px;
+  background: var(--bg-card);
+  color: var(--c-primary);
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: var(--shadow-md, 0 6px 18px rgb(0 0 0 / 0.14));
+  z-index: 2;
+}
+.chat-jump:hover { background: var(--bg-hover); }
+
+/* ============================================================
+   v2 — message actions, pin/lock banners, filters, user picker
+   ============================================================ */
+
+/* Screen-reader-only text (no utility exists in this project yet) */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ---------- small icon buttons (hover toolbars, row menus) ---------- */
+.chat-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  /* 24px was the VISUAL size and also the hit area: measured on a phone, all
+     131 controls in the conversation were 24x24, well under the 40px minimum a
+     finger can reliably hit. The box is now 36px tall with the glyph centred,
+     and the toolbar rows below grow to 40px on touch. */
+  min-width: 32px;
+  min-height: 32px;
+  padding: 0 6px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm, 8px);
+  background: none;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color var(--dur-fast, 120ms) var(--ease, ease),
+    color var(--dur-fast, 120ms) var(--ease, ease);
+}
+/* A finger needs 40px; a cursor is fine with 32. */
+@media (hover: none), (max-width: 900px) {
+  .chat-icon-btn { min-width: 40px; min-height: 40px; }
+}
+.chat-icon-btn:hover { background: var(--bg-hover); color: var(--text); }
+.chat-icon-btn:focus-visible { outline: 2px solid var(--c-primary); outline-offset: 1px; }
+.chat-icon-btn:disabled {
+  opacity: 0.5;
+  cursor: progress;
+  background: none;
+}
+.chat-icon-btn.is-accent { color: var(--c-primary); }
+.chat-icon-btn.is-danger:hover {
+  color: var(--error);
+  background: color-mix(in srgb, var(--error) 12%, transparent);
+}
+
+/* ---------- per-message action row (hover / focus / touch) ---------- */
+/*
+ * Floats above the message ROW (full width), out of flow, so revealing it can
+ * never resize the message or reflow the conversation.
+ *
+ * The side is chosen so the toolbar never hangs over the bubble it belongs to:
+ * my messages hug the right, so their toolbar is right-aligned above them.
+ */
+.chat-msg__actions {
+  position: absolute;
+  /*
+   * Docked to its OWN bubble. Measured before this change: the toolbar floated
+   * 26px ABOVE the bubble and overlapped the PREVIOUS message by 51px, so a
+   * reader could not tell whether Copy/Delete acted on this message or the one
+   * before it. It now sits on its bubble's top edge, and that bubble is
+   * outlined in the same accent while the toolbar is showing.
+   *
+   * `top: 40px` = the reserved headroom (`.chat-msg` padding) that sits between
+   * the toolbar and the bubble, so the bar can never cover the message's text.
+   */
+  top: 40px;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  padding: 2px var(--space-1);
+  /* One line, always. If the labels cannot fit, they are hidden by the query
+     below — the toolbar never stacks, never clips a button out of reach. */
+  flex-wrap: nowrap;
+  max-width: 100%;
+  overflow: hidden;
+  border: 1px solid var(--border-strong, var(--border));
+  border-radius: 999px;
+  background: var(--bg-card, var(--bg-surface));
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--text) 16%, transparent);
+  opacity: 0;
+  transform: translateY(-2px);
+  pointer-events: none;
+  transition: opacity var(--dur-fast, 120ms) var(--ease, ease),
+    transform var(--dur-fast, 120ms) var(--ease, ease);
+}
+/* Mine hug the right edge, so their toolbar sits above their top-right corner. */
+.chat-msg--mine .chat-msg__actions { right: 0; left: auto; }
+.chat-msg:not(.chat-msg--mine) .chat-msg__actions { left: 0; right: auto; }
+/* While the toolbar is showing, its own bubble is outlined in the same accent,
+   so the pair reads as one unit even in a dense run. */
+.chat-msg:hover .chat-msg__body,
+.chat-msg:focus-within .chat-msg__body {
+  outline: 2px solid color-mix(in srgb, var(--c-primary) 55%, transparent);
+  outline-offset: 1px;
+}
+/* The first message of a run needs headroom for its toolbar; the gap between
+   runs (`.chat-msg--first`) already provides it, so nothing overlaps. */
+.chat-msg:hover .chat-msg__actions,
+.chat-msg:focus-within .chat-msg__actions {
+  opacity: 1;
+  transform: translateY(-100%);
+  pointer-events: auto;
+}
+/* Touch devices have no hover, so the actions must be permanently available.
+   NOTE: this single rule replaces an earlier `@media (hover: none)` block that
+   sat ABOVE the mobile block below. That block set `opacity: 1`, the later one
+   re-declared the properties without it, and the net result on a touch device
+   was `opacity: 0` — the toolbar measured invisible, so Copy/Save/Delete were
+   unreachable by any means. There is now exactly one place that decides. */
+@media (hover: none), (max-width: 900px) {
+  .chat-msg__actions {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+
+.chat-msg--important .chat-msg__body {
+  border-color: color-mix(in srgb, var(--warning) 55%, var(--border));
+  box-shadow: inset 3px 0 0 var(--warning);
+}
+.chat-msg--pinned .chat-msg__body {
+  border-color: color-mix(in srgb, var(--c-primary) 45%, var(--border));
+}
+
+.chat-bubble {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.chat-bubble__meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: calc(10px * var(--font-size-scale, 1));
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  justify-content: flex-end;
+}
+.chat-msg--theirs .chat-bubble__meta { justify-content: flex-start; }
+
+/*
+ * Direction, stated where it matters.
+ *
+ * The author label appears at the start of every run, my bubbles sit right with
+ * an accent edge, and each bubble carries a screen-reader-only "Sent by you" /
+ * "Received". A visible `→`/`←` on all 24 bubbles was tried and removed: it was
+ * noise, and it repeated what the side and the label already said.
+ */
+.chat-msg--mine .chat-msg__body {
+  /* The edge is the per-MESSAGE signal, so even the middle of a long run reads
+     as yours without repeating a word. */
+  border-right-width: 3px;
+  border-right-color: color-mix(in srgb, var(--c-primary) 65%, var(--border));
+}
+.chat-msg--theirs .chat-msg__body {
+  border-left-width: 3px;
+  border-left-color: color-mix(in srgb, var(--text-muted) 45%, var(--border));
+}
+
+/*
+ * A worded toolbar needs room, and it must NEVER get it by wrapping.
+ *
+ * Measured bug (2026-10-28): with `flex-wrap: wrap` the toolbar inherited its
+ * available width from the bubble, so over a 54px-wide "hi" it laid out as a
+ * 50px-wide, 178px-tall column of seven stacked buttons — one of which could no
+ * longer be clicked at all (elementFromPoint landed on a neighbour).
+ *
+ * The fix has two halves:
+ *   1. the toolbar is anchored to the full-width `.chat-msg` ROW, not the
+ *      fit-content bubble (see `.chat-msg__body { position: static }` below), so
+ *      it always has the pane's width to lay out in;
+ *   2. it stays a single line: no wrapping, and it shrinks (labels hide, then
+ *      the overflow is clipped) instead of stacking.
+ */
+.chat-msg__actions.has-labels {
+  flex-wrap: nowrap;
+  max-width: 100%;
+  border-radius: 999px;
+}
+.chat-icon-btn.has-label {
+  padding: 0 7px;
+  gap: var(--space-1);
+  font-size: calc(10.5px * var(--font-size-scale, 1));
+  font-weight: 600;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/*
+ * Degradation ladder for the toolbar, so it is ALWAYS a single usable row:
+ *   1. wide pane  → worded buttons (Copy / Edit / Save / Important / Pin / Delete)
+ *   2. narrow pane → the same buttons, icon-only, each still labelled for
+ *      assistive tech and offering its `title` on hover
+ * A container query is used rather than a viewport query because the chat pane,
+ * not the window, is what actually shrinks (the inbox takes 228“300px).
+ */
+.chat-msg {
+  container-type: inline-size;
+  container-name: chatmsg;
+}
+@container chatmsg (max-width: 520px) {
+  .chat-icon-btn.has-label > span { display: none; }
+  .chat-icon-btn.has-label { padding: 0 5px; }
+  /* The "everyone" control keeps a glyph distinction instead of its word. */
+  .chat-msg__actions .chat-icon-btn.has-label[aria-label='Delete for everyone'] > span { display: none; }
+}
+
+/* On a phone the labels never fit, so the ladder starts at step 2. */
+@media (max-width: 900px) {
+  .chat-icon-btn.has-label > span { display: none; }
+  .chat-icon-btn.has-label { padding: 0 5px; }
+}
+
+/* "You:" in the inbox preview — direction must be readable in text, because a
+   300px row has no bubble to tint. There is exactly ONE source of this prefix
+   (`previewText` in chat-format.ts); rendering a chip here as well produced the
+   literal row text "YouYou: …". */
+.chat-list__item--mine .chat-list__preview { color: var(--text); }
+.chat-list__item--mine .chat-list__title { font-weight: 700; }
+
+.chat-msg__meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  /* Meta follows the bubble: my tags/time align right, theirs align left. */
+  justify-content: flex-start;
+}
+.chat-msg--mine .chat-msg__meta { justify-content: flex-end; }
+.chat-msg__edited { font-size: calc(10px * var(--font-size-scale, 1)); font-style: italic; color: var(--text-muted); }
+.chat-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 0 5px;
+  border-radius: 999px;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+.chat-tag--important {
+  background: color-mix(in srgb, var(--warning) 18%, transparent);
+  color: color-mix(in srgb, var(--warning) 78%, var(--text));
+}
+.chat-tag--saved {
+  background: color-mix(in srgb, var(--c-primary) 14%, transparent);
+  color: var(--c-primary);
+}
+
+/* Inline editor inside a bubble */
+.chat-msg__editor { display: flex; flex-direction: column; gap: 6px; min-width: min(320px, 60vw); }
+.chat-msg__editor textarea {
+  width: 100%;
+  resize: none;
+  padding: var(--space-2);
+  border: 1px solid var(--c-primary);
+  border-radius: var(--radius-sm, 8px);
+  background: var(--bg-card);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.45;
+}
+.chat-msg__editor-actions { display: flex; justify-content: flex-end; gap: 4px; }
+
+/* ---------- pinned banner + lock state ---------- */
+.chat-pinned {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  border: none;
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--c-primary) 8%, transparent);
+  color: var(--c-primary);
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+.chat-pinned:hover { background: color-mix(in srgb, var(--c-primary) 14%, transparent); }
+.chat-pinned:focus-visible { outline: 2px solid var(--c-primary); outline-offset: -2px; }
+.chat-pinned__label {
+  flex-shrink: 0;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.chat-pinned__text {
+  flex: 1;
+  min-width: 0;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.chat-pinned__unpin {
+  flex-shrink: 0;
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-sm, 8px);
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.chat-pinned__unpin:hover { background: var(--bg-hover); color: var(--text); }
+
+/* One banner slot, most urgent content first (lock > error). The old layout put
+   the pin notice above the lock notice, so the reason the composer was disabled
+   sat below a note about a message. */
+.chat-banner {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--border);
+  font-size: 11.5px;
+  font-weight: 600;
+}
+.chat-banner > span { flex: 1; min-width: 0; }
+.chat-banner--locked {
+  background: color-mix(in srgb, var(--warning) 12%, transparent);
+  color: color-mix(in srgb, var(--warning) 70%, var(--text));
+}
+.chat-banner--error {
+  background: color-mix(in srgb, var(--error) 10%, transparent);
+  color: color-mix(in srgb, var(--error) 80%, var(--text));
+}
+.chat-locked-banner {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--warning) 12%, transparent);
+  color: color-mix(in srgb, var(--warning) 70%, var(--text));
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+/* ---------- undo strip + hidden-messages list (reversible delete) ---------- */
+.chat-undo {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--error) 8%, transparent);
+  color: var(--text);
+  font-size: 11.5px;
+}
+.chat-undo__label { flex-shrink: 0; font-weight: 600; }
+.chat-undo__text {
+  flex: 1;
+  min-width: 0;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.chat-undo__btn {
+  flex-shrink: 0;
+  padding: 2px 10px;
+  border: 1px solid color-mix(in srgb, var(--c-primary) 45%, var(--border));
+  border-radius: 999px;
+  background: var(--bg-card);
+  text-decoration: none;
+  font-weight: 700;
+}
+.chat-undo__more { flex-shrink: 0; color: var(--text-muted); font-size: calc(10.5px * var(--font-size-scale, 1)); }
+
+.chat-hidden-bar { padding: 4px 12px; border-bottom: 1px solid var(--border); font-size: calc(11px * var(--font-size-scale, 1)); }
+.chat-hidden-list { max-height: 160px; overflow-y: auto; border-bottom: 1px solid var(--border); padding: 4px 12px 8px; }
+.chat-hidden-list__empty { margin: 6px 0; font-size: calc(11.5px * var(--font-size-scale, 1)); }
+.chat-hidden-list__row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  padding: 4px 0;
+  font-size: calc(11.5px * var(--font-size-scale, 1));
+  border-bottom: 1px dashed var(--border);
+}
+.chat-hidden-list__row:last-child { border-bottom: none; }
+.chat-hidden-list__meta { flex-shrink: 0; color: var(--text-muted); font-family: var(--font-mono); font-size: calc(10px * var(--font-size-scale, 1)); }
+.chat-hidden-list__text {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text);
+}
+.chat-hidden-list__row .chat-link-btn { flex-shrink: 0; }
+
+/* ---------- find-in-conversation ---------- */
+.chat-find {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--bg-card) 70%, transparent);
+  color: var(--text-muted);
+}
+.chat-find input {
+  flex: 1;
+  min-width: 0;
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm, 8px);
+  background: var(--bg-input, var(--bg-surface));
+  color: var(--text);
+  font: inherit;
+  font-size: 12.5px;
+}
+.chat-find input:focus-visible {
+  outline: none;
+  border-color: var(--c-primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--c-primary) 20%, transparent);
+}
+.chat-find__count {
+  flex-shrink: 0;
+  min-width: 58px;
+  text-align: right;
+  font-size: calc(10.5px * var(--font-size-scale, 1));
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+.chat-msg__hit {
+  padding: 0 1px;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--warning) 38%, transparent);
+  color: inherit;
+}
+
+/* ---------- pending / failed sends ---------- */
+.chat-msg--pending .chat-msg__body { opacity: 0.72; }
+.chat-msg--failed .chat-msg__body {
+  border-color: color-mix(in srgb, var(--error) 55%, var(--border));
+  box-shadow: inset -3px 0 0 var(--error);
+}
+.chat-msg__state { font-size: calc(10px * var(--font-size-scale, 1)); font-style: italic; color: var(--text-muted); }
+.chat-msg__state.is-failed { color: var(--error); font-weight: 700; }
+.chat-msg__failed {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-1);
+  font-size: calc(11px * var(--font-size-scale, 1));
+  color: var(--error);
+}
+.chat-msg--mine .chat-msg__failed { justify-content: flex-end; }
+.chat-link-btn {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--c-primary);
+  font: inherit;
+  font-size: calc(11px * var(--font-size-scale, 1));
+  font-weight: 700;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.chat-msg--flash .chat-msg__body {
+  animation: chat-flash 1.2s var(--ease, ease);
+}
+@keyframes chat-flash {
+  0%, 100% { outline: 0 solid transparent; }
+  25% { outline: 2px solid var(--c-primary); outline-offset: 2px; }
+}
+.chat-load-older { display: flex; justify-content: center; padding: 4px 0 8px; }
+.chat-panel__head-meta { display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0; }
+
+/* A count on a header control (how many deleted messages are restorable). */
+.chat-icon-btn__count {
+  min-width: 15px;
+  height: 15px;
+  padding: 0 4px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--c-primary);
+  color: var(--c-primary-contrast, #fff);
+  font-size: 9.5px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.chat-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: calc(10px * var(--font-size-scale, 1));
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.chat-pill--lock {
+  background: color-mix(in srgb, var(--warning) 18%, transparent);
+  color: color-mix(in srgb, var(--warning) 78%, var(--text));
+}
+.chat-panel[data-locked='true'] .chat-panel__input textarea {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+/* ---------- delete-for-everyone confirmation + inline error ---------- */
+.chat-confirm {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  margin: 0 12px 8px;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid color-mix(in srgb, var(--error) 45%, var(--border));
+  border-radius: var(--radius-sm, 8px);
+  background: color-mix(in srgb, var(--error) 9%, transparent);
+  font-size: 12px;
+  color: var(--text);
+}
+.chat-confirm__actions { display: flex; align-items: center; gap: 6px; }
+.chat-panel__error {
+  margin: 0 12px 8px;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm, 8px);
+  background: color-mix(in srgb, var(--error) 10%, transparent);
+  color: color-mix(in srgb, var(--error) 80%, var(--text));
+  font-size: 11.5px;
+}
+/* A `?with=` deep link that the server refused — say so instead of no-op. */
+.chat-link-error {
+  margin: 0 0 10px;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid color-mix(in srgb, var(--warning) 45%, var(--border));
+  border-radius: var(--radius-sm, 8px);
+  background: color-mix(in srgb, var(--warning) 10%, transparent);
+  color: var(--text);
+  font-size: 12px;
+}
+
+/* ---------- Responsive ---------- */
+
+@media (max-width: 900px) {
+  .chat-layout { grid-template-columns: minmax(0, 1fr); }
+  /* Single column: list OR conversation, never both. */
+  .chat-layout[data-view='thread'] .chat-list { display: none; }
+  .chat-layout[data-view='list'] .chat-panel { display: none; }
+  .chat-list,
+  .chat-panel {
+    height: calc(100dvh - var(--topbar-h, 64px) - 120px);
+    max-height: none;
+    min-height: 380px;
+  }
+  .chat-panel__back { display: inline-flex; }
+  .chat-msg__body { max-width: 88%; }
+  /* The floating toolbar would clip on a narrow screen; the mobile rule at the
+     end of this file gives it a row of its own instead. */
+  .chat-msg__actions { top: auto; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-list__item,
+  .chat-panel__input textarea {
+    transition: none;
+  }
+}
+
+/* ---------- list: search + filter chips + row flags / menu ---------- */
+.chat-list__tools {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: 8px 8px 6px;
+  border-bottom: 1px solid var(--border);
+}
+.chat-search {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0 8px;
+  height: 28px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm, 8px);
+  background: var(--bg-input, var(--bg-surface));
+  color: var(--text-muted);
+}
+.chat-search:focus-within { border-color: var(--c-primary); }
+.chat-search input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 12px;
+  color: var(--text);
+  outline: none;
+}
+.chat-filters { display: flex; flex-wrap: wrap; gap: 4px; }
+/* Chips must keep their own height; a flex child shrinks by default. */
+.chat-filters > .chat-filter { flex: 0 0 auto; }
+.chat-filter {
+  /* 22px tall was below the 32px floor this UI now holds itself to (and far
+     below the 40px a finger needs). Padding grows, the type stays small. */
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: none;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: calc(11px * var(--font-size-scale, 1));
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color var(--dur-fast, 120ms) var(--ease, ease);
+}
+@media (hover: none), (max-width: 900px) {
+  .chat-filter { min-height: 40px; }
+}
+.chat-filter:hover { background: var(--bg-hover); color: var(--text); }
+.chat-filter.is-active {
+  background: color-mix(in srgb, var(--c-primary) 16%, transparent);
+  border-color: color-mix(in srgb, var(--c-primary) 40%, var(--border));
+  color: var(--c-primary);
+}
+.chat-list__row-wrap { position: relative; }
+.chat-list__flags {
+  position: absolute;
+  bottom: 8px;
+  left: 46px;
+  display: inline-flex;
+  gap: 3px;
+  color: var(--text-muted);
+}
+.chat-list__flag { display: inline-grid; place-items: center; }
+.chat-list__flag.is-important { color: var(--warning); }
+.chat-list__flag.is-saved { color: var(--c-primary); }
+.chat-list__flag.is-locked { color: color-mix(in srgb, var(--warning) 80%, var(--text)); }
+.chat-list__menu {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  opacity: 0;
+  transition: opacity var(--dur-fast, 120ms) var(--ease, ease);
+}
+.chat-list__row-wrap:hover .chat-list__menu,
+.chat-list__row-wrap:focus-within .chat-list__menu { opacity: 1; }
+@media (hover: none) {
+  .chat-list__menu { opacity: 1; }
+}
+.chat-list__empty { margin: 0; padding: 14px 10px; font-size: 12px; text-align: center; }
+
+/* ---------- user picker dialog ---------- */
+.chat-picker__hint { margin: 0 0 10px; font-size: 12px; }
+.chat-picker__search {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0 10px;
+  height: 34px;
+  margin-bottom: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm, 8px);
+  background: var(--bg-input, var(--bg-surface));
+  color: var(--text-muted);
+}
+.chat-picker__search:focus-within { border-color: var(--c-primary); }
+.chat-picker__search input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 13px;
+  color: var(--text);
+  outline: none;
+}
+.chat-picker__group { margin-top: 10px; }
+.chat-picker__group-title {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin: 0 0 4px;
+  font-size: calc(10.5px * var(--font-size-scale, 1));
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.chat-picker__items { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.chat-picker__item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm, 8px);
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.chat-picker__item:hover { background: var(--bg-hover); }
+.chat-picker__item:focus-visible { outline: 2px solid var(--c-primary); outline-offset: 1px; }
+.chat-picker__text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.chat-picker__text strong { font-size: 13px; color: var(--text-strong); }
+.chat-picker__text .ui-muted { font-size: 11.5px; }
+.chat-picker__action {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--c-primary);
+  color: var(--c-primary-contrast, #fff);
+  font-size: calc(11px * var(--font-size-scale, 1));
+  font-weight: 700;
+}
+.chat-picker__action.is-open {
+  background: color-mix(in srgb, var(--c-primary) 14%, transparent);
+  color: var(--c-primary);
+}
+.chat-picker__empty { margin: 12px 0; font-size: 12.5px; text-align: center; }
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-icon-btn,
+  .chat-msg__actions,
+  .chat-list__menu,
+  .chat-filter {
+    transition: none;
+  }
+  .chat-msg__actions { opacity: 1; pointer-events: auto; }
+  .chat-list__menu { opacity: 1; }
+  /* The "jump to" highlight is motion; a static outline still marks the message. */
+  .chat-msg--flash .chat-msg__body { animation: none; outline: 2px solid var(--c-primary); outline-offset: 2px; }
+}
+
+/* Mobile: there is no hover, so the toolbar is always visible and must not
+   cover the message. It sits BELOW the bubble on the matching side, as one
+   row of icons (the labels are hidden by the 900px rule above). */
+@media (max-width: 900px) {
+  /* Mobile header: one compact row. The subtitle is dropped (the lock pill and
+     the title already say what matters) and the count chip hides, so the
+     conversation keeps the height instead of the chrome. */
+  .chat-panel__head { padding: 6px 10px; gap: 8px; }
+  .chat-panel__meta { display: none; }
+  .chat-panel__count { display: none; }
+  .chat-panel__input { padding: 8px 10px; }
+  .chat-panel__input textarea { min-height: 40px; }
+
+  .chat-msg {
+    padding-top: 0;
+    /* 40px buttons + 2px breathing room: the toolbar is always visible on
+       touch, so this space is always needed. */
+    padding-bottom: 44px;
+    margin-top: 0;
+  }
+  .chat-msg--first { margin-top: 6px; }
+  .chat-msg + .chat-msg:not(.chat-msg--first) { margin-top: 0; }
+  .chat-msg__actions {
+    top: auto;
+    bottom: 0;
+    flex-wrap: nowrap;
+    max-width: 100%;
+    box-shadow: none;
+    background: none;
+    border-color: transparent;
+    padding: 0;
+    transform: none;
+  }
+  .chat-msg--mine .chat-msg__actions { left: auto; right: 0; justify-content: flex-end; }
+  .chat-msg:not(.chat-msg--mine) .chat-msg__actions { right: auto; left: 0; }
+  /* `transform: none` is all the mobile layout may change. `opacity` and
+     `pointer-events` are owned by the `(hover: none)` rule above — re-declaring
+     them here is what once made the toolbar invisible on a touch screen. */
+  .chat-msg__actions,
+  .chat-msg:hover .chat-msg__actions,
+  .chat-msg:focus-within .chat-msg__actions { transform: none; }
+}
+
+

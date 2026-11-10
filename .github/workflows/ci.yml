@@ -1,0 +1,194 @@
+# VEYLIX — continuous integration.
+#
+# Every gate the project relies on, run on every push so none of them can quietly
+# rot. The `-race` job matters most: it cannot run on the Windows dev machine
+# (no C compiler with CGO_ENABLED=0), so this is the only place the detector
+# actually runs.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  # `write` is required by the "publish the ... log to the ci-logs branch" steps
+  # in the backend jobs. Those exist because an artifact download needs a token,
+  # so a failing build on a public repo was unreadable to anyone without one —
+  # including the agent fixing it. Scoped at workflow level because a job-level
+  # grant cannot be narrower than the branch push it performs.
+  contents: write
+
+env:
+  GO_VERSION: '1.27'
+  NODE_VERSION: '24'
+
+jobs:
+  backend:
+    name: backend (build · vet · test)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: backend/go.sum
+
+      - name: gofmt
+        working-directory: backend
+        run: |
+          out=$(gofmt -l .)
+          if [ -n "$out" ]; then
+            echo "these files are not gofmt'd:"
+            echo "$out"
+            exit 1
+          fi
+
+      - name: build
+        working-directory: backend
+        run: go build ./...
+
+      - name: vet
+        working-directory: backend
+        run: go vet ./...
+
+      - name: test
+        working-directory: backend
+        # `-v` and a captured log on purpose: when this failed on the Linux
+        # runner and passed on Windows, the failure was invisible from here —
+        # no log, no line, so any fix would have been a guess. The log is
+        # uploaded either way, so the next failure names itself instead of
+        # costing a round trip.
+        run: |
+          set +e
+          go test ./... -count=1 -v > /tmp/test.log 2>&1
+          rc=$?
+          # Print the failure lines so the run's own log is useful too.
+          grep -E '^(--- FAIL|FAIL|panic:)' /tmp/test.log | head -40
+          exit $rc
+
+      - name: upload the test log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-test-log
+          path: /tmp/test.log
+          if-no-files-found: warn
+
+      # Artifact downloads require an authenticated token, so an agent or a
+      # collaborator without one cannot read the failure. Committing the log to
+      # a dedicated branch makes the evidence readable by anyone who can read
+      # the repo — which is the point of a public build.
+      - name: publish the test log to the ci-logs branch
+        if: failure()
+        run: |
+          set -euo pipefail
+          git config user.name  'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git fetch origin ci-logs 2>/dev/null && git checkout ci-logs || git checkout --orphan ci-logs
+          mkdir -p ci-logs
+          cp /tmp/test.log ci-logs/backend-test.log
+          git add -f ci-logs/backend-test.log
+          git commit -m "ci: backend test log for ${{ github.sha }}" || echo "no change to commit"
+          git push --force origin HEAD:ci-logs
+
+  race:
+    name: backend (race detector)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: backend/go.sum
+
+      # The race detector needs CGO, so it is built here rather than on the
+      # developer's CGO_ENABLED=0 Windows box.
+      - name: go test -race
+        working-directory: backend
+        env:
+          CGO_ENABLED: '1'
+        # Case names and a stack are what a race report is made of; without
+        # `-v` the log says only that something raced. Uploaded below so the
+        # evidence survives the run.
+        run: |
+          set +e
+          go test ./... -race -count=1 -v > /tmp/race.log 2>&1
+          rc=$?
+          grep -E '^(--- FAIL|FAIL|panic:|WARNING: DATA RACE)' /tmp/race.log | head -40
+          exit $rc
+
+      - name: upload the race log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-race-log
+          path: /tmp/race.log
+          if-no-files-found: warn
+
+      - name: publish the race log to the ci-logs branch
+        if: failure()
+        run: |
+          set -euo pipefail
+          git config user.name  'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git fetch origin ci-logs 2>/dev/null && git checkout ci-logs || git checkout --orphan ci-logs
+          mkdir -p ci-logs
+          cp /tmp/race.log ci-logs/backend-race.log
+          git add -f ci-logs/backend-race.log
+          git commit -m "ci: backend race log for ${{ github.sha }}" || echo "no change"
+          git push --force origin HEAD:ci-logs
+
+  frontend:
+    name: frontend (typecheck · lint · audit · build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: install
+        working-directory: frontend
+        run: npm ci
+
+      - name: typecheck
+        working-directory: frontend
+        run: npx tsc -b
+
+      - name: lint
+        working-directory: frontend
+        run: npm run lint
+
+      # Fails if any screen claims a capability the backend contradicts, or if an
+      # invented money literal appears in src/.
+      - name: ui truth gate
+        working-directory: frontend
+        run: npm run audit
+
+      - name: ui truth gate self-test
+        working-directory: frontend
+        run: npm run audit:selftest
+
+      - name: qr encoder self-test
+        working-directory: frontend
+        run: npm run qr:selftest
+
+      - name: client ping self-test
+        working-directory: frontend
+        run: npm run ping:selftest
+
+      # The README states route/test/migration counts; this fails when they drift.
+      - name: docs verify
+        working-directory: frontend
+        run: npm run docs:verify
+
+      - name: build
+        working-directory: frontend
+        run: npm run build

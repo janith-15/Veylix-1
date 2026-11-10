@@ -1,0 +1,231 @@
+/* Usage section of the VPN details page (D-092).
+ *
+ * Layout lives here rather than in `style={{ … }}` props (D-059/D-091 rule 11):
+ * the range switch, the custom date row, the figures strip and the empty states
+ * are each ONE class, so the section cannot drift away from the rest of the app
+ * one inline override at a time. */
+
+.vui {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.vui-switch {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.vui-custom {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 10px 12px;
+  border: 1px solid var(--border, rgba(127, 127, 160, 0.22));
+  border-radius: var(--radius-sm, 10px);
+  background: var(--surface-2, rgba(127, 127, 160, 0.06));
+}
+
+.vui-custom__field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: var(--t-xs, 11px);
+  color: var(--text-muted);
+}
+
+.vui-custom__field input {
+  padding: 5px 8px;
+  border: 1px solid var(--border, rgba(127, 127, 160, 0.3));
+  border-radius: var(--radius-sm, 8px);
+  background: var(--bg-card, var(--surface-1, #12141f));
+  color: var(--text-strong);
+  font-size: var(--t-sm2, 12.5px);
+  /* A date input opens a native picker, so it must not be squeezed to nothing
+     on a narrow row. */
+  min-width: 140px;
+}
+
+.vui-custom__field input:focus-visible {
+  outline: 2px solid var(--accent, #6f8cff);
+  outline-offset: 1px;
+}
+
+.vui-custom__hint {
+  font-size: var(--t-xs, 11px);
+  color: var(--text-muted);
+}
+
+.vui-pkg {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.vui-pkg__figures,
+.vui-speedfigs {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 10px;
+  border-top: 1px solid var(--border, rgba(127, 127, 160, 0.16));
+  padding-top: 10px;
+}
+
+.vui-pkg__figures > span,
+.vui-speedfigs > span {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.vui-pkg__figures strong,
+.vui-speedfigs strong {
+  font-size: var(--t-md, 15px);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-strong);
+  overflow-wrap: anywhere;
+}
+
+.vui-pkg__figures .vui-muted,
+.vui-speedfigs .vui-muted {
+  font-size: var(--t-xs, 11px);
+}
+
+/* A warning carries an icon AND a sentence: colour alone is never the message. */
+.vui-warn {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 10px 12px;
+  border: 1px solid var(--warn-border, rgba(214, 158, 46, 0.42));
+  border-radius: var(--radius-sm, 10px);
+  background: var(--warn-soft, rgba(214, 158, 46, 0.1));
+  color: var(--text-strong);
+  font-size: var(--t-sm2, 12.5px);
+  line-height: 1.45;
+}
+
+.vui-warn svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+  color: var(--warn, #d69e2e);
+}
+
+.vui-muted {
+  color: var(--text-muted);
+  font-size: var(--t-sm2, 12.5px);
+}
+
+/* ---- the 7 x 24 activity heatmap ------------------------------------- */
+
+/* A grid of cells, not a chart: each cell is one hour of one weekday, shaded by
+   how much moved in it. Tokens only, so the shading follows the active preset. */
+.vui-heat {
+  display: grid;
+  grid-template-columns: auto repeat(24, minmax(0, 1fr));
+  gap: 2px;
+  align-items: center;
+}
+
+.vui-heat__day {
+  font-size: 10px;
+  color: var(--text-muted);
+  padding-right: var(--space-2);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.vui-heat__hour {
+  font-size: 9px;
+  color: var(--text-muted);
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.vui-heat__cell {
+  aspect-ratio: 1;
+  min-height: 12px;
+  border-radius: 2px;
+  background: var(--bg-hover);
+}
+
+/* Four steps of intensity. A cell with no measurement stays at the empty token
+   rather than being shaded as "a little traffic" — absent is not small. */
+.vui-heat__cell[data-level='1'] { background: color-mix(in srgb, var(--chart-1, #5b5bd6) 25%, transparent); }
+.vui-heat__cell[data-level='2'] { background: color-mix(in srgb, var(--chart-1, #5b5bd6) 50%, transparent); }
+.vui-heat__cell[data-level='3'] { background: color-mix(in srgb, var(--chart-1, #5b5bd6) 75%, transparent); }
+.vui-heat__cell[data-level='4'] { background: var(--chart-1, #5b5bd6); }
+
+.vui-heat__legend {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+
+.vui-heat__swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+}
+
+/* ---- peak-hour sentence and the exhaustion estimate ------------------ */
+
+.vui-figure {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-2);
+}
+
+.vui-figure strong {
+  font-size: var(--text-xl);
+  font-variant-numeric: tabular-nums;
+}
+
+.vui-estimate {
+  border-left: 2px solid var(--border-strong);
+  padding-left: var(--space-3);
+}
+
+/* The sentence under a chart, explaining what it is measuring. Kept narrow so
+   it reads as a caption rather than body copy. */
+.vui-note {
+  margin: 8px 0 0;
+  max-width: 62ch;
+  line-height: 1.45;
+}
+
+/* "No data" is a state, not an empty chart: it gets an icon and a sentence. */
+.vui-empty {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  border: 1px dashed var(--border, rgba(127, 127, 160, 0.3));
+  border-radius: var(--radius-sm, 10px);
+  color: var(--text-muted);
+  font-size: var(--t-sm2, 12.5px);
+}
+
+@media (max-width: 560px) {
+  .vui-custom__field {
+    flex: 1 1 100%;
+  }
+
+  .vui-custom__field input {
+    width: 100%;
+  }
+
+  .vui-pkg__figures,
+  .vui-speedfigs {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

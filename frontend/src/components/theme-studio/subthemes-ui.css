@@ -1,0 +1,82 @@
+﻿/* Sub-theme picker tiles */
+.sub-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: var(--space-3);
+  width: 100%;
+}
+
+.sub-tile {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  text-align: left;
+  border-radius: var(--radius-sm);
+  border: 2px solid var(--border);
+  background: var(--bg-card);
+  min-width: 0;
+  overflow: hidden;
+  cursor: pointer;
+  transition: transform var(--transition-fast), border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+.sub-tile:hover {
+  transform: translateY(-2px);
+  border-color: color-mix(in srgb, var(--c-primary) 55%, var(--border));
+}
+.sub-tile--active {
+  border-color: var(--c-primary);
+  box-shadow: 0 0 0 1px var(--c-primary), 0 10px 24px -14px color-mix(in srgb, var(--c-primary) 80%, transparent);
+}
+
+/* Miniature interface preview */
+.sub-tile__preview {
+  position: relative;
+  display: block;
+  height: 92px;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid rgba(127, 127, 160, 0.25);
+  padding: 8px;
+}
+.sub-tile__bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: 18px;
+  padding: 0 6px;
+  margin-bottom: 8px;
+}
+.sub-tile__dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.sub-tile__line { height: 3px; flex: 1; border-radius: 2px; opacity: 0.7; }
+.sub-tile__card {
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+  height: 52px;
+  padding: var(--space-2);
+  border-width: 1px;
+  border-style: solid;
+}
+.sub-tile__btn { width: 26px; height: 9px; }
+
+/* Text meta */
+.sub-tile__meta { display: flex; flex-direction: column; gap: 3px; }
+.sub-tile__name { font-size: 13px; font-weight: 700; color: var(--text-strong); }
+.sub-tile__blurb { font-size: 11px; color: var(--text-muted); line-height: 1.35; }
+.sub-tile__tags { display: flex; gap: var(--space-2); margin-top: 3px; }
+.sub-tile__tags em {
+  font-style: normal;
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--c-primary) 14%, transparent);
+  color: var(--c-primary);
+}
+.sub-tile--active .sub-tile__tags em {
+  background: color-mix(in srgb, var(--c-primary) 24%, transparent);
+}
+
+

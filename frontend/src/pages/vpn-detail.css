@@ -1,0 +1,143 @@
+/* VPN details page (D-092 / brief §6).
+ *
+ * Three sections, one heading level each, and every layout rule is a class —
+ * the page previously carried 23 `style={{ … }}` props, four of them the same
+ * flex block copied four times (D-059, D-091 rule 11). */
+
+.vd {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.vd-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* The three sections are plain buttons, not a routed tab bar: the section is
+ * view state, so switching must not push a history entry the Back button then
+ * has to unwind. */
+.vd-tabs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+  padding: 4px;
+  border: 1px solid var(--border, rgba(127, 127, 160, 0.22));
+  border-radius: var(--radius-sm, 10px);
+  background: var(--surface-2, rgba(127, 127, 160, 0.06));
+}
+
+.vd-tabs__btn {
+  padding: 7px 14px;
+  border: none;
+  border-radius: var(--radius-sm, 8px);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: var(--t-sm2, 13px);
+  font-weight: 600;
+  cursor: pointer;
+  /* A comfortable touch target even on the narrowest phone. */
+  min-height: 34px;
+}
+
+.vd-tabs__btn:hover {
+  color: var(--text-strong);
+}
+
+.vd-tabs__btn[aria-current='page'] {
+  background: var(--bg-card, var(--surface-1, #12141f));
+  color: var(--text-strong);
+  box-shadow: var(--shadow-sm, 0 1px 2px rgba(0, 0, 0, 0.18));
+}
+
+.vd-tabs__btn:focus-visible {
+  outline: 2px solid var(--accent, #6f8cff);
+  outline-offset: 2px;
+}
+
+.vd-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* ONE heading level for every section. The rule is that no word repeats at two
+ * levels in the same column — this is the only <h2> style on the page. */
+.vd-h2 {
+  margin: 4px 0 0;
+  font-size: var(--t-md, 15px);
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: var(--text-strong);
+}
+
+.vd-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* The explanation for a non-active status. Icon + sentence, never colour alone
+ * (D-091.5). */
+.vd-note {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--warn-border, rgba(214, 158, 46, 0.42));
+  border-radius: var(--radius-sm, 10px);
+  background: var(--warn-soft, rgba(214, 158, 46, 0.1));
+  color: var(--text-strong);
+  font-size: var(--t-sm2, 12.5px);
+  line-height: 1.45;
+}
+
+/* A definition list, because that is what these are: term → value. It also
+ * gives a screen reader the pair instead of two loose strings. */
+.vd-facts {
+  margin: 0 0 12px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+}
+
+.vd-facts > div {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.vd-facts dt {
+  font-size: var(--t-xs, 11px);
+  color: var(--text-muted);
+}
+
+.vd-facts dd {
+  margin: 0;
+  font-size: var(--t-sm2, 13px);
+  font-weight: 600;
+  color: var(--text-strong);
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 560px) {
+  .vd-tabs {
+    /* Three labels can exceed a phone's width; they scroll in their own strip
+       rather than wrapping into two rows and pushing the content down. */
+    overflow-x: auto;
+    flex-wrap: nowrap;
+  }
+
+  .vd-tabs__btn {
+    white-space: nowrap;
+    min-height: 38px;
+  }
+
+  .vd-facts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

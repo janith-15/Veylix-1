@@ -1,0 +1,55 @@
+# VEYLIX — Caddyfile (reverse proxy + automatic HTTPS)
+#
+# The binary does NOT terminate TLS. It binds loopback and this proxy fronts it,
+# which is why `VEYLIX_ADDR` must stay 127.0.0.1 in production.
+#
+# Replace `vpn.example.com` with your domain, then:
+#   sudo cp deploy/Caddyfile /etc/caddy/Caddyfile
+#   sudo systemctl reload caddy
+#
+# Caddy obtains and renews the certificate itself, so nothing else is needed for
+# HTTPS. The UI and the API share ONE origin here, which is what makes the
+# backend's CSRF origin check pass with no CORS configuration at all (D-043).
+
+vpn.example.com {
+	encode zstd gzip
+
+	# The VPN platform holds customer credentials. These headers are the floor,
+	# not a full security review:
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		# The UI is same-origin only; nothing should be framed or embedded.
+		Cross-Origin-Opener-Policy "same-origin"
+		-Server
+	}
+
+	# The binary already serves the SPA and the API on one port, so a single
+	# upstream is all that is required. No path routing, no separate asset host.
+	reverse_proxy 127.0.0.1:8080 {
+		# Long-lived panel reads (sync, links) can take seconds; bound them so a
+		# hanging panel cannot hold a browser connection open forever.
+		transport http {
+			read_timeout 60s
+			write_timeout 60s
+		}
+		# Pass the real client address through, so the backend's rate limiting
+		# and audit trail record the customer rather than the proxy.
+		header_up X-Forwarded-For {remote_host}
+		header_up X-Real-IP {remote_host}
+	}
+
+	log {
+		output file /var/log/caddy/veylix.log {
+			roll_size 10MiB
+			roll_keep 5
+		}
+	}
+}
+
+# Optional: redirect the bare apex to the app.
+# example.com {
+# 	redir https://vpn.example.com{uri} permanent
+# }

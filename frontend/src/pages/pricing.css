@@ -1,0 +1,88 @@
+/* L4 — the rate card (D-035.4). Uses design tokens only; no literal colours. */
+.pricing-page {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.pricing-notice {
+  border-color: var(--warning);
+}
+
+.pricing-grid {
+  display: grid;
+  grid-template-columns: minmax(240px, 320px) 1fr;
+  gap: var(--space-4);
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .pricing-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.pricing-scope {
+  display: grid;
+  gap: var(--space-3);
+  align-content: start;
+  position: sticky;
+  top: var(--space-4);
+}
+
+@media (max-width: 900px) {
+  .pricing-scope {
+    position: static;
+  }
+}
+
+.pricing-scope__note {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.pricing-scope__meta {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.pricing-form {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.pricing-form__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text);
+}
+
+.pricing-form__head h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.pricing-form__head--spaced {
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border);
+}
+
+/* A two-column field grid that collapses on a narrow screen. */
+.pricing-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: var(--space-3);
+}
+
+.pricing-error {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--error) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--error) 40%, transparent);
+  color: var(--error);
+  font-size: 13px;
+}

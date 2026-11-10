@@ -1,0 +1,22 @@
+-- 0029_overview_indexes.sql — the confirmation date gets its own index (D-107)
+--
+-- WHY. `PaymentTotals` and the trend chart window payments by `confirmed_at`
+-- (`WHERE confirmed_at >= monthStart AND confirmed_at < monthEnd`). The existing
+-- `idx_pay_status (status, created_at)` can only narrow by status; the date range
+-- is then filtered row by row inside that status bucket.
+--
+-- MEASURED, not assumed (store/overview_index_test.go, EXPLAIN QUERY PLAN):
+--   before -> SEARCH payment_records USING INDEX idx_pay_status (status=?)
+--   after  -> SEARCH payment_records USING INDEX idx_pay_status (status=?)
+--
+-- The plan is unchanged, because `status IN (...)` is the more selective predicate
+-- and SQLite keeps it. This index is therefore a READ-AHEAD, not a fix: it is the
+-- index the month window will switch to once `payment_records` grows past the point
+-- where a status bucket stops being small. It is added now because a migration is
+-- cheaper than a production incident, and it costs one index on a table that holds
+-- one row per payment.
+--
+-- `IF NOT EXISTS` so this migration is safe on a database that already carries the
+-- index from an earlier attempt — re-running a migration must never fail.
+CREATE INDEX IF NOT EXISTS idx_pay_confirmed ON payment_records (confirmed_at)
+    WHERE confirmed_at IS NOT NULL;

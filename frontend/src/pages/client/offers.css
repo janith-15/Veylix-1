@@ -1,0 +1,720 @@
+/*
+ * SECTION 03 — Offers & Orders.
+ *
+ * Every selector is scoped under `.of`, and the file is imported only by
+ * `ClientOffersPage`, so it ships as its own route-split chunk and cannot leak
+ * into another screen.
+ *
+ * NO COLOUR LITERALS, NO NEW TOKENS. The token names below are the exact set the
+ * sibling client stylesheet (`vpns.css`) already proves work across every preset:
+ *   --bg-surface · --border · --c-primary · --success · --warning · --error ·
+ *   --text · --text-muted · --radius · --space-N
+ * An earlier draft of this file invented names (`--surface`, `--fg`, `--danger`,
+ * `--t-sm`, `--accent`) that do not exist in the theme, and would have rendered as
+ * unset-value fallbacks. They are gone.
+ */
+
+/* ---- page shell ------------------------------------------------------- */
+
+.of {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4, 16px);
+}
+
+.of-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3, 12px);
+}
+
+/* The one visually emphasised surface. The tint is derived from the primary
+   token, so a sub-theme recolours it without this file knowing it exists. */
+.of-featured {
+  border-radius: var(--radius-lg, 14px);
+  padding: var(--space-4, 16px);
+  border: 1px solid color-mix(in srgb, var(--c-primary) 35%, var(--border));
+  background: color-mix(in srgb, var(--c-primary) 7%, var(--bg-surface));
+}
+
+.of-featured__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3, 12px);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-3, 12px);
+}
+
+.of-featured__title {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 650;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text);
+}
+
+.of-featured__sub {
+  margin: 4px 0 0;
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+  line-height: 1.45;
+}
+
+.of-featured__grid {
+  display: grid;
+  gap: var(--space-3, 12px);
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+/* ---- the offer card (featured + browse share it) ---------------------- */
+
+.of-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3, 12px);
+  padding: var(--space-3, 14px);
+  border-radius: var(--radius, 10px);
+  border: 1px solid var(--border);
+  background: var(--bg-surface);
+  height: 100%;
+}
+
+.of-card--featured {
+  border-color: color-mix(in srgb, var(--c-primary) 45%, var(--border));
+}
+
+.of-card__top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.of-card__name {
+  margin: 0;
+  font-size: 0.9375rem;
+  font-weight: 640;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+  color: var(--text);
+}
+
+.of-card__price {
+  font-size: 1.05rem;
+  font-weight: 680;
+  color: var(--text);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+/* A price that could not be established must not look like a price. */
+.of-card__price--unset {
+  font-size: 0.8125rem;
+  font-weight: 550;
+  color: var(--text-muted);
+  white-space: normal;
+}
+
+.of-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.6875rem;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--text) 6%, transparent);
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.of-badge--premium {
+  border-color: color-mix(in srgb, var(--c-primary) 50%, var(--border));
+  background: color-mix(in srgb, var(--c-primary) 12%, transparent);
+  color: var(--c-primary);
+}
+
+.of-badge--free {
+  border-color: color-mix(in srgb, var(--success) 50%, var(--border));
+  background: color-mix(in srgb, var(--success) 12%, transparent);
+  color: var(--success);
+}
+
+/* "Custom specifications" — a small, honest indicator, NOT a category. */
+.of-badge--custom {
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 550;
+}
+
+/* A real, computed recommendation. Rendered only when a comparison produced it. */
+.of-badge--best {
+  border-color: color-mix(in srgb, var(--warning) 55%, var(--border));
+  background: color-mix(in srgb, var(--warning) 14%, transparent);
+  color: var(--warning);
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+/* ---- specifications -------------------------------------------------- */
+
+.of-specs {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(76px, 1fr));
+  gap: var(--space-2, 8px);
+  margin: 0;
+}
+
+.of-spec {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.of-spec__k {
+  font-size: 0.6875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.of-spec__v {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+/* ---- toolbar: search, chips, view toggle ----------------------------- */
+
+.of-toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3, 12px);
+}
+
+.of-toolbar__row {
+  display: flex;
+  gap: var(--space-2, 8px);
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+/* Chip rows inside a card: 6px reads as one group, 8px reads as separate items. */
+.of-toolbar__row--tight {
+  gap: 6px;
+}
+
+.of-search {
+  position: relative;
+  flex: 1 1 240px;
+  min-width: 180px;
+}
+
+.of-search input {
+  width: 100%;
+  padding: 7px 10px 7px 30px;
+  border-radius: var(--radius, 10px);
+  border: 1px solid var(--border);
+  background: var(--bg-surface);
+  color: var(--text);
+  font-size: 0.8125rem;
+}
+
+.of-search__icon {
+  position: absolute;
+  left: 9px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-muted);
+  pointer-events: none;
+  display: flex;
+}
+
+.of-chips {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.of-chip {
+  padding: 5px 11px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--bg-surface);
+  color: var(--text-muted);
+  font-size: 0.8125rem;
+  font-weight: 550;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.of-chip[aria-pressed='true'] {
+  border-color: color-mix(in srgb, var(--c-primary) 55%, var(--border));
+  background: color-mix(in srgb, var(--c-primary) 14%, transparent);
+  color: var(--c-primary);
+  font-weight: 650;
+}
+
+.of-chip__n {
+  margin-left: 5px;
+  opacity: 0.72;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- filters panel --------------------------------------------------- */
+
+.of-filters {
+  display: grid;
+  gap: var(--space-3, 12px);
+  grid-template-columns: repeat(auto-fit, minmax(148px, 1fr));
+  padding: var(--space-3, 12px);
+  border-radius: var(--radius, 10px);
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--text) 3%, transparent);
+}
+
+.of-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.of-field > span {
+  font-size: 0.6875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text-muted);
+}
+
+.of-field select,
+.of-field input {
+  padding: 6px 8px;
+  border-radius: var(--radius-sm, 8px);
+  border: 1px solid var(--border);
+  background: var(--bg-surface);
+  color: var(--text);
+  font-size: 0.8125rem;
+  min-width: 0;
+}
+
+.of-field__note {
+  font-size: 0.6875rem;
+  color: var(--text-muted);
+  line-height: 1.35;
+}
+
+.of-pricepair {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.of-pricepair input {
+  width: 100%;
+  min-width: 0;
+}
+
+/* ---- result counts, grid, pager -------------------------------------- */
+
+.of-counts {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3, 12px);
+  flex-wrap: wrap;
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+}
+
+.of-grid {
+  display: grid;
+  gap: var(--space-3, 12px);
+  grid-template-columns: repeat(auto-fill, minmax(258px, 1fr));
+}
+
+/* ---- compact list view ---------------------------------------------- */
+
+.of-tablewrap {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius, 10px);
+}
+
+.of-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8125rem;
+  min-width: 720px;
+}
+
+.of-table th,
+.of-table td {
+  text-align: left;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+
+.of-table thead th {
+  font-size: 0.6875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text-muted);
+  font-weight: 600;
+  white-space: nowrap;
+  background: color-mix(in srgb, var(--text) 3%, transparent);
+}
+
+.of-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.of-table td.of-num {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.of-table .of-rowname {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+/* ---- free vs premium comparison -------------------------------------- */
+
+.of-cmpwrap {
+  overflow-x: auto;
+}
+
+.of-cmp {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8125rem;
+}
+
+.of-cmp th,
+.of-cmp td {
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+}
+
+.of-cmp thead th {
+  font-size: 0.6875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text-muted);
+}
+
+.of-cmp tbody th {
+  font-weight: 550;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.of-cmp td {
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+/* ---- compare tray ---------------------------------------------------- */
+
+.of-tray {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3, 12px);
+  flex-wrap: wrap;
+  padding: 10px 12px;
+  border-radius: var(--radius, 10px);
+  border: 1px solid color-mix(in srgb, var(--c-primary) 40%, var(--border));
+  background: color-mix(in srgb, var(--c-primary) 8%, transparent);
+  font-size: 0.8125rem;
+}
+
+.of-tray__names {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.of-tray__tag {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  font-size: 0.6875rem;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---- confirmation / review ------------------------------------------ */
+
+.of-review {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3, 12px);
+  padding: var(--space-3, 14px);
+  border-radius: var(--radius, 10px);
+  border: 1px solid color-mix(in srgb, var(--c-primary) 45%, var(--border));
+  background: var(--bg-surface);
+}
+
+.of-review__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3, 12px);
+  flex-wrap: wrap;
+}
+
+.of-review__title {
+  margin: 0;
+  font-size: 0.9375rem;
+  font-weight: 650;
+  color: var(--text);
+}
+
+.of-review__price {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.of-review__meter {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px;
+  border-radius: var(--radius-sm, 8px);
+  background: color-mix(in srgb, var(--text) 4%, transparent);
+  font-size: 0.8125rem;
+}
+
+.of-meter {
+  height: 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--text) 12%, transparent);
+  overflow: hidden;
+}
+
+.of-meter__fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--c-primary);
+}
+
+.of-meter__fill--full {
+  background: var(--warning);
+}
+
+.of-review__note {
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+  line-height: 1.45;
+  margin: 0;
+}
+
+/* A note that follows a control needs air above it; a note that follows a
+   heading does not. Was an inline margin on the element. */
+.of-review__note--spaced {
+  margin-top: 8px;
+}
+
+.of-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.8125rem;
+}
+
+.of-line {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3, 12px);
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+.of-line--total {
+  border-top: 1px solid var(--border);
+  padding-top: 5px;
+  font-weight: 700;
+}
+
+/* ---- my orders ------------------------------------------------------- */
+
+.of-orders {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2, 8px);
+}
+
+.of-order {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3, 12px);
+  flex-wrap: wrap;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius, 10px);
+  background: var(--bg-surface);
+}
+
+.of-order__main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.of-order__title {
+  font-weight: 600;
+  font-size: 0.875rem;
+  overflow-wrap: anywhere;
+  color: var(--text);
+}
+
+.of-order__meta {
+  font-size: 0.6875rem;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.of-status {
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.6875rem;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--text) 6%, transparent);
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.of-status--good {
+  border-color: color-mix(in srgb, var(--success) 50%, var(--border));
+  background: color-mix(in srgb, var(--success) 12%, transparent);
+  color: var(--success);
+}
+
+.of-status--wait {
+  border-color: color-mix(in srgb, var(--warning) 50%, var(--border));
+  background: color-mix(in srgb, var(--warning) 12%, transparent);
+  color: var(--warning);
+}
+
+.of-status--bad {
+  border-color: color-mix(in srgb, var(--error) 50%, var(--border));
+  background: color-mix(in srgb, var(--error) 12%, transparent);
+  color: var(--error);
+}
+
+.of-empty {
+  padding: 20px 14px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.875rem;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius, 10px);
+}
+
+/* ---- responsive ------------------------------------------------------ */
+
+@media (max-width: 720px) {
+  .of-grid,
+  .of-featured__grid {
+    grid-template-columns: 1fr;
+  }
+  .of-filters {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 420px) {
+  .of-filters {
+    grid-template-columns: 1fr;
+  }
+  .of-featured {
+    padding: var(--space-3, 12px);
+  }
+}
+
+/* Touch targets: 44px where a coarse pointer is in use, matching the allowance
+   S3-5 established for the client surface. */
+@media (pointer: coarse) {
+  .of-chip,
+  .of-pager__btn,
+  .of-search input,
+  .of-field select,
+  .of-field input {
+    min-height: 44px;
+  }
+}
+
+.of-pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3, 12px);
+  flex-wrap: wrap;
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+}
+
+.of-pager__btn {
+  padding: 5px 11px;
+  border-radius: var(--radius-sm, 8px);
+  border: 1px solid var(--border);
+  background: var(--bg-surface);
+  color: var(--text);
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+
+.of-pager__btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* A value the source did not provide. Neutral, never a guess. */
+.of-spec__v--none {
+  font-weight: 450;
+  color: var(--text-muted);
+}
+
+.of-card__actions {
+  display: flex;
+  gap: var(--space-2, 8px);
+  flex-wrap: wrap;
+  margin-top: auto;
+  padding-top: 4px;
+}
+
+.of-card__pick {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+  cursor: pointer;
+  user-select: none;
+}

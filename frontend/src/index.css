@@ -1,0 +1,15 @@
+﻿/* VEYLIX VPN — global styles entry */
+@import './styles/tailwind.css';
+@import './styles/tokens.css';
+@import './styles/theme-extras.css';
+@import './styles/glass.css';
+@import './styles/base.css';
+/* Per-theme UI languages — must come after the component styles it overrides. */
+@import './styles/ui-themes.css';
+@import './styles/style-layer.css';
+@import './styles/variants.css';
+@import './styles/mobile.css';
+@import './styles/touch.css';
+
+/* Keep design tokens as the single source for theme colors.
+   Individual components consume var(--...) tokens only. */

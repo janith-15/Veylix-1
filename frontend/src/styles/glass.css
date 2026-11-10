@@ -1,0 +1,80 @@
+﻿/* ============================================================
+   VEYLIX VPN — Glass effect utilities
+   Applied to cards, sidebar, topbar, dialogs and toasts.
+   Disabled automatically when --glass-enabled: 0 (Classic theme)
+   or when <html> has .low-resource.
+   ============================================================ */
+
+.glass {
+  /* Positioning is NOT forced here: shell chrome (.app-sidebar fixed,
+     .app-topbar sticky) must keep its own positioning. Every other glass
+     surface is naturally positioned by its own rules, and `isolation`
+     already gives the ::before highlight a stacking context. */
+  position: relative;
+  background: var(--glass-bg);
+  border: var(--border-weight) solid var(--glass-border);
+  box-shadow: var(--glass-shadow);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  isolation: isolate;
+}
+
+/* Shell chrome wins over the generic `.glass` positioning above. */
+.app-shell > .app-sidebar { position: fixed; }
+.app-shell .app-topbar { position: sticky; }
+
+/* The shell surfaces need a transparent page behind them to blur the scene */
+.glass.app-sidebar { background: var(--glass-bg); }
+
+/* ---- Opaque overrides ----
+   Glass is CHROME-only (sidebar + topbar). Any surface that carries content
+   or text must not sample the decorative 3D scene behind it. */
+.ui-dialog.glass,
+.toast.glass,
+.palette.glass,
+.chat-panel.glass,
+.notif-pop.glass {
+  background: var(--bg-card);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+/* Subtle top-left shine, purely decorative */
+.glass::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--glass-highlight);
+  opacity: calc(var(--glass-enabled) * 0.9);
+  pointer-events: none;
+  z-index: -1;
+}
+
+/* Fallback: no backdrop-filter support -> solid surfaces */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .glass {
+    background: var(--bg-card);
+  }
+}
+
+/* Glass disabled (Classic theme or user toggles it off) */
+html[data-glass='off'] .glass,
+html.low-resource .glass {
+  background: var(--bg-card);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  border-color: var(--border);
+  box-shadow: var(--shadow-sm);
+}
+html[data-glass='off'] .glass::before,
+html.low-resource .glass::before {
+  display: none;
+}
+
+/* Reduced motion: no animated glass shimmer */
+@media (prefers-reduced-motion: reduce) {
+  .glass {
+    transition: none;
+  }
+}

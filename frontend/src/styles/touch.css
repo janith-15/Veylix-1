@@ -1,0 +1,82 @@
+/* ============================================================
+   Touch targets for POINTERS THAT ARE FINGERS (D-058).
+
+   The audit found most controls under the 44×44 minimum on desktop too — but a
+   mouse is precise and material design ships 36–40px rows deliberately, while a
+   thumb is not. So the enlargement is scoped to `pointer: coarse` (touch screens,
+   tablets, phones) and desktop density is left alone.
+
+   `pointer: coarse` describes the PRIMARY input. A laptop with a touchscreen and a
+   trackpad reports `fine`, which is correct: the user is almost certainly using the
+   trackpad, and 44px rows would cost them screen space for nothing.
+   ============================================================ */
+@media (pointer: coarse) {
+  .ui-btn--sm,
+  .ui-btn--md {
+    min-height: 44px;
+  }
+  .ui-input {
+    min-height: 44px;
+  }
+  /* Sidebar and topbar controls are the two places a thumb lands most often. */
+  .app-nav__item,
+  .app-topbar__icon-btn,
+  .app-mobile-toggle {
+    min-height: 44px;
+  }
+  /* An icon-only button has no text to grow with, so its width needs the floor too:
+     the topbar buttons are a fixed 36×36. */
+  .app-topbar__icon-btn {
+    min-width: 44px;
+  }
+
+  /* Column sort headers and filter chips are buttons, not decoration. Sorting is a
+     primary way to work a table, and at 18–28px tall these were the last controls a
+     finger could not reliably hit. Width matters too: "Offer ↕" is 37px wide, so the
+     height alone was not enough. */
+  .ui-table__sort {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  .dash-range,
+  .audit-filters button {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  /* The staff role toggle: two segments, side by side. */
+  .auth__role {
+    min-height: 44px;
+  }
+
+  /* Profile tabs and the small icon buttons (Copy, Find, Save). These are true
+     controls: an icon button with no text has no other dimension to grow in. */
+  .ui-tabs button,
+  .ui-tabs [role='tab'],
+  .prof-tabs button {
+    min-height: 44px;
+  }
+  button[aria-label] {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  /* A switch is a control you tap, not a label. */
+  .ui-switch,
+  .ui-switch__track {
+    min-height: 44px;
+  }
+  /* The in-conversation find bar: its buttons are 40×40, which is 4px short. */
+  .chat-find button {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  /* A row that is a link behaves like a button, so it gets the same floor. A pure
+     inline text link inside a sentence is left alone: growing it would break the
+     line it sits in, and it is not the way anyone navigates on a phone. */
+  .ui-table tbody tr > td > a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+}
+

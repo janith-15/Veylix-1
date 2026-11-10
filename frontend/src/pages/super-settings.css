@@ -1,0 +1,71 @@
+/* Super Admin → Settings (D-080). Small, local layout only: the shared UI
+   components (Card, Input, Button) already carry the look and feel. */
+
+.settings-page {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.settings-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 0.75rem 1.5rem;
+  margin: 0;
+}
+
+.settings-facts dt {
+  color: var(--c-muted, #8a8a8a);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.settings-facts dd {
+  margin: 0.15rem 0 0;
+}
+
+.settings-google-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0.5rem 0;
+}
+
+.settings-form {
+  display: grid;
+  gap: 0.75rem;
+  margin: 0.75rem 0;
+}
+
+.settings-actions {
+  margin-top: 0.5rem;
+}
+
+.settings-copyline {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.settings-copyline code {
+  background: var(--c-surface-2, rgba(0, 0, 0, 0.06));
+  padding: 0.35rem 0.55rem;
+  border-radius: var(--radius-sm, 6px);
+  font-size: 0.85rem;
+  word-break: break-all;
+}
+
+/* The derived "register this exact URL" callout above the Google form. */
+.settings-callback {
+  border: 1px solid var(--c-border, rgba(0, 0, 0, 0.12));
+  border-radius: var(--radius-sm, 6px);
+  padding: 0.6rem 0.75rem;
+  margin: 0.75rem 0 0;
+}
+
+.settings-callback .settings-copyline {
+  margin-top: 0.4rem;
+}

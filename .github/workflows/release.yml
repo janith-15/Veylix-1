@@ -1,0 +1,194 @@
+# VEYLIX — release artifacts.
+#
+# Triggered by a version tag. Produces the two Linux binaries the INSTALL doc
+# asks for, with checksums, and refuses to publish a binary that does not answer
+# its own readiness probe — a release that cannot start is not a release.
+name: release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  GO_VERSION: '1.27'
+  NODE_VERSION: '24'
+
+jobs:
+  build:
+    name: build ${{ matrix.goarch }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - goarch: amd64
+          - goarch: arm64
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: backend/go.sum
+
+      - name: build the UI
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
+
+      # The UI is embedded into the binary at compile time (D-029), so it must be
+      # copied in BEFORE `go build`. A stale chunk left behind is a file a browser
+      # could still request long after it stopped matching the code, so the
+      # destination is wiped first.
+      - name: embed the UI
+        run: |
+          embed=backend/internal/httpapi/dist
+          find "$embed" -mindepth 1 ! -name .gitkeep -delete 2>/dev/null || true
+          mkdir -p "$embed"
+          cp -r frontend/dist/. "$embed/"
+
+      - name: build the binary
+        working-directory: backend
+        env:
+          GOOS: linux
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: '0'
+        run: |
+          mkdir -p ../dist
+          go build -trimpath -ldflags "-s -w -X main.version=${{ github.ref_name }}" \
+            -o ../dist/veylixd-linux-${{ matrix.goarch }} ./cmd/veylixd
+
+      # The operations CLI ships in the same release as the binary it manages
+      # (INSTALLATION_DESIGN.md §5-P3). Without it an installed host has no
+      # supported way to upgrade, change its domain or roll back - so a release
+      # that omits it is not a release.
+      - name: build the operations CLI
+        working-directory: backend
+        env:
+          GOOS: linux
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: '0'
+        run: |
+          go build -trimpath -ldflags "-s -w -X main.version=${{ github.ref_name }}" \
+            -o ../dist/vpn-platformctl-linux-${{ matrix.goarch }} ./cmd/vpn-platformctl
+
+      # A binary that cannot boot is not an artifact. This runs the real thing.
+      - name: smoke-test the binary
+        env:
+          VEYLIX_ENCRYPTION_KEY: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
+          VEYLIX_SESSION_KEY: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
+          VEYLIX_DATA_DIR: ${{ runner.temp }}/veylix-data
+          VEYLIX_ADDR: 127.0.0.1:18080
+        run: |
+          set -euo pipefail
+          mkdir -p "$VEYLIX_DATA_DIR"
+
+          # arm64 cannot execute on an amd64 runner; that artifact is checksummed
+          # but not booted, and the job says so rather than pretending.
+          if [ "${{ matrix.goarch }}" != "amd64" ]; then
+            echo "skipping boot test: ${{ matrix.goarch }} cannot run on this runner"
+            exit 0
+          fi
+
+          ./dist/veylixd-linux-${{ matrix.goarch }} &
+          pid=$!
+          trap 'kill $pid 2>/dev/null || true' EXIT
+
+          for i in $(seq 1 30); do
+            if curl -sf http://127.0.0.1:18080/api/ready > /tmp/ready.json; then break; fi
+            sleep 1
+          done
+
+          echo "ready: $(cat /tmp/ready.json)"
+          grep -q '"ui"' /tmp/ready.json || { echo "readiness did not report the embedded UI"; exit 1; }
+
+          # The SPA must be served, and a missing asset must stay a 404 rather
+          # than falling through to index.html.
+          code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:18080/dashboard)
+          [ "$code" = "200" ] || { echo "/dashboard answered $code"; exit 1; }
+          code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:18080/assets/nope.js)
+          [ "$code" = "404" ] || { echo "/assets/nope.js answered $code, want 404"; exit 1; }
+
+      - name: checksum
+        working-directory: dist
+        run: |
+          sha256sum "veylixd-linux-${{ matrix.goarch }}" \
+                    "vpn-platformctl-linux-${{ matrix.goarch }}" \
+            > "veylixd-linux-${{ matrix.goarch }}.sha256"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: veylixd-linux-${{ matrix.goarch }}
+          path: |
+            dist/veylixd-linux-${{ matrix.goarch }}
+            dist/vpn-platformctl-linux-${{ matrix.goarch }}
+            dist/veylixd-linux-${{ matrix.goarch }}.sha256
+          if-no-files-found: error
+
+  publish:
+    name: publish
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+      # A workflow never has a working tree until it explicitly checks one out.
+      #
+      # This step was missing, and the failure was subtle: both `build` jobs
+      # succeeded, `combine checksums` succeeded, and then the deploy-template
+      # bundle died with "the bundle is missing deploy/veylixd.service" — because
+      # `deploy/` had been downloaded from an artifact directory that never
+      # contained it. The error named the wrong cause, so it is spelled out here
+      # rather than left to be rediscovered.
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: combine checksums
+        working-directory: dist
+        run: cat ./*.sha256 > SHA256SUMS
+
+      # THE TEMPLATES ARE PART OF THE RELEASE.
+      #
+      # install.sh needs deploy/Caddyfile, deploy/veylixd.service and
+      # deploy/veylix-backup.sh. Without this bundle a host installed from
+      # release artifacts had no HTTPS config, no hardened unit and no backup
+      # script - and `vpn-platformctl update` then refused to run its own
+      # backup step. The installer resolves this tarball at
+      # <release>/veylix-deploy.tar.gz and extracts ONLY deploy/* from it.
+      - name: bundle the deployment templates
+        working-directory: dist
+        run: |
+          set -euo pipefail
+          tar -czf veylix-deploy.tar.gz -C .. deploy
+          tar -tzf veylix-deploy.tar.gz | grep -q '^deploy/veylixd.service$' \
+            || { echo "the bundle is missing deploy/veylixd.service"; exit 1; }
+          tar -tzf veylix-deploy.tar.gz | grep -q '^deploy/Caddyfile$' \
+            || { echo "the bundle is missing deploy/Caddyfile"; exit 1; }
+          tar -tzf veylix-deploy.tar.gz | grep -q '^deploy/veylix-backup.sh$' \
+            || { echo "the bundle is missing deploy/veylix-backup.sh"; exit 1; }
+          sha256sum veylix-deploy.tar.gz >> SHA256SUMS
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/veylixd-linux-amd64
+            dist/veylixd-linux-arm64
+            dist/vpn-platformctl-linux-amd64
+            dist/vpn-platformctl-linux-arm64
+            dist/veylix-deploy.tar.gz
+            dist/SHA256SUMS
+          generate_release_notes: true

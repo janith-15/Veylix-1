@@ -1,0 +1,76 @@
+/*
+ * VPN Guides (`pages/client/ClientGuidesPage.tsx`).
+ *
+ * Every selector is scoped under `.gd`, and the file is imported only by that
+ * page, so it ships as its own route-split chunk.
+ *
+ * These eight classes exist because the page used fourteen inline
+ * `style={{ … }}` attributes for nothing but gap, alignment, an icon colour and
+ * a zero margin (D-059). A token-only stylesheet makes the page obey the preset
+ * like every other client screen.
+ */
+
+/* ---- vertical stacks ------------------------------------------------- */
+
+.gd__stack {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.gd__stack--snug {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.gd__stack--tight {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* ---- horizontal rows ------------------------------------------------- */
+
+.gd__row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.gd__row--plain {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* Platform lines read as a definition list, so the labels share a baseline. */
+.gd__row--baseline {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  flex-wrap: wrap;
+}
+
+/* ---- text and icons -------------------------------------------------- */
+
+/* A paragraph inside a stack carries no margin of its own; the stack spaces it. */
+.gd__note {
+  margin: 0;
+}
+
+.gd__icon {
+  flex: none;
+  color: var(--text-muted);
+}
+
+.gd__icon--ok {
+  color: var(--success);
+}
+
+/* Touch targets: 44px where a coarse pointer is in use. */
+@media (pointer: coarse) {
+  .gd__row--plain .ui-btn {
+    min-height: 44px;
+  }
+}

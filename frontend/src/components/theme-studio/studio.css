@@ -1,0 +1,319 @@
+﻿/* ============================================================
+   VEYLIX VPN — Theme Studio drawer
+   ============================================================ */
+.studio-scrim {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: var(--z-modal, 300);
+}
+.studio {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(420px, 100vw);
+  z-index: calc(var(--z-modal, 300) + 1);
+  display: flex;
+  flex-direction: column;
+  /* Opaque panel: a translucent/glass surface let the dashboard bleed
+     through and destroyed text contrast. */
+  background: var(--bg-sidebar);
+  color: var(--text);
+  border-left: var(--border-weight) solid var(--border-strong);
+  box-shadow: -12px 0 48px -12px rgba(0, 0, 0, 0.45);
+  animation: studio-in 0.22s ease;
+}
+@keyframes studio-in {
+  from { transform: translateX(24px); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+.studio__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+  border-bottom: var(--border-weight) solid var(--border);
+  background: var(--bg-sidebar);
+  flex-shrink: 0;
+}
+.studio__title { font-weight: 700; font-size: 16px; color: var(--text-strong); }
+.studio__body {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: var(--space-4) var(--space-5) var(--space-10);
+  background: var(--bg-sidebar);
+  overscroll-behavior: contain;
+}
+.studio__section { margin-bottom: var(--space-6); }
+.studio__section:last-child { margin-bottom: 0; }
+.studio__section-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: none;
+  color: var(--text-muted);
+  margin-bottom: var(--space-3);
+  font-feature-settings: 'kern' 1;
+  text-rendering: optimizeLegibility;
+}
+
+/* Preset cards */
+.studio-presets {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+.studio-preset {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border-radius: var(--radius-sm);
+  border: 2px solid var(--border);
+  background: var(--bg-card);
+  text-align: left;
+  min-width: 0;
+  overflow: hidden;
+  transition: border-color var(--transition-fast), transform var(--transition-fast), box-shadow var(--transition-fast);
+}
+.studio-preset:hover { transform: translateY(-1px); border-color: var(--border-strong); }
+.studio-preset--active {
+  border-color: var(--c-primary);
+  box-shadow: 0 0 0 3px var(--tint-primary, color-mix(in srgb, var(--c-primary) 18%, transparent));
+}
+.studio-preset__swatch {
+  height: 44px;
+  border-radius: 6px;
+  border: 1px solid rgba(127, 127, 160, 0.25);
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-2);
+}
+.studio-preset__dot { width: 10px; height: 10px; border-radius: 50%; }
+.studio-preset__name { font-size: 12px; font-weight: 600; color: var(--text); }
+.studio-preset__meta {
+  font-size: 10px;
+  line-height: 1.3;
+  color: var(--text-muted);
+  letter-spacing: 0.02em;
+}
+.studio-preset--active .studio-preset__meta { color: var(--c-primary); }
+
+/* Colour rows */
+.studio-colors { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); }
+.studio-color { display: flex; flex-direction: column; gap: var(--space-2); }
+.studio-color__label { font-size: 12px; color: var(--text-muted); font-weight: 600; }
+.studio-color__row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  border: var(--border-weight) solid var(--border-strong);
+  background: var(--bg-input);
+}
+.studio-color__swatch {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  border: 1px solid rgba(127, 127, 160, 0.35);
+  padding: 0;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.studio-color__hex {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  width: 100%;
+  min-width: 0;
+  outline: none;
+  text-transform: uppercase;
+  overflow: hidden;
+  background: var(--bg-sidebar);
+}
+
+/* Segmented control — scrollable on narrow panels */
+.studio-seg {
+  display: flex;
+  gap: var(--space-1);
+  padding: var(--space-1);
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface);
+  border: var(--border-weight) solid var(--border);
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.studio-seg::-webkit-scrollbar { display: none; }
+.studio-seg__btn {
+  flex: 1 0 auto;
+  padding: var(--space-2) var(--space-4);
+  border-radius: calc(var(--radius-sm) - 2px);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-muted);
+  letter-spacing: 0.01em;
+  text-transform: none;
+  white-space: nowrap;
+  background: none;
+  font-feature-settings: 'kern' 1;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+.studio-seg__btn:hover { color: var(--text); }
+.studio-seg__btn--active {
+  background: var(--bg-card);
+  color: var(--text-strong);
+  box-shadow: var(--shadow-sm);
+}
+
+/* Slider row */
+.studio-slider { display: flex; flex-direction: column; gap: var(--space-2); margin-bottom: var(--space-3); }
+.studio-slider__head {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+.studio-slider input[type='range'] {
+  width: 100%;
+  accent-color: var(--c-primary);
+}
+
+/* Toggle row */
+.studio-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+  border-bottom: 1px dashed var(--border);
+}
+.studio-toggle:last-child { border-bottom: none; }
+.studio-toggle__text { font-size: 13px; font-weight: 600; color: var(--text); }
+.studio-toggle__hint { font-size: 11.5px; color: var(--text-muted); font-weight: 400; }
+
+/* Preview / footer */
+.studio__foot {
+  display: flex;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-5);
+  border-top: var(--border-weight) solid var(--border);
+  background: var(--bg-sidebar);
+  flex-shrink: 0;
+  box-shadow: 0 -8px 20px -16px rgba(0, 0, 0, 0.35);
+}
+.studio-preview {
+  padding: var(--space-3);
+  border-radius: var(--radius);
+  background: var(--bg-card);
+  border: var(--border-weight) solid var(--border);
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* Chart live preview inside the Components tab */
+.studio-chart-preview {
+  margin-top: var(--space-3);
+  padding: var(--space-3) 8px 4px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--bg-surface);
+}
+
+/* Style tab: live typography preview */
+.style-preview {
+  margin-top: var(--space-3);
+  padding: var(--space-3);
+  border-radius: var(--radius-sm);
+  border: 1px dashed var(--border-strong);
+  background: var(--bg-surface);
+}
+.style-preview__h {
+  font-family: var(--style-heading-font, var(--font-family));
+  font-weight: var(--style-heading-weight, 700);
+  text-transform: var(--style-heading-transform, none);
+  letter-spacing: var(--style-heading-tracking, 0);
+  color: var(--text-strong);
+  font-size: 1.15rem;
+  margin-bottom: var(--space-1);
+}
+.style-preview__p { font-size: 12px; color: var(--text-muted); }
+
+/* Mobile: full-screen sheet */
+@media (max-width: 640px) {
+  .studio { width: 100vw; border-left: none; }
+}
+
+
+
+
+
+/* ============================================================
+   ONE STUDIO, TWO VIEWS
+   compact: the 420px drawer a user opens for a quick change.
+   full   : the whole viewport, for advanced theme work.
+   Only geometry differs - the controls are the same components, so a
+   fix lands in both views and they can never drift apart.
+   ============================================================ */
+.studio__expand {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  margin-right: var(--space-2);
+  padding: 5px 10px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: color var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease);
+}
+.studio__expand:hover { color: var(--text); border-color: var(--border-strong); }
+
+/* ---------- FULL VIEW ---------- */
+.studio--full {
+  width: 100vw;
+  max-width: 100vw;
+  border-left: none;
+  z-index: calc(var(--z-modal, 300) + 5);
+}
+
+/* A full page has real width: lay the sections out in columns instead of
+   one long scroll, and cap the reading measure so it stays usable. */
+.studio--full .studio__body {
+  padding: var(--space-6) max(var(--space-6), calc((100vw - 1280px) / 2));
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  gap: var(--space-6);
+  align-items: start;
+}
+.studio--full .studio__section { margin-bottom: 0; }
+.studio--full .studio-presets { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
+.studio--full .sub-grid { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); }
+.studio--full .scene-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
+.studio--full .studio__foot {
+  padding-left: max(var(--space-6), calc((100vw - 1280px) / 2));
+  padding-right: max(var(--space-6), calc((100vw - 1280px) / 2));
+}
+
+/* On a phone the full view is still one column. */
+@media (max-width: 720px) {
+  .studio--full .studio__body { grid-template-columns: 1fr; padding: var(--space-4); }
+  .studio--full .studio__foot { padding-left: var(--space-4); padding-right: var(--space-4); }
+}

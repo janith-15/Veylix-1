@@ -1,0 +1,36 @@
+{
+  // Teach VS Code's built-in CSS language service the Tailwind CSS v4
+  // at-rules (@theme, @utility, @custom-variant, …). Without this it
+  // reports "Unknown at rule @theme" in src/styles/tailwind.css, even
+  // though @tailwindcss/vite compiles it correctly.
+  "css.customData": [".vscode/tailwind-css-data.json"],
+  // Tailwind's @import 'tailwindcss/theme' layer(theme) syntax is valid v4
+  // but not plain CSS, so the generic unknown-at-rule check stays noisy here.
+  "css.lint.unknownAtRules": "ignore",
+  "scss.customData": [".vscode/tailwind-css-data.json"],
+  "scss.lint.unknownAtRules": "ignore",
+  "less.customData": [".vscode/tailwind-css-data.json"],
+  "less.lint.unknownAtRules": "ignore",
+  // Tailwind v4 declares tokens as custom properties; the editor cannot
+  // resolve the aliases those tokens reference inside @theme.
+  "css.lint.unknownProperties": "ignore",
+  "css.lint.vendorPrefix": "ignore",
+
+  // Go language server. `gopls` keeps its own on-disk index; when a file is
+  // renamed or deleted outside the editor it can keep reporting the OLD path
+  // (e.g. "fakePanel redeclared" pointing at a file that no longer exists).
+  // `buildOnSave` + `staticcheck off` keeps diagnostics aligned with what
+  // `go build` / `go vet` actually say, which is the only authority here.
+  "go.useLanguageServer": true,
+  "gopls": {
+    "ui.diagnostic.staticcheck": false,
+    "ui.diagnostic.analyses": {},
+    "build.buildFlags": ["-tags="]
+  },
+  "[go]": {
+    "editor.formatOnSave": true,
+    "editor.codeActionsOnSave": {
+      "source.organizeImports": "explicit"
+    }
+  }
+}

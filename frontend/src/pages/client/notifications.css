@@ -1,0 +1,52 @@
+/*
+ * Notifications (`pages/client/ClientNotificationsPage.tsx`).
+ *
+ * Scoped under `.ntf`; imported only by that page. These classes replace a
+ * seven-property inline `style={{ … }}` on every row (D-059) — including a
+ * conditional background, which is now the `ntf__item--unread` modifier.
+ *
+ * Tokens only: --bg-surface, --border, --radius, --text, --text-muted.
+ */
+
+.ntf__stack {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ntf__item {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius, 10px);
+  background: transparent;
+}
+
+/* Unread is a surface change, and the "Mark read" button states it in words too. */
+.ntf__item--unread {
+  background: var(--bg-surface);
+}
+
+.ntf__body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.ntf__meta {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex: none;
+}
+
+/* Touch targets: 44px where a coarse pointer is in use. */
+@media (pointer: coarse) {
+  .ntf__meta .ui-btn {
+    min-height: 44px;
+  }
+}

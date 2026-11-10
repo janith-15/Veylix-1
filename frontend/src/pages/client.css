@@ -1,0 +1,867 @@
+/* Client pages (dashboard, VPN detail, buy, history) */
+.client-offers-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: var(--space-4);
+}
+
+/* A connection link is shown twice on purpose (D-033): a QR for a phone and the
+   URI for a desktop client. Side by side when there is room, stacked when not —
+   never squeezed to an unreadable width. */
+.vpn-connect-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--space-4);
+  align-items: start;
+}
+.client-vpn-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.client-vpn-card__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+/* U5 (UI/UX defect board) — the one-sentence verdict under the page header.
+   Colour comes from state tokens only, so every preset inherits it. */
+.client-verdict {
+  margin: 0 0 var(--space-3);
+  padding: 10px 14px;
+  border-radius: var(--radius);
+  font-size: 13px;
+  border: 1px solid var(--border);
+  background: var(--bg-surface);
+  color: var(--text);
+}
+.client-verdict.is-ok {
+  border-color: color-mix(in srgb, var(--success) 40%, var(--border));
+  background: color-mix(in srgb, var(--success) 8%, var(--bg-card));
+}
+.client-verdict.is-warn {
+  border-color: color-mix(in srgb, var(--warning) 45%, var(--border));
+  background: color-mix(in srgb, var(--warning) 10%, var(--bg-card));
+}
+
+/* U9 (UI/UX defect board) — the verdict line inside the detail hero. It states
+   status-aware fact, not a promise: colour comes from the theme, never a hex. */
+.vpn-verdict {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-strong);
+  line-height: 1.4;
+}
+
+/* U10 — section headings on the VPN detail page. Named sections beat a single
+   column of identical cards; each is a real <h2> for assistive tech. */
+.vpn-section-title {
+  margin: var(--space-5) 0 var(--space-3);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 6px;
+}
+.vpn-section-title:first-of-type { margin-top: var(--space-3); }
+
+.vpn-detail-hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+  padding: var(--space-6);
+  border-radius: var(--radius-card, var(--radius-lg));
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--c-primary) 20%, var(--bg-card)) 0%,
+    color-mix(in srgb, var(--c-secondary) 14%, var(--bg-card)) 100%
+  );
+  border: 1px solid color-mix(in srgb, var(--c-primary) 28%, var(--border));
+}
+.vpn-detail-hero__meta { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.vpn-warn {
+  border: 1px solid color-mix(in srgb, var(--warning) 45%, var(--border));
+  background: color-mix(in srgb, var(--warning) 10%, var(--bg-card));
+  padding: var(--space-4);
+  border-radius: var(--radius);
+  font-size: 13px;
+}
+.vpn-qr {
+  display: grid;
+  place-items: center;
+  padding: 10px;
+  border-radius: var(--radius-sm);
+  background: #ffffff;
+  border: 1px solid var(--border);
+}
+.vpn-qr svg { display: block; }
+.vpn-link-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.vpn-link-row textarea {
+  flex: 1;
+  min-height: 60px;
+  resize: none;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+.vpn-chips { display: flex; gap: 8px; flex-wrap: wrap; }
+.vpn-chip {
+  font-size: 11.5px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--bg-surface);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.guide-steps { display: grid; gap: 8px; margin: 0; padding-left: 18px; font-size: 13px; }
+.sell-step-dots { display: flex; gap: 6px; margin-bottom: var(--space-4); }
+.sell-step-dots span {
+  height: 6px;
+  flex: 1;
+  border-radius: 999px;
+  background: var(--border);
+  transition: background-color var(--dur, 180ms) var(--ease, ease);
+}
+@media (max-width: 600px) {
+  .vpn-link-row { flex-direction: column; }
+  .vpn-link-row textarea { width: 100%; }
+  .vpn-link-row > button { align-self: flex-start; }
+  .vpn-qr { margin: 0 auto; }
+}
+.sell-step-dots span[data-on='true'] { background: var(--c-primary); }
+/* D-047: the plan's price. Right-aligned in the card header so a column of
+   plans reads as a price column, and never truncates a long currency string. */
+.client-price {
+  font-weight: 700;
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-strong);
+  white-space: nowrap;
+}
+
+/* Setup guide: the app choices. Each is a real link to the client's own page,
+   so a customer can act on the instruction instead of guessing a name. */
+.guide-apps {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+}
+.guide-app {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 7px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--bg-surface);
+  color: var(--text);
+  text-decoration: none;
+  font-size: 13px;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+.guide-app:hover {
+  background: var(--bg-hover);
+  border-color: var(--border-strong);
+}
+.guide-app:active { transform: translateY(1px); }
+.guide-app:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+.guide-app__name { font-weight: 600; }
+.guide-app__note {
+  color: var(--text-muted);
+  font-size: 11.5px;
+}
+/* Super Admin lifecycle controls on the VPN detail header (D-036.5).
+   A row rather than a menu: an operator arrives here to stop one specific VPN,
+   and a hidden menu makes a safety action feel like a hunt. It wraps instead of
+   overflowing on a narrow screen. */
+.vpn-actions {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+
+/* ===========================================================================
+ * SECTION 01 - CLIENT DASHBOARD (S4)
+ *
+ * Everything below is scoped under `.cl-dash` (the dashboard root) so no rule
+ * here can reach another screen. That matters: `client.css` is shared by the
+ * VPN detail, buy and history pages, and an unscoped card rule would silently
+ * restyle them.
+ *
+ * Rules followed without exception:
+ *   - NO literal colour, radius, shadow, spacing or font. Every value is an
+ *     existing custom property or a color-mix() of one, so all six presets and
+ *     their sub-themes apply here with no further work.
+ *   - Breakpoints at the widths this portal is verified at: 360 / 390 / 768 /
+ *     1024 / 1440 / 1920. Between them the layout is intrinsically fluid.
+ *   - No animation. The only movement is a border/background change on hover of
+ *     a clickable tile, which is an affordance, not decoration.
+ * ======================================================================== */
+
+.cl-dash {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  contain: layout style;
+  min-width: 0;
+}
+
+/* --- 01 . welcome header ------------------------------------------------- */
+
+.cl-welcome {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+  padding: var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--c-primary) 7%, var(--bg-surface));
+}
+
+.cl-welcome__text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.cl-welcome__eyebrow {
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.cl-welcome__title {
+  margin: 0;
+  font-size: clamp(20px, 2.6vw, 27px);
+  line-height: 1.2;
+  font-weight: 650;
+  color: var(--text);
+}
+
+.cl-welcome__sub {
+  margin: 0;
+  font-size: 13.5px;
+  color: var(--text-muted);
+  max-width: 62ch;
+}
+
+.cl-welcome__actions {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.cl-welcome__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid color-mix(in srgb, var(--success) 40%, var(--border));
+  background: color-mix(in srgb, var(--success) 12%, transparent);
+  color: var(--success);
+  align-self: flex-start;
+}
+
+
+/* --- 02 . overview cards ------------------------------------------------- */
+
+.cl-overview {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+/*
+ * One overview tile. Deliberately its own class rather than a restyle of the
+ * shared `.ui-metric`: the operator console uses that primitive and this work
+ * owns the client dashboard only.
+ */
+.cl-ov {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-surface);
+  min-width: 0;
+  position: relative;
+  overflow: hidden;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+}
+
+/* The accent rule is the visually distinct cue: one 3px edge per tile, taken
+   from the semantic token that tile reports, never from a fixed colour. */
+.cl-ov::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: var(--c-primary);
+}
+
+.cl-ov--ok::before { background: var(--success); }
+.cl-ov--warn::before { background: var(--warning); }
+.cl-ov--info::before { background: var(--c-primary); }
+
+/* A tile that opens a list is a real button, so keyboard and focus come free. */
+button.cl-ov {
+  cursor: pointer;
+  transition: border-color 140ms ease;
+}
+
+button.cl-ov:hover {
+  border-color: color-mix(in srgb, var(--c-primary) 45%, var(--border));
+}
+
+button.cl-ov:focus-visible {
+  outline: 2px solid var(--c-primary);
+  outline-offset: 2px;
+}
+
+.cl-ov__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.cl-ov__label {
+  font-size: 12px;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.cl-ov__icon {
+  color: var(--text-muted);
+  display: inline-flex;
+  flex-shrink: 0;
+}
+
+.cl-ov__value {
+  font-size: clamp(22px, 2.4vw, 28px);
+  font-weight: 680;
+  line-height: 1.1;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.cl-ov__delta {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+/* --- 03 . primary VPN --------------------------------------------------- */
+
+.cl-primary {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.cl-primary__head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 6px;
+}
+
+
+/* --- 04 . attention center ---------------------------------------------- */
+
+.cl-attn {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+/* Warning-tone row: the VPN is not connectable but nothing is broken. */
+.cl-attn__row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid color-mix(in srgb, var(--warning) 34%, var(--border));
+  border-left-width: 3px;
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--warning) 6%, var(--bg-surface));
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+/* Error-tone row: the VPN is gone, exhausted or suspended. `--error` is the
+   token every preset defines for this; there is no `--danger` in tokens.css. */
+.cl-attn__row--error {
+  border-color: color-mix(in srgb, var(--error) 34%, var(--border));
+  background: color-mix(in srgb, var(--error) 6%, var(--bg-surface));
+}
+
+.cl-attn__body {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  flex: 1 1 240px;
+}
+
+.cl-attn__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-weight: 640;
+  font-size: 13.5px;
+  color: var(--text);
+}
+
+.cl-attn__why {
+  font-size: 12.5px;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.cl-attn__meta {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* --- 05 . orders in progress -------------------------------------------- */
+
+.cl-orders {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid color-mix(in srgb, var(--c-primary) 34%, var(--border));
+  border-left-width: 3px;
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--c-primary) 7%, var(--bg-surface));
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.cl-orders--error {
+  border-color: color-mix(in srgb, var(--warning) 34%, var(--border));
+  background: color-mix(in srgb, var(--warning) 7%, var(--bg-surface));
+}
+
+.cl-orders__body {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  flex: 1 1 240px;
+}
+
+.cl-orders__title {
+  font-weight: 640;
+  font-size: 13.5px;
+  color: var(--text);
+}
+
+.cl-orders__note {
+  font-size: 12.5px;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+
+/* --- 06 . free claim ---------------------------------------------------- */
+
+.cl-claim {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.cl-claim__meters {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.cl-claim__meter {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+
+.cl-claim__meter-label {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--text-muted);
+  flex-wrap: wrap;
+}
+
+.cl-claim__meter-num {
+  font-weight: 640;
+  color: var(--text);
+}
+
+.cl-claim__track {
+  display: block;
+  height: 7px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--text-muted) 22%, transparent);
+  overflow: hidden;
+}
+
+.cl-claim__fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--c-primary);
+}
+
+.cl-claim__fill.is-high { background: var(--warning); }
+.cl-claim__fill.is-full { background: var(--error); }
+
+.cl-claim__offers {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: var(--space-3);
+}
+/*
+ * The reason a claim button is disabled.
+ *
+ * A disabled control with no explanation is the defect this replaces, so the
+ * sentence sits under the button in the muted tone: readable, not shouting.
+ * It is never the only place the meaning lives - the same fact is in the
+ * button title and in the verdict at the top of the page.
+ */
+.cl-claim__blocked {
+  display: block;
+  color: var(--text-muted);
+  line-height: 1.45;
+  margin-top: 2px;
+}
+
+/* ------------------------------------------------------------------ *
+ * Client VPN hero card (`components/vpn/VpnHeroCard.tsx`)
+ *
+ * The card used nine inline `style={{ … }}` attributes for nothing but gap,
+ * alignment and a max width. D-059 forbids that: inline styles cannot be
+ * overridden by a preset, cannot be media-queried, and made the card the only
+ * place in the client surface that ignored the design tokens. Every one of them
+ * now lives in a class here.
+ *
+ * The quota bar (`cl-quotabar*`) was borrowed from `admins.css`. It is the same
+ * visual so it is restyled here under `chv__meter` instead of importing that
+ * stylesheet into a client route - a reseller stylesheet must never be what a
+ * customer's screen depends on.
+ * ------------------------------------------------------------------ */
+
+.chv__body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+
+.chv__row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.chv__row--head {
+  align-items: center;
+}
+
+.chv__row--tight {
+  gap: 6px;
+}
+
+.chv__name {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.chv__meter {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 200px;
+  max-width: 360px;
+}
+
+.chv__meter .cl-quotabar__num {
+  font-size: 0.71875rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.chv__meter .cl-quotabar__track {
+  display: block;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--border);
+  overflow: hidden;
+}
+
+.chv__meter .cl-quotabar__fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--c-primary);
+  transition: width 160ms ease;
+}
+
+.chv__meter .cl-quotabar__fill.is-high {
+  background: var(--warning);
+}
+
+.chv__meter .cl-quotabar__fill.is-full {
+  background: var(--error);
+}
+
+.chv__warn {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.chv__side {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-end;
+}
+
+.chv__kind {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+}
+.cl-claim__blocked {
+  display: block;
+  color: var(--text-muted);
+  line-height: 1.45;
+  margin-top: 2px;
+}
+
+
+
+/* --- 07 . quick access -------------------------------------------------- */
+
+.cl-quick {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(148px, 1fr));
+  gap: var(--space-2);
+}
+
+/*
+ * One shortcut. A real Link/button so it is keyboard reachable and announced;
+ * the whole tile is the target, which is also the touch floor.
+ */
+.cl-quick__item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-surface);
+  color: var(--text);
+  text-decoration: none;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 560;
+  text-align: left;
+  cursor: pointer;
+  min-width: 0;
+  transition: border-color 140ms ease, background 140ms ease;
+}
+
+.cl-quick__item:hover {
+  border-color: color-mix(in srgb, var(--c-primary) 45%, var(--border));
+  background: color-mix(in srgb, var(--c-primary) 6%, var(--bg-surface));
+}
+
+.cl-quick__item:focus-visible {
+  outline: 2px solid var(--c-primary);
+  outline-offset: 2px;
+}
+
+.cl-quick__icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  color: var(--c-primary);
+}
+
+.cl-quick__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* --- section heading (shared by every block above) ---------------------- */
+
+.cl-h2 {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  margin: 0;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+}
+
+.cl-h2__title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+  color: var(--text);
+}
+
+.cl-h2__aside {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+
+/* --- responsive --------------------------------------------------------
+ * Overlapping min/max bands are ordered smallest-last so each later block wins
+ * only where it is narrower. All six verified widths are named explicitly.
+ * ---------------------------------------------------------------------- */
+
+@media (min-width: 1440px) {
+  .cl-overview {
+    gap: var(--space-4);
+  }
+}
+
+@media (min-width: 1920px) {
+  .cl-dash {
+    gap: var(--space-5);
+  }
+}
+
+/* 1024 and below: overview drops to two columns. */
+@media (max-width: 1024px) {
+  .cl-overview {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* 768 and below: tablet. Meters stack; the welcome block tightens. */
+@media (max-width: 768px) {
+  .cl-claim__meters {
+    grid-template-columns: 1fr;
+  }
+
+  .cl-welcome {
+    padding: var(--space-3);
+  }
+
+  .cl-quick {
+    grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+  }
+}
+
+/* 640 and below: a two-column overview starts squeezing the value text. */
+@media (max-width: 640px) {
+  .cl-overview {
+    grid-template-columns: 1fr;
+  }
+
+  .cl-attn__row,
+  .cl-orders {
+    padding: var(--space-3);
+  }
+}
+
+/* 390 and below: one column everywhere. */
+@media (max-width: 390px) {
+  .cl-dash {
+    gap: var(--space-3);
+  }
+
+  .cl-quick {
+    grid-template-columns: 1fr;
+  }
+
+  .cl-welcome__actions {
+    width: 100%;
+  }
+}
+
+/* 360: narrowest supported width. */
+@media (max-width: 360px) {
+  .cl-welcome__title {
+    font-size: 19px;
+  }
+
+  .cl-ov__value {
+    font-size: 21px;
+  }
+}
+
+/* --- coarse pointer: finger-sized targets on the new controls ------------
+ * S3-5 established this pattern for the Client surfaces (D-056 / D-058): a
+ * mouse is precise and the compact desktop row is deliberate, a thumb is not.
+ * Scoped to this dashboard's own controls, so desktop density is untouched and
+ * no shared primitive changes size.
+ * ---------------------------------------------------------------------- */
+
+@media (pointer: coarse) {
+  .cl-quick__item {
+    min-height: 48px;
+  }
+
+  button.cl-ov {
+    min-height: 76px;
+  }
+}
+

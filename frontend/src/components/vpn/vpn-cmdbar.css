@@ -1,0 +1,242 @@
+/* ------------------------------------------------------------------ *
+ * Saved views (Phase-6 UX, 4.4)
+ *
+ * Named filter sets kept in this browser. Chips are open-by-default; the delete
+ * target is deliberately tiny and separate, so removing a view can never be the
+ * same click as opening one.
+ * ------------------------------------------------------------------ */
+.saved-views {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.saved-views__list {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.saved-views__chip {
+  display: inline-flex;
+  align-items: stretch;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--bg-surface);
+}
+
+.saved-views__open {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.saved-views__open:hover {
+  background: var(--bg-hover);
+}
+
+.saved-views__del {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 6px;
+  border: 0;
+  border-left: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-muted, inherit);
+  cursor: pointer;
+}
+
+.saved-views__del:hover {
+  background: color-mix(in srgb, var(--error) 16%, transparent);
+  color: var(--error);
+}
+
+/* ------------------------------------------------------------------ *
+ * /vpns — the catalogue at a glance (Phase-1 UX, P2)
+ *
+ * The strip is a row of one-click FILTERS, so the common triage question
+ * ("what needs me today?") is one click instead of four dropdowns and a
+ * remembered number. Tokens only: no hard-coded colours, so every theme preset
+ * keeps working.
+ * ------------------------------------------------------------------ */
+/* ------------------------------------------------------------------ *
+ * FREE / PREMIUM tag picker (Phase-1 UX, P1.2)
+ *
+ * Two states, both one click away. It lives inside a table cell, so it must not
+ * shift the row height or steal the row's own click target — hence inline-flex
+ * with a fixed height and `stopPropagation` handled by the parent's row wrapper.
+ *
+ * A disabled pair means ISSUED: the tag is locked (D-025.2), so the control
+ * reports that state instead of vanishing and leaving the column blank.
+ * ------------------------------------------------------------------ */
+.cl-tagpick {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm, 8px);
+  overflow: hidden;
+  background: var(--bg-surface);
+}
+
+.cl-tagpick__btn {
+  padding: 3px 9px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted, inherit);
+  cursor: pointer;
+  transition: background 110ms ease, color 110ms ease;
+}
+
+.cl-tagpick__btn.cl-tagpick__btn--sep {
+  border-left: 1px solid var(--border);
+}
+
+.cl-tagpick__btn.cl-tagpick__btn--hover:hover {
+  background: var(--bg-hover);
+  color: var(--text, inherit);
+}
+
+/* The current classification. `--primary` was a leftover name from the token
+   v2 rename and was never defined, so this button rendered white-on-transparent:
+   the selected FREE/PREMIUM segment was invisible. */
+.cl-tagpick__btn.is-on {
+  background: var(--c-primary);
+  color: var(--c-primary-contrast, #fff);
+}
+
+/*
+ * Issued rows keep the control visible but inert: a missing control would read as
+ * "the feature does not apply here", when the truth is "this VPN is locked".
+ */
+.cl-tagpick__btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.cl-tagpick__btn.is-on:disabled {
+  opacity: 0.75;
+}
+
+/* ------------------------------------------------------------------ *
+ * The strip is a row of one-click FILTERS, so the common triage question
+ * ("what needs me today?") is one click instead of four dropdowns and a
+ * remembered number. Tokens only: no hard-coded colours, so every theme preset
+ * keeps working.
+ * ------------------------------------------------------------------ */
+.vpn-cmdbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 8px;
+  padding: 10px;
+  margin-bottom: 14px;
+  border-radius: var(--radius-lg, 14px);
+  border: 1px solid var(--border);
+  background: var(--bg-surface);
+}
+
+.vpn-cmdbar__cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 96px;
+  padding: 8px 12px;
+  border-radius: var(--radius);
+  border: 1px solid transparent;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease, transform 120ms ease;
+}
+
+.vpn-cmdbar__cell:hover:not(:disabled) {
+  background: var(--bg-hover);
+  border-color: var(--border-strong, var(--border));
+}
+
+.vpn-cmdbar__cell:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+/* The tile you are currently filtered by. */
+.vpn-cmdbar__cell.is-active {
+  border-color: var(--c-primary);
+  background: var(--tint-primary, rgba(127, 127, 127, 0.12));
+}
+
+/*
+ * A zero count is inert, not merely quiet: a control that provably returns an
+ * empty list is a dead end dressed as an action.
+ */
+.vpn-cmdbar__cell.is-empty {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.vpn-cmdbar__count {
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.vpn-cmdbar__label {
+  font-size: 11.5px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--text-muted, inherit);
+  opacity: 0.85;
+}
+
+.vpn-cmdbar__cell--attention .vpn-cmdbar__count {
+  color: var(--warning);
+}
+
+.vpn-cmdbar__cell--danger .vpn-cmdbar__count {
+  color: var(--error);
+}
+
+.vpn-cmdbar__cell--total {
+  border-right: 1px solid var(--border);
+  padding-right: 16px;
+  margin-right: 2px;
+}
+
+.vpn-cmdbar__split {
+  margin-left: auto;
+  align-self: center;
+  font-size: 12.5px;
+  color: var(--text-muted, inherit);
+}
+
+.vpn-cmdbar__warn {
+  color: var(--error);
+}
+
+@media (max-width: 720px) {
+  .vpn-cmdbar__cell {
+    min-width: 78px;
+    padding: 6px 9px;
+  }
+  .vpn-cmdbar__count {
+    font-size: 17px;
+  }
+  .vpn-cmdbar__split {
+    margin-left: 0;
+    width: 100%;
+    padding-top: 4px;
+    border-top: 1px solid var(--border);
+  }
+}

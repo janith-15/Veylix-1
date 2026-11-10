@@ -1,0 +1,268 @@
+﻿/* ============================================================
+   VEYLIX VPN - Chart primitives
+   Every colour is a --chart-* token, so charts re-skin with the theme.
+   ============================================================ */
+
+.ui-chart {
+  display: block;
+  overflow: visible;
+  /* D-059: width and height come from the component as custom properties. */
+  width: 100%;
+  height: var(--ui-chart-h, 160px);
+  touch-action: pan-y;
+}
+
+/* Animated draw-in for line / area paths */
+.ui-chart path {
+  transition: stroke var(--transition-med), fill var(--transition-med);
+}
+html[data-chart-animate='true'] .ui-chart path[stroke] {
+  stroke-dasharray: 2000;
+  stroke-dashoffset: 2000;
+  animation: ui-chart-draw 900ms ease forwards;
+}
+@keyframes ui-chart-draw {
+  to { stroke-dashoffset: 0; }
+}
+
+html[data-chart-animate='true'] .ui-chart rect,
+html[data-chart-animate='true'] .ui-chart circle {
+  transform-origin: center bottom;
+  animation: ui-chart-grow 600ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@keyframes ui-chart-grow {
+  from { opacity: 0; transform: scaleY(0.2); }
+  to { opacity: 1; transform: none; }
+}
+
+.ui-sparkline {
+  vertical-align: middle;
+  /* D-059: dimensions arrive as custom properties from the component. */
+  display: block;
+  width: var(--ui-spark-w, 100%);
+  height: var(--ui-spark-h, 40px);
+}
+
+/* The value-axis tick text. A class rather than an inline style so a theme
+   preset can restyle the axis without touching the chart code (D-059). */
+.ui-chart-axis {
+  font-size: 10px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  fill: var(--chart-axis, var(--text-muted));
+  letter-spacing: 0.01em;
+}
+
+/* ---------- Chart tooltips, crosshair, legends (UI 2.1) ---------- */
+.ui-chart-wrap { position: relative; }
+.ui-chart-wrap > .ui-chart { display: block; }
+
+/* D-059: the donut's own box, sized from a custom property the component sets. */
+.ui-chart-wrap--donut {
+  width: var(--donut-size, 132px);
+  max-width: 100%;
+  margin: 0 auto;
+}
+.ui-chart--donut {
+  margin: 0 auto;
+  display: block;
+  touch-action: pan-y;
+  overflow: visible;
+  padding: 2px;
+}
+/* Only the arc strokes are hover targets; the centre text is not. */
+.ui-chart__arc {
+  pointer-events: stroke;
+}
+
+.ui-chart-root {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  min-width: 0;
+}
+.ui-chart-root > .ui-chart-wrap { align-self: center; }
+
+.chart-tip {
+  position: absolute;
+  /* D-059: position arrives as custom properties from the component. */
+  left: var(--chart-tip-x, 0%);
+  top: var(--chart-tip-y, 0%);
+  z-index: var(--z-dropdown, 100);
+  pointer-events: none;
+  min-width: 150px;
+  padding: var(--space-2) 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--bg-card) 94%, transparent);
+  box-shadow: var(--elev-2, var(--shadow-md));
+  font-size: 12px;
+  transform: translate(14px, -50%);
+}
+.chart-tip[data-flip='true'] { transform: translate(calc(-100% - 14px), -50%); }
+.chart-tip__title {
+  font-size: calc(10.5px * var(--font-size-scale, 1));
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 5px;
+}
+.chart-tip__row { display: flex; align-items: center; gap: var(--space-2); margin-top: 3px; }
+.chart-tip__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  flex-shrink: 0;
+  /* D-059: the series colour arrives as a custom property. */
+  background: var(--legend-color, currentColor);
+}
+.chart-tip__val { margin-left: auto; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+.ui-chart-legend { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-2); }
+.ui-chart-legend__item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 3px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: none;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: border-color var(--dur-fast, 120ms) var(--ease, ease), opacity var(--dur-fast, 120ms) var(--ease, ease);
+}
+.ui-chart-legend__item:hover { border-color: var(--border-strong); color: var(--text); }
+.ui-chart-legend__item[data-off='true'] { opacity: 0.4; text-decoration: line-through; }
+.ui-chart-legend__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  /* D-059: the series colour arrives as a custom property. */
+  background: var(--legend-color, currentColor);
+}
+.ui-chart-legend__pct { margin-left: auto; font-variant-numeric: tabular-nums; }
+
+/* Donut hover feedback */
+.ui-chart--donut circle { transition: stroke-width var(--dur-fast, 120ms) var(--ease, ease); }
+
+/* Donut sweep entrance — segments grow from zero */
+html[data-chart-animate='true'] .ui-chart--donut circle:not(.ring) {
+  animation: donut-sweep 800ms var(--ease-entrance, ease) both;
+}
+@keyframes donut-sweep {
+  from { stroke-dasharray: 0 var(--circ, 999); }
+  to { stroke-dasharray: var(--circ, 999) var(--circ, 999); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ui-chart--donut circle:not(.ring) { animation: none; }
+}
+
+/* Chart container fade-in */
+.ui-chart-wrap {
+  animation: chart-reveal 400ms var(--ease-entrance, ease) both;
+}
+@keyframes chart-reveal {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ui-chart-wrap { animation: none; }
+}
+.ui-progress { display: flex; flex-direction: column; gap: var(--space-2); width: 100%; }
+.ui-progress__head {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+.ui-progress__track {
+  width: 100%;
+  /* D-059: height arrives as a custom property from the component. */
+  height: var(--ui-progress-h, 8px);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--text-muted) 18%, transparent);
+  overflow: hidden;
+}
+.ui-progress__fill {
+  height: 100%;
+  border-radius: inherit;
+  background: var(--chart-1, var(--c-primary));
+  transition: width 420ms cubic-bezier(0.22, 1, 0.36, 1);
+  /* D-059: the percentage arrives as a custom property from the component. */
+  width: var(--ui-progress-pct, 0%);
+}
+.ui-progress--success .ui-progress__fill { background: var(--success); }
+.ui-progress--warning .ui-progress__fill { background: var(--warning); }
+.ui-progress--error .ui-progress__fill { background: var(--error); }
+
+/* Per-theme chart personalities */
+[data-ui='editorial'] .ui-progress__track { border-radius: 0; }
+[data-ui='flat'] .ui-progress__track { border-radius: 0; }
+[data-ui='neon'] .ui-progress__fill {
+  box-shadow: 0 0 14px -2px var(--chart-1, var(--c-primary));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html[data-chart-animate='true'] .ui-chart path[stroke],
+  html[data-chart-animate='true'] .ui-chart rect,
+  html[data-chart-animate='true'] .ui-chart circle {
+    animation: none;
+    stroke-dasharray: none;
+    stroke-dashoffset: 0;
+  }
+}
+
+/* ============================================================
+   Per-theme chart personality
+   Line weight, grid, caps, bar radius and speed all change
+   with the active UI language, so charts read as "this theme".
+   ============================================================ */
+
+/* ---------- Modern (soft): rounded, generous, springy ---------- */
+[data-ui='soft'] .ui-chart path[stroke] { stroke-width: 2.5; stroke-linecap: round; }
+[data-ui='soft'] .ui-chart line { stroke-dasharray: 3 5; }
+[data-ui='soft'] .ui-chart { --bar-radius: 6; }
+[data-ui='soft'] .ui-progress__fill { border-radius: 999px; }
+
+/* ---------- Dark (glass): thin, dim, deep ---------- */
+[data-ui='glass'] .ui-chart path[stroke] { stroke-width: 2; stroke-linecap: round; }
+[data-ui='glass'] .ui-chart line { stroke-dasharray: 2 6; opacity: 0.7; }
+[data-ui='glass'] .ui-chart { --bar-radius: 4; }
+[data-ui='glass'] .ui-chart { filter: drop-shadow(0 0 10px color-mix(in srgb, var(--chart-1) 35%, transparent)); }
+
+/* ---------- Light (editorial): crisp hairlines, square ---------- */
+[data-ui='editorial'] .ui-chart path[stroke] {
+  stroke-width: 1.5;
+  stroke-linecap: butt;
+  stroke-linejoin: miter;
+}
+[data-ui='editorial'] .ui-chart line { stroke-dasharray: none; opacity: 1; }
+[data-ui='editorial'] .ui-chart { --bar-radius: 0; }
+[data-ui='editorial'] .ui-chart text { text-transform: uppercase; letter-spacing: 0.06em; }
+
+/* ---------- Classic (flat): plain, no flourish ---------- */
+[data-ui='flat'] .ui-chart path[stroke] {
+  stroke-width: 2;
+  stroke-linecap: butt;
+  stroke-linejoin: miter;
+  transition: none;
+}
+[data-ui='flat'] .ui-chart line { stroke-dasharray: none; opacity: 0.6; }
+[data-ui='flat'] .ui-chart { --bar-radius: 0; }
+[data-ui='flat'] .ui-chart * { animation: none !important; }
+
+/* ---------- Gaming (neon): thick, glowing, dashed ---------- */
+[data-ui='neon'] .ui-chart path[stroke] {
+  stroke-width: 3;
+  stroke-linecap: square;
+  stroke-linejoin: miter;
+  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--chart-1) 75%, transparent));
+}
+[data-ui='neon'] .ui-chart line { stroke-dasharray: 4 4; opacity: 0.85; }
+[data-ui='neon'] .ui-chart { --bar-radius: 2; }
+[data-ui='neon'] .ui-chart text { font-family: var(--font-mono); letter-spacing: 0.08em; }

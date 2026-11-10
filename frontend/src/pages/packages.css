@@ -1,0 +1,86 @@
+/* L5 — the package catalogue (D-035). Tokens only. */
+.pkg-page {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.pkg-notice {
+  border-color: var(--warning);
+}
+
+.pkg-sub {
+  display: block;
+  font-size: 11.5px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+/* Kind chips — the three kinds must be distinguishable at a glance. */
+.pkg-kind {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  border: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.pkg-kind--free {
+  color: var(--success);
+  border-color: color-mix(in srgb, var(--success) 45%, transparent);
+  background: color-mix(in srgb, var(--success) 12%, transparent);
+}
+
+.pkg-kind--premium {
+  color: var(--c-primary);
+  border-color: color-mix(in srgb, var(--c-primary) 45%, transparent);
+  background: color-mix(in srgb, var(--c-primary) 12%, transparent);
+}
+
+.pkg-kind--custom-premium {
+  color: var(--warning);
+  border-color: color-mix(in srgb, var(--warning) 45%, transparent);
+  background: color-mix(in srgb, var(--warning) 12%, transparent);
+}
+
+.pkg-price {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.pkg-on {
+  color: var(--success);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.pkg-actions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.pkg-danger {
+  color: var(--error);
+}
+
+/* Dialog field grid. */
+.pkg-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--space-3);
+}
+
+.pkg-error {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--error) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--error) 40%, transparent);
+  color: var(--error);
+  font-size: 13px;
+}

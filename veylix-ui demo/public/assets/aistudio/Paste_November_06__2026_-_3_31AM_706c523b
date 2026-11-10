@@ -1,0 +1,1728 @@
+# VEYLIX
+# COMPLETE MASTER PRODUCT & ENGINEERING BIBLE
+## Full Application Specification — From Zero to Production
+
+**Document Type:** Complete Product Requirements + Software Requirements + UI/UX Specification + Technical Architecture + Database Specification + API Specification + Security Specification + Installation & Deployment Specification + QA & Release Specification.
+
+**Product:** Veylix VPN Business Management Platform  
+**Document Authority:** Single authoritative product and engineering specification  
+**Target Environment:** Self-hosted Linux server  
+**Minimum Resource Target:** 1 CPU / 500 MB RAM  
+**Backend:** Go  
+**Frontend:** React + TypeScript  
+**Database:** SQLite  
+**External VPN Management:** Owner-supplied 3X-UI panels  
+**Deployment:** Independent self-hosted installations  
+**Final Goal:** A complete, secure, reliable, responsive, independently deployable production application.
+
+---
+
+# 1. PRODUCT IDENTITY AND VISION
+
+## 1.1 Product Definition
+
+Veylix is a self-hosted VPN Business Management Platform.
+
+It allows a business owner to manage VPN infrastructure, external 3X-UI panels, VPN inventory, resellers, clients, pricing, subscriptions, payments, usage, assignments, notifications, support and business operations through one centralized web application.
+
+Veylix is a management and business automation layer.
+
+It does not replace 3X-UI, Xray-core or the external VPN infrastructure.
+
+Veylix communicates with owner-supplied 3X-UI installations through their APIs.
+
+## 1.2 Core Product Principles
+
+1. One installation represents one independent business owner.
+2. Each installation owns its own database and secrets.
+3. Multiple external 3X-UI panels can connect to one Veylix installation.
+4. Super Admin controls the entire installation.
+5. Admins operate within assigned permissions, servers and quotas.
+6. Clients only access their own information and assigned services.
+7. Every important operation must be auditable.
+8. Failed remote operations must be recoverable.
+9. Data ownership and permission boundaries must be enforced by the backend.
+10. The application must remain efficient on small servers.
+11. The UI must be modern, responsive and customizable.
+12. No external service should receive VPN credentials or sensitive user data without explicit necessity and authorization.
+
+## 1.3 Product Goals
+
+The final product must provide:
+
+- Complete VPN business management.
+- Multiple 3X-UI server management.
+- Reseller management.
+- Client management.
+- Free and premium VPN distribution.
+- Quota management.
+- Automated VPN lifecycle management.
+- Sales and payments.
+- QR and connection links.
+- Usage and expiry tracking.
+- Support communication.
+- Complete administrative visibility.
+- Secure independent installation.
+- One-command installation.
+- Safe upgrade and recovery.
+- Reliable low-resource performance.
+
+## 1.4 Product Boundaries
+
+Veylix must not:
+
+- Install or bundle 3X-UI automatically.
+- Pretend to be an Xray server.
+- Require a central shared database.
+- Automatically synchronize unrelated installations.
+- Allow one installation to control another.
+- expose one reseller's clients to another reseller.
+- Allow a client to inspect another client's credentials.
+- claim support for protocols that the integration cannot reliably process.
+
+---
+
+# 2. USERS, ROLES AND PERMISSIONS
+
+## 2.1 User Roles
+
+The application has three principal roles:
+
+1. Super Admin.
+2. Admin / Reseller.
+3. Client.
+
+Permissions must be enforced server-side. Hiding frontend controls is not sufficient security.
+
+## 2.2 Super Admin
+
+Super Admin owns and controls the entire Veylix installation.
+
+### Dashboard
+
+Display:
+
+- Total connected servers.
+- Healthy and unhealthy servers.
+- Total inbounds.
+- Total VPN inventory.
+- Active VPNs.
+- Expired VPNs.
+- Suspended VPNs.
+- Free VPNs.
+- Premium VPNs.
+- Total admins.
+- Active admins.
+- Total clients.
+- Active clients.
+- New registrations.
+- Sales.
+- Payments.
+- Pending orders.
+- Failed operations.
+- Total traffic usage.
+- Server resource usage.
+- Recent activity.
+- System health.
+- Important notifications.
+
+Dashboard data must come from real application data, not hardcoded mock values.
+
+### Server Management
+
+Super Admin must be able to:
+
+- Add a 3X-UI server.
+- Edit server details.
+- Delete a server connection subject to safe dependency checks.
+- Test connectivity.
+- Enable or disable integration.
+- View panel health.
+- View panel version when available.
+- Configure panel URL.
+- Configure API credentials.
+- View inbound lists.
+- View clients.
+- Inspect client status.
+- View traffic.
+- Synchronize data.
+- Inspect synchronization errors.
+- View last successful synchronization.
+- Assign server access to admins.
+- Manage multiple panels independently.
+
+Sensitive credentials must never be displayed in plaintext after saving.
+
+### VPN Inventory
+
+Super Admin must be able to:
+
+- View all available VPN resources.
+- Filter by server.
+- Filter by inbound.
+- Filter by protocol.
+- Filter by status.
+- Search clients.
+- View available resources.
+- View assigned resources.
+- View expired resources.
+- View suspended resources.
+- Mark resources as FREE.
+- Mark resources as PREMIUM.
+- Manage offers and packages.
+- Assign VPN resources.
+- Revoke VPN resources.
+- Transfer resources.
+- Suspend and resume resources.
+- Inspect usage.
+- Inspect expiry.
+- View provisioning errors.
+
+### Admin Management
+
+Super Admin must be able to:
+
+- Create admin accounts.
+- Edit admin profiles.
+- Activate and deactivate admins.
+- Suspend admins.
+- Reset passwords through secure workflows.
+- Assign servers.
+- Set quotas.
+- View quota consumption.
+- Set allocation restrictions.
+- View assigned clients.
+- View sales and payments.
+- View admin activity.
+- Set admin contact details.
+- Manage admin-specific business configuration.
+- View audit history.
+
+### Client Management
+
+Super Admin must be able to:
+
+- View all clients.
+- Search clients.
+- Filter clients.
+- View client profiles.
+- View assigned VPNs.
+- View connection information.
+- View usage.
+- View expiry.
+- View purchase history.
+- View payment records.
+- View seller/admin relationship.
+- View device information where permitted.
+- Suspend and reactivate clients according to policy.
+- Inspect client communication.
+- View account history.
+
+### Business Management
+
+Include:
+
+- Pricing management.
+- Package management.
+- Offer management.
+- Free VPN policy configuration.
+- Premium product configuration.
+- Admin allocation prices.
+- Client purchase prices.
+- Orders.
+- Payments.
+- Payment verification.
+- Payment rejection.
+- Refund workflows subject to approved policy.
+- Sales reporting.
+- Revenue reporting.
+- Business activity logs.
+
+### Communication
+
+Include:
+
+- Admin-client chat.
+- Support messages.
+- Notifications.
+- Contact information.
+- WhatsApp contact.
+- Telegram contact.
+- Gmail contact.
+- Read/unread states.
+- Message history.
+- Message search.
+- Saved messages.
+- Important messages.
+- Pinned messages.
+- Message visibility controls.
+
+### System Settings
+
+Include:
+
+- General settings.
+- Application name.
+- Logo.
+- Branding.
+- Timezone.
+- Currency.
+- Date format.
+- Theme configuration.
+- Email configuration.
+- Notification configuration.
+- Session configuration.
+- Security settings.
+- Backup settings.
+- Maintenance mode.
+- Domain information.
+- Version information.
+
+## 2.3 Admin / Reseller
+
+Admins manage their own clients and assigned resources.
+
+They must not have unrestricted access to the whole installation.
+
+### Admin Dashboard
+
+Display:
+
+- Assigned servers.
+- Available quota.
+- Used quota.
+- Remaining quota.
+- Total clients.
+- Active clients.
+- Expired VPNs.
+- Active VPNs.
+- Sales.
+- Orders.
+- Payments.
+- Recent activity.
+- Notifications.
+
+### Client Management
+
+Admins must be able to:
+
+- Create clients where permitted.
+- View their own clients.
+- Edit permitted client details.
+- Search and filter clients.
+- View VPN assignments.
+- View usage and expiry.
+- View payments.
+- Contact clients.
+- Manage support conversations.
+
+Admins must never access another admin's clients unless explicitly authorized by a Super Admin permission.
+
+### VPN Management
+
+Admins must be able to:
+
+- View assigned server resources.
+- View available VPN inventory.
+- Assign VPNs within quota.
+- View their remaining quota.
+- View connection links.
+- View QR codes.
+- View traffic.
+- View expiry.
+- Renew services where permitted.
+- Suspend or resume only when authorized.
+- Inspect failed assignments.
+
+Quota checks must be atomic and server-side.
+
+### Sales and Pricing
+
+Super Admin determines admin allocation terms.
+
+Admins may determine their own customer selling price only according to the approved business policy.
+
+The application must separately record:
+
+- Super Admin allocation price.
+- Admin customer selling price.
+- Customer purchase price.
+- Payment amount.
+- Revenue.
+- Outstanding balance where applicable.
+
+No price should be silently changed by an unrelated operation.
+
+## 2.4 Client
+
+Clients can access only their own accounts and VPN services.
+
+### Client Dashboard
+
+Display:
+
+- Active VPNs.
+- Free VPNs available.
+- Premium VPNs.
+- Expiring services.
+- Traffic usage.
+- Purchase history.
+- Payment status.
+- Notifications.
+- Seller contact information.
+
+### VPN Access
+
+For each assigned VPN display:
+
+- VPN name.
+- Server.
+- Protocol.
+- Connection status when available.
+- Connection link.
+- QR code.
+- Traffic limit.
+- Traffic consumed.
+- Remaining traffic.
+- Expiry date.
+- Assigned date.
+- Renewal information.
+
+QR generation must happen locally in the browser. Do not transmit credentials to third-party QR websites.
+
+### Profile
+
+Include:
+
+- Name.
+- Email.
+- Phone.
+- WhatsApp.
+- Telegram.
+- Password change.
+- Account security.
+- Notification preferences.
+- Session management.
+- Seller information.
+
+---
+
+# 3. COMPLETE BUSINESS LOGIC
+
+## 3.1 Ownership Model
+
+Each VPN resource must have an identifiable ownership chain.
+
+The system must distinguish:
+
+- External panel ownership.
+- Server ownership within Veylix.
+- Resource inventory ownership.
+- Admin allocation.
+- Client assignment.
+- Purchase records.
+
+Enforce the ownership chain in every backend operation.
+
+## 3.2 Free VPN
+
+Free VPN resources must be selectable and manageable by Super Admin.
+
+Super Admin must be able to:
+
+- Tag resources as FREE.
+- Enable or disable free offers.
+- Set available inventory.
+- Control eligibility.
+- Inspect free claims.
+- Prevent unauthorized duplicate allocation.
+
+Free VPN eligibility and claim limits must follow explicitly approved policy.
+
+## 3.3 Premium VPN
+
+Premium resources must support:
+
+- Product name.
+- Description.
+- Protocol.
+- Server.
+- Inbound.
+- Traffic limit.
+- Expiry duration.
+- Price.
+- Availability.
+- Purchase status.
+- Assignment history.
+
+The system must generate the appropriate connection link and QR code after successful provisioning.
+
+## 3.4 Quota Management
+
+Quota rules must support:
+
+- Admin quota allocation.
+- Quota consumption.
+- Remaining quota.
+- Quota adjustment.
+- Quota history.
+- Concurrency-safe assignment.
+- Rejection when insufficient quota.
+- Audit history.
+
+Quota must never become negative because of simultaneous requests.
+
+## 3.5 VPN Lifecycle
+
+Define explicit state transitions for:
+
+- AVAILABLE.
+- RESERVED.
+- PROVISIONING.
+- ACTIVE.
+- EXPIRED.
+- SUSPENDED.
+- REVOKED.
+- RELEASED.
+- FAILED.
+
+Only valid transitions are allowed.
+
+A failed remote operation must not falsely report successful provisioning.
+
+Remote panel outcomes must be distinguished as:
+
+- CONFIRMED.
+- REJECTED.
+- UNKNOWN.
+
+UNKNOWN operations require reconciliation.
+
+## 3.6 Payments
+
+Payment records must include:
+
+- Order reference.
+- Customer.
+- Admin.
+- Amount.
+- Currency.
+- Payment method.
+- Proof where supported.
+- Payment status.
+- Created timestamp.
+- Verified timestamp.
+- Verifier.
+- Rejection reason.
+- Refund status.
+
+Do not activate paid VPN services solely because a payment proof image was uploaded.
+
+Activation must follow the verified settlement workflow.
+
+Refund and replacement rules require owner approval.
+
+## 3.7 Notifications
+
+Support:
+
+- In-app notifications.
+- Order notifications.
+- Payment notifications.
+- Expiry notifications.
+- Quota alerts.
+- Server health alerts.
+- Synchronization errors.
+- Security alerts.
+- Chat notifications.
+
+Notification delivery must not leak sensitive credentials.
+
+## 3.8 Chat
+
+Chat must enforce participant ownership.
+
+Include:
+
+- Conversations.
+- Messages.
+- Read states.
+- Saved messages.
+- Important messages.
+- Pinned messages.
+- Hidden messages.
+- Message timestamps.
+- Search.
+- Attachment support only when safely implemented.
+
+---
+
+# 4. COMPLETE FRONTEND SPECIFICATION
+
+## 4.1 Technology
+
+Use the existing project architecture:
+
+- React.
+- TypeScript.
+- Vite.
+- React Router.
+- Zustand.
+- Tailwind CSS.
+- Existing reusable UI components.
+- Existing API client.
+
+Avoid replacing working architecture without measured technical justification and owner approval.
+
+## 4.2 Application Layout
+
+The application must have:
+
+- Responsive sidebar.
+- Top navigation.
+- User profile menu.
+- Notifications.
+- Breadcrumbs where useful.
+- Search.
+- Main content area.
+- Mobile navigation.
+- Consistent page layouts.
+
+## 4.3 Page Requirements
+
+Every page must include:
+
+- Correct role access.
+- Loading state.
+- Error state.
+- Empty state.
+- Success feedback.
+- Form validation.
+- Responsive layout.
+- Accessible controls.
+- Correct API integration.
+- Proper authorization.
+- No fake production data.
+
+## 4.4 Super Admin Pages
+
+Include complete pages for:
+
+1. Dashboard.
+2. Server management.
+3. Add server.
+4. Edit server.
+5. Server details.
+6. Inbound management.
+7. VPN inventory.
+8. VPN details.
+9. VPN assignments.
+10. VPN lifecycle management.
+11. Admin management.
+12. Admin details.
+13. Admin quota management.
+14. Client management.
+15. Client details.
+16. Packages.
+17. Offers.
+18. Pricing.
+19. Orders.
+20. Payments.
+21. Payment verification.
+22. Sales reports.
+23. Usage reports.
+24. Chat.
+25. Notifications.
+26. Audit logs.
+27. Theme Studio.
+28. General settings.
+29. Email settings.
+30. Security settings.
+31. Backup and restore.
+32. Version and updates.
+
+## 4.5 Admin Pages
+
+Include:
+
+1. Dashboard.
+2. Assigned servers.
+3. VPN inventory.
+4. Available quota.
+5. Client list.
+6. Client details.
+7. Client creation.
+8. VPN assignment.
+9. Sales.
+10. Orders.
+11. Payments.
+12. Usage.
+13. Expiry management.
+14. Chat.
+15. Notifications.
+16. Profile.
+17. Contact settings.
+
+## 4.6 Client Pages
+
+Include:
+
+1. Dashboard.
+2. My VPNs.
+3. VPN details.
+4. QR and connection links.
+5. Free VPN offers.
+6. Premium offers.
+7. Packages.
+8. Purchase history.
+9. Orders.
+10. Payments.
+11. Usage history.
+12. Notifications.
+13. Chat/support.
+14. Profile.
+15. Contact seller.
+
+Page names and routes must be reconciled with the actual current project. Do not create duplicate pages without need.
+
+---
+
+# 5. COMPLETE THEME AND DESIGN SYSTEM
+
+## 5.1 Theme Presets
+
+Provide:
+
+- Modern.
+- Dark.
+- Light.
+- Classic / Normal.
+- Gaming.
+
+Preserve all existing 40 subthemes.
+
+## 5.2 Theme Studio
+
+Super Admin must be able to customize:
+
+- Primary color.
+- Secondary color.
+- Accent color.
+- Background.
+- Surface.
+- Card background.
+- Text colors.
+- Border colors.
+- Sidebar appearance.
+- Header appearance.
+- Button appearance.
+- Input appearance.
+- Table appearance.
+- Chart colors.
+- Shadows.
+- Radius.
+- Typography.
+- Icon style.
+- Animation settings.
+- 3D presentation settings.
+
+## 5.3 Theme Persistence
+
+Theme selection must persist across refreshes.
+
+Changes must not unexpectedly modify other installations.
+
+If user-specific themes are supported, user preferences must be separated from installation-wide branding.
+
+## 5.4 Visual Quality
+
+The UI must be:
+
+- Modern.
+- Clean.
+- Consistent.
+- Professional.
+- Responsive.
+- Accessible.
+- Fast.
+- Easy to understand.
+
+Use animations only where they improve usability.
+
+Gaming and 3D visual effects must be optional and performance-aware.
+
+Respect reduced-motion preferences.
+
+## 5.5 UI Acceptance
+
+- No horizontal overflow on supported mobile widths.
+- All interactive targets comfortably touchable.
+- All forms keyboard accessible.
+- Focus indicators visible.
+- Contrast appropriate.
+- No broken navigation.
+- No placeholder screens in production workflows.
+- No mock data presented as real data.
+- All pages have proper loading, error and empty states.
+
+---
+
+# 6. BACKEND ARCHITECTURE
+
+## 6.1 Technology
+
+Use Go as the backend language and preserve the established project architecture.
+
+Use standard library HTTP infrastructure where appropriate.
+
+Keep the application modular.
+
+## 6.2 Backend Modules
+
+Document and preserve the responsibilities of:
+
+- `httpapi`
+- `store`
+- `provisioning`
+- `auth`
+- `auth/google`
+- `sync`
+- `integrations`
+- `panel`
+- `payments`
+- `domain`
+- `mail`
+- `config`
+- `audit`
+- `releases`
+
+## 6.3 Backend Design Rules
+
+- Validate all inputs.
+- Enforce permissions on the backend.
+- Enforce resource ownership.
+- Use transactions for related local database operations.
+- Use idempotency for retryable workflows.
+- Use request context and cancellation.
+- Avoid unbounded goroutines.
+- Avoid unnecessary memory allocations.
+- Handle graceful shutdown.
+- Use structured and sanitized logs.
+- Never log passwords, tokens or raw VPN credentials.
+- Return consistent error responses.
+
+## 6.4 Provisioning
+
+Provisioning must safely coordinate local database changes and external 3X-UI operations.
+
+The workflow must:
+
+1. Validate request.
+2. Authenticate actor.
+3. Authorize resource ownership.
+4. Check quota.
+5. Reserve inventory if applicable.
+6. Create a durable operation/outbox record.
+7. Call the external panel.
+8. Classify outcome.
+9. Persist confirmed result.
+10. Compensate or reconcile uncertain outcomes.
+11. Notify users.
+12. Record audit event.
+
+Never claim full distributed atomicity between SQLite and the remote panel.
+
+---
+
+# 7. DATABASE SPECIFICATION
+
+## 7.1 Database
+
+Use the established SQLite pure-Go driver.
+
+Preserve:
+
+- WAL.
+- Foreign keys.
+- Busy timeout.
+- Connection pool limits.
+- Transaction safety.
+- Integrity checks.
+
+## 7.2 Schema
+
+Document and maintain every existing application table.
+
+For every table specify:
+
+- Name.
+- Purpose.
+- Columns.
+- Types.
+- Defaults.
+- Primary key.
+- Unique constraints.
+- Foreign keys.
+- Delete behaviour.
+- Indexes.
+- Data retention.
+- Responsible service.
+
+Include all existing indexes and relationships.
+
+Do not invent tables or schema details without checking current migrations.
+
+## 7.3 Installation Identity
+
+Every installation needs a unique identity.
+
+It must be bound to its database and secrets.
+
+The implementation design must prevent an unrelated backup from being restored silently.
+
+## 7.4 Data Integrity
+
+- Foreign keys enabled.
+- No orphan records.
+- Unique ownership rules.
+- Safe quota transactions.
+- Valid state transitions.
+- Migration verification.
+- Integrity checks after restore.
+- Safe concurrent access.
+
+## 7.5 Data Growth
+
+Monitor:
+
+- Audit logs.
+- Usage snapshots.
+- Server metrics.
+- Notifications.
+- Outbox.
+
+Provide retention mechanisms after owner-approved durations.
+
+Never silently delete records required for business or audit purposes.
+
+---
+
+# 8. API SPECIFICATION
+
+## 8.1 API Principles
+
+All endpoints must:
+
+- Use authenticated requests where appropriate.
+- Enforce backend authorization.
+- Validate input.
+- Return predictable responses.
+- Use correct HTTP status codes.
+- Avoid exposing secrets.
+- Be documented.
+- Have automated tests.
+
+## 8.2 Endpoint Documentation
+
+For every actual endpoint specify:
+
+- Method.
+- Path.
+- Purpose.
+- Roles.
+- Permission.
+- Request body.
+- Response body.
+- Validation.
+- Error responses.
+- Database effects.
+- External panel effects.
+- Audit behaviour.
+- Frontend consumer.
+- Tests.
+
+Include dynamically registered routes.
+
+Do not depend on literal-only route counting.
+
+## 8.3 API Client
+
+The frontend API client must map to real backend contracts.
+
+Every frontend API method must have:
+
+- Correct path.
+- Correct method.
+- Correct request type.
+- Correct response type.
+- Error handling.
+- Authentication behaviour.
+
+No disconnected or fake production API calls.
+
+---
+
+# 9. 3X-UI INTEGRATION
+
+## 9.1 External Ownership
+
+3X-UI must be installed and maintained separately by the owner.
+
+Veylix stores connection information and communicates through the supported API.
+
+## 9.2 Multiple Panels
+
+Support multiple independently configured panels.
+
+Each panel must have:
+
+- Name.
+- Base URL.
+- Encrypted API token.
+- Connection status.
+- Health information.
+- Synchronization state.
+- Last successful sync.
+- Error history.
+
+## 9.3 Panel Security
+
+- HTTPS required.
+- Bearer authentication.
+- TLS certificate validation.
+- Redirect refusal.
+- SSRF protection.
+- Private-network access only through explicit configuration.
+- Response-size limits.
+- Request timeouts.
+- Safe retry policies.
+- Secret encryption at rest.
+
+## 9.4 Protocol Support
+
+Currently documented supported protocols:
+
+- VLESS.
+- VMess.
+- Trojan.
+- Shadowsocks.
+
+Do not claim support for WireGuard, Hysteria or TUIC unless implemented and tested.
+
+## 9.5 Connection Information
+
+Provide:
+
+- Panel-generated connection links.
+- Local QR generation.
+- Protocol information.
+- Traffic limits.
+- Expiry information.
+- Secure credential display.
+- Copy-to-clipboard support.
+
+---
+
+# 10. AUTHENTICATION AND SECURITY
+
+## 10.1 Passwords
+
+Preserve Argon2id with the verified parameters:
+
+- Memory: 64 MiB.
+- Iterations: 2.
+- Parallelism: 2.
+
+Review concurrent login memory consumption against the target server.
+
+## 10.2 Sessions
+
+Use:
+
+- Hashed session identifiers.
+- Secure cookies.
+- HttpOnly.
+- SameSite Strict.
+- Secure flag under HTTPS.
+- Session expiry.
+- Session revocation.
+
+## 10.3 Authorization
+
+Use explicit role and permission checks.
+
+Unknown permissions must deny access.
+
+All resource queries must enforce ownership.
+
+## 10.4 Security Controls
+
+Maintain and test:
+
+- CSRF protection.
+- IDOR protection.
+- SSRF protection.
+- SQL injection resistance.
+- XSS prevention.
+- Rate limiting.
+- Secret encryption.
+- Secure bootstrap.
+- Audit logging.
+- Safe error messages.
+- Session security.
+- Password protection.
+
+## 10.5 Additional Hardening
+
+Evaluate and implement:
+
+- Content-Security-Policy.
+- Permissions-Policy.
+- Request correlation IDs.
+- Firewall guidance.
+- Dependency vulnerability scanning.
+- DNS rebinding protection.
+- Secure headers.
+- Security regression tests.
+
+---
+
+# 11. INDEPENDENT INSTALLATION MODEL
+
+This is a mandatory architectural requirement.
+
+The same software repository must support many separate installations.
+
+Every installation is a fully independent application instance.
+
+Each instance must have its own:
+
+- Database.
+- Installation ID.
+- Super Admin.
+- Admin accounts.
+- Client accounts.
+- Encryption keys.
+- Session secrets.
+- Panel credentials.
+- VPN records.
+- Business settings.
+- Audit records.
+- Usage history.
+- Domain.
+- SSL certificate.
+- Installed version.
+
+There must be no central database dependency.
+
+There must be no automatic cross-installation data synchronization.
+
+Updating Installation A must never update Installation B.
+
+Each owner controls upgrades separately.
+
+Two separate Veylix installations should use separate 3X-UI panels for full operational isolation.
+
+Sharing one external panel between separate installations creates shared-resource and client-identity conflict risks.
+
+---
+
+# 12. INSTALLATION SYSTEM
+
+## 12.1 One-Command Installer
+
+The final product must support a documented single installation command for supported Linux servers.
+
+The installer must:
+
+1. Detect OS and CPU architecture.
+2. Verify required permissions.
+3. Check available RAM and disk.
+4. Check existing installations.
+5. Retrieve the selected release.
+6. Verify checksums.
+7. Create a dedicated service user.
+8. Create protected application directories.
+9. Generate unique installation secrets.
+10. Initialize a fresh database.
+11. Initialize installation identity.
+12. Configure environment variables.
+13. Validate embedded frontend assets.
+14. Install the application binary.
+15. Configure systemd.
+16. Install or configure Caddy.
+17. Collect domain information.
+18. Verify DNS.
+19. Obtain HTTPS certificates.
+20. Configure firewall guidance.
+21. Start the application.
+22. Verify health.
+23. Open first-time Super Admin setup.
+24. Print installation summary.
+
+The installer must never silently wipe an existing installation.
+
+## 12.2 Domain and HTTPS
+
+Support:
+
+- Custom domain.
+- DNS preflight.
+- HTTPS.
+- Automatic certificate renewal.
+- Secure reverse proxy.
+- Correct forwarded headers.
+- Renewal monitoring.
+
+## 12.3 Fresh Installation
+
+Fresh installation must produce:
+
+- Empty database.
+- New installation identity.
+- New encryption keys.
+- New session secrets.
+- First Super Admin setup.
+- No previous users.
+- No previous VPN assignments.
+- No previous business history.
+- No previous panel credentials.
+
+## 12.4 Upgrade
+
+Upgrade must:
+
+1. Verify installation identity.
+2. Check current version.
+3. Verify target release.
+4. Create backup.
+5. Validate backup.
+6. Stop or safely coordinate service.
+7. Apply migrations.
+8. Install new binary.
+9. Start service.
+10. Run health checks.
+11. Verify application operation.
+12. Preserve existing data and keys.
+
+## 12.5 Backup and Restore
+
+Backups must include all required database and secret material.
+
+Include:
+
+- Database.
+- WAL and SHM where required by the backup method.
+- Encryption keys.
+- Installation identity.
+- Version information.
+- Schema version.
+- Checksums.
+- Backup manifest.
+
+Restore must verify provenance and installation identity.
+
+Cross-installation restoration must never happen silently.
+
+Same-installation recovery and new independent cloning must be separate authorized workflows.
+
+---
+
+# 13. PERFORMANCE REQUIREMENTS
+
+## 13.1 Target Server
+
+Target:
+
+- 1 CPU.
+- 500 MB RAM.
+
+The system must remain usable under this constraint.
+
+## 13.2 Resource Management
+
+Measure and optimize:
+
+- Go heap.
+- SQLite connections.
+- Background sync.
+- HTTP buffers.
+- Concurrent requests.
+- Argon2id login memory.
+- Frontend bundle.
+- Caddy overhead.
+- Database growth.
+
+## 13.3 Performance Testing
+
+Measure:
+
+- Idle RAM.
+- Peak RAM.
+- Login performance.
+- Concurrent login pressure.
+- API p50/p95.
+- Database operations.
+- Panel synchronization.
+- Backup duration.
+- Restore duration.
+- CPU utilization.
+
+Do not claim the target is achieved until reproducible measurements exist.
+
+---
+
+# 14. LOGGING, MONITORING AND RECOVERY
+
+Provide:
+
+- Structured logs.
+- Audit logs.
+- Application health.
+- Panel health.
+- Database health.
+- Background job health.
+- Disk usage.
+- Memory usage.
+- CPU usage.
+- Failed provisioning.
+- Failed reconciliation.
+- Failed email.
+- Failed payments.
+- Backup status.
+
+Sensitive values must be redacted.
+
+Define alert severity and recovery procedures.
+
+---
+
+# 15. DEVELOPMENT AND CODE QUALITY
+
+## 15.1 General Rules
+
+- Preserve existing working architecture.
+- Prefer incremental improvements.
+- Avoid unnecessary rewrites.
+- Avoid duplicated business logic.
+- Keep services focused.
+- Maintain type safety.
+- Maintain backward compatibility where required.
+- Use migrations for schema changes.
+- Never edit already-applied migration files.
+- Add regression tests for defects.
+- Do not silently change product rules.
+
+## 15.2 Frontend Quality
+
+- Strict TypeScript.
+- Reusable components.
+- Centralized API client.
+- Consistent error handling.
+- Responsive design.
+- Accessible forms.
+- No hardcoded production data.
+- No broken links.
+- No dead buttons.
+
+## 15.3 Backend Quality
+
+- Explicit errors.
+- Context propagation.
+- Safe transactions.
+- Idempotency.
+- Bounded concurrency.
+- Secure logging.
+- Graceful shutdown.
+- Testable services.
+
+## 15.4 Database Quality
+
+- Foreign keys.
+- Correct indexes.
+- Safe migrations.
+- Integrity checks.
+- Concurrency tests.
+- Backup validation.
+
+---
+
+# 16. COMPLETE TESTING STRATEGY
+
+## 16.1 Unit Tests
+
+Test every critical business rule independently.
+
+## 16.2 Integration Tests
+
+Test:
+
+- Database interactions.
+- Authentication.
+- Authorization.
+- Provisioning.
+- Synchronization.
+- Payments.
+- Chat.
+- Notifications.
+- External panel adapter.
+
+## 16.3 Frontend Tests
+
+Test:
+
+- Page rendering.
+- Role-based navigation.
+- Form validation.
+- Theme switching.
+- API loading states.
+- Error states.
+- Mobile layouts.
+- QR generation.
+- User workflows.
+
+## 16.4 End-to-End Tests
+
+Test complete flows:
+
+- Super Admin setup.
+- Panel connection.
+- Admin creation.
+- Quota allocation.
+- Client creation.
+- VPN assignment.
+- Client connection information.
+- Payment verification.
+- Expiry.
+- Suspension.
+- Recovery.
+
+## 16.5 Security Tests
+
+Test:
+
+- IDOR.
+- RBAC.
+- CSRF.
+- SSRF.
+- Session security.
+- Rate limits.
+- Secret encryption.
+- Password handling.
+- Cross-installation isolation.
+
+## 16.6 Deployment Tests
+
+Test on clean Linux VMs:
+
+- Fresh installation.
+- HTTPS.
+- Service restart.
+- Upgrade.
+- Failed upgrade recovery.
+- Backup.
+- Restore.
+- Independent second installation.
+- Independent version updates.
+
+## 16.7 Performance Tests
+
+Verify the 1 CPU / 500 MB target using reproducible workloads.
+
+## 16.8 Release Gate
+
+A release cannot be declared production-ready while mandatory tests are failing, blocked or unverified.
+
+---
+
+# 17. IMPLEMENTATION ROADMAP
+
+Development must follow ordered phases.
+
+## Phase 0 — Baseline and Project Understanding
+
+- Inspect Git state.
+- Verify current architecture.
+- Verify migrations.
+- Verify tests.
+- Preserve user work.
+- Establish reliable baseline.
+
+## Phase 1 — Product and Documentation Alignment
+
+- Reconcile the Master Bible.
+- Align API contracts.
+- Align route inventories.
+- Align frontend inventory.
+- Identify discrepancies.
+- Define owner decisions.
+
+## Phase 2 — Critical Backend Reliability
+
+- Resolve SMTP configuration mismatch.
+- Investigate quota concurrency.
+- Wire provisioning reconciliation safely.
+- Improve context propagation.
+- Improve error recovery.
+
+## Phase 3 — Installation Identity and Data Safety
+
+- Design installation identity.
+- Design backup provenance.
+- Prevent unsafe foreign restores.
+- Test same-installation recovery.
+
+## Phase 4 — Database and Retention
+
+- Complete schema verification.
+- Implement approved retention policies.
+- Protect audit history.
+- Test database growth.
+- Improve integrity verification.
+
+## Phase 5 — Frontend Completion
+
+- Resolve incomplete workflows.
+- Fix API mismatches.
+- Complete role-based pages.
+- Improve responsive behaviour.
+- Optimize bundle splitting.
+- Verify all themes.
+
+## Phase 6 — Backend and API Completion
+
+- Complete missing functionality.
+- Verify all API contracts.
+- Improve observability.
+- Improve authorization auditability.
+- Add missing regression tests.
+
+## Phase 7 — 3X-UI Integration Reliability
+
+- Test real panels.
+- Verify every supported operation.
+- Test synchronization.
+- Test failed operations.
+- Test reconciliation.
+- Test multiple panels.
+
+## Phase 8 — Security Hardening
+
+- CSP.
+- Permissions-Policy.
+- Request correlation.
+- DNS rebinding defence.
+- Dependency scanning.
+- Security regression tests.
+
+## Phase 9 — Installer
+
+- One-command installation.
+- Fresh database.
+- Unique identity and secrets.
+- systemd.
+- Caddy.
+- Domain and HTTPS.
+- Health checks.
+
+## Phase 10 — Upgrade, Backup and Restore
+
+- Version management.
+- Independent updates.
+- Backup.
+- Restore.
+- Rollback.
+- New independent installation.
+- Cross-installation safeguards.
+
+## Phase 11 — Performance Optimization
+
+- Benchmark 1 CPU / 500 MB.
+- Optimize memory.
+- Optimize database.
+- Optimize frontend.
+- Verify concurrency.
+- Measure real workload.
+
+## Phase 12 — Full QA
+
+- Unit tests.
+- Integration tests.
+- E2E tests.
+- Security tests.
+- Browser tests.
+- Deployment tests.
+- Multi-installation tests.
+- Performance tests.
+
+## Phase 13 — Production Release
+
+- Final security audit.
+- Final regression.
+- Release build.
+- Checksums.
+- Supported architecture artifacts.
+- Deployment documentation.
+- Recovery documentation.
+- Production acceptance.
+
+A phase is complete only when its acceptance criteria are verified.
+
+---
+
+# 18. OWNER APPROVAL REQUIREMENTS
+
+Do not invent decisions for:
+
+- HWID/device policy.
+- Refund policy.
+- Replacement policy.
+- Data retention periods.
+- Installation identity design details.
+- Cross-installation clone authorization.
+- Destructive operations.
+- Production data deletion.
+- Credential rotation.
+- Major architecture changes.
+- Git commits and releases.
+- Real production deployment.
+
+Mark unresolved items as OWNER DECISION REQUIRED.
+
+---
+
+# 19. CURRENT IMPLEMENTATION BASELINE
+
+The specification must distinguish current implementation from desired final behaviour.
+
+The previously investigated project baseline includes:
+
+- Go backend.
+- React/TypeScript frontend.
+- Vite build.
+- SQLite pure-Go driver.
+- Embedded frontend in the Go binary.
+- Multiple backend modules.
+- Existing Super Admin, Admin and Client workflows.
+- Multiple 3X-UI panel integration architecture.
+- 36 application tables in the reported database inventory.
+- 129 unique effective API endpoints in the R5 baseline.
+- 37 frontend page files in the R2/R7 baseline.
+- 17 Zustand stores.
+- Five theme presets and 40 subthemes.
+- Existing authentication and authorization protections.
+- Existing provisioning and reconciliation code.
+- Existing backup and restore workflows.
+
+Known gaps at the reported discovery baseline:
+
+1. No one-command installer.
+2. No installation identity.
+3. No backup provenance protection.
+4. Provisioning reconciliation not wired into production scheduling.
+5. Five unbounded data tables.
+6. SMTP environment variable mismatch.
+7. Quota concurrency test instability.
+8. No measured 1 CPU / 500 MB benchmark.
+9. CSP and Permissions-Policy missing.
+10. Frontend route-level code splitting incomplete.
+11. Some API and documentation verification gates incomplete.
+12. Real live 3X-UI tests not performed.
+
+These facts must be rechecked against the current repository before being marked current.
+
+---
+
+# 20. FINAL PRODUCTION ACCEPTANCE CRITERIA
+
+Veylix is production-ready only when all mandatory criteria pass.
+
+### Product
+- Every approved feature works.
+- All three roles have correct workflows.
+- No critical placeholder functionality remains.
+- No unauthorized access exists.
+
+### Frontend
+- All pages work.
+- All themes work.
+- Desktop and mobile layouts work.
+- All forms and actions function.
+- No broken navigation.
+
+### Backend
+- All business rules enforced.
+- All permissions enforced.
+- All critical workflows recover safely.
+- All errors handled correctly.
+
+### Database
+- All migrations pass.
+- Data integrity verified.
+- Concurrency tested.
+- Backup and restore verified.
+
+### Integration
+- Multiple 3X-UI panels work.
+- Supported protocols work.
+- Failed operations reconcile.
+- No false provisioning success.
+
+### Security
+- Mandatory security tests pass.
+- No known unresolved critical vulnerability.
+- Secrets remain protected.
+- Installation isolation verified.
+
+### Installation
+- Fresh installation works.
+- HTTPS works.
+- First Super Admin setup works.
+- Existing installations are protected.
+- Upgrade preserves data.
+- Restore preserves intended installation identity.
+
+### Independent Installations
+- Two separate installations work independently.
+- Different Super Admins.
+- Different databases.
+- Different keys.
+- Different versions.
+- No automatic data sharing.
+- Updating one does not affect the other.
+
+### Performance
+- 1 CPU / 500 MB target measured and verified.
+- No uncontrolled memory growth.
+- Database growth managed.
+- Critical workflows remain responsive.
+
+### Release
+- Automated QA passes.
+- Release artifacts verified.
+- Recovery process documented.
+- No mandatory owner decision is silently assumed.
+
+---
+
+# 21. DOCUMENT GOVERNANCE
+
+This document is the authoritative product and engineering specification.
+
+Every future product change must be reflected here.
+
+The document must always distinguish:
+
+- Approved requirement.
+- Current implementation.
+- Verified behaviour.
+- Planned work.
+- Owner decision required.
+
+Never silently downgrade a product requirement because the current code does not implement it.
+
+Never declare a feature complete merely because a page, route, function or test file exists.
+
+Completion requires implementation and evidence.
+
+**FINAL PRODUCT OBJECTIVE: Build Veylix as a complete, secure, reliable, modern, responsive, independently installable VPN business management platform, with every approved product requirement implemented and verified from initial setup through ongoing production operation.**

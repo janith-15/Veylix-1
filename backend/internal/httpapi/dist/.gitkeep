@@ -1,0 +1,19 @@
+# Placeholder so `go:embed all:dist` compiles on a fresh clone.
+
+`go:embed` fails the build when the embedded directory does not exist, so this
+directory is committed with a `.gitkeep` and nothing else. It is **overwritten**
+by a real build:
+
+```powershell
+# from the repository root
+.\dev.ps1 -Package
+```
+
+That runs `npm run build` in `frontend/` and copies `frontend/dist/*` here, so
+`go build ./...` produces a binary that serves the whole app (Phase 6 / E7).
+
+**Never edit files in this directory by hand** — the next build replaces them.
+
+When `.gitkeep` is the only file, `SPAStatus()` reports `present = false` and the
+binary answers `503 ui_unavailable` for UI routes instead of pretending a
+front-end exists (`docs/DECISIONS.md` D-029).

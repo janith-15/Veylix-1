@@ -1,0 +1,41 @@
+# VEYLIX — line endings are a correctness issue, not a preference.
+#
+# This repository is developed on Windows and deployed on Linux. Windows
+# `core.autocrlf=true` rewrites a checked-out shell script to CRLF, and the
+# resulting file fails on the server with:
+#
+#   /usr/bin/env: 'bash\r': No such file or directory
+#
+# That failure looks like a missing interpreter and is actually a stray \r at
+# the end of the shebang — so the rule is enforced here rather than diagnosed
+# on a customer's host. `* text=auto eol=lf` overrides core.autocrlf for the
+# whole tree; the per-type rules below exist so the intent is readable.
+*                 text=auto eol=lf
+
+# Shell scripts, services and anything else executed on the server: LF, always.
+*.sh              text eol=lf
+*.bash            text eol=lf
+*.service         text eol=lf
+Caddyfile         text eol=lf
+*.env.example     text eol=lf
+
+# Source: normalise to LF in the repository, let each platform check out native.
+*.go              text
+*.ts              text
+*.tsx             text
+*.js              text
+*.mjs             text
+*.json            text
+*.md              text
+*.css              text
+*.yml             text
+*.yaml            text
+*.sql             text
+
+# Binary artifacts must never be line-ending converted.
+*.png             binary
+*.jpg             binary
+*.ico             binary
+*.woff            binary
+*.woff2           binary
+*.gz              binary

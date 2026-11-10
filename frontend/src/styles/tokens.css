@@ -1,0 +1,475 @@
+﻿/* ============================================================
+   VEYLIX VPN — Design Tokens
+   Single source of theme values. Every data-theme defines the
+   full token set. ThemeProvider may override any token via
+   inline CSS custom properties (for user customization).
+   ============================================================ */
+
+:root,
+[data-theme='modern'] {
+  /* Sidebar layout variables */
+  --sidebar-width: 250px;
+  --sidebar-offset: 0px;
+  --c-primary: #5b5bd6;
+  --c-primary-hover: #4f46e5;
+  --c-primary-contrast: #ffffff;
+  --c-secondary: #06b6d4;
+  --c-secondary-contrast: #062f3d;
+  --c-secondary-hover: #0891b2;
+
+  /* Unified accent tint for selected states, chips and active nav */
+  --tint-primary: color-mix(in srgb, var(--c-primary) 14%, transparent);
+
+  --bg-page: #f5f5fa;
+  --bg-sidebar: #ffffff;
+  --bg-card: #ffffff;
+  --bg-surface: #f1f1f9;
+  --bg-input: #ffffff;
+  --bg-hover: #e8e8f6;
+
+  --text: #191930;
+  --text-muted: #616285;
+  --text-strong: #0d0d20;
+  --text-on-accent: #ffffff;
+
+  --border: #e4e4f2;
+  --border-strong: #cccede;
+  --focus: #6366f1;
+
+  --success: #10b981;
+  --warning: #f59e0b;
+  --error: #e11d48;
+  --info: #3b82f6;
+
+  --radius: 12px;
+  --radius-sm: 10px;
+  --radius-lg: 18px;
+  --border-weight: 1px;
+
+  --shadow-sm: 0 1px 2px rgba(70, 65, 160, 0.06);
+  --shadow-md: 0 6px 18px rgba(70, 65, 160, 0.1);
+  --shadow-lg: 0 12px 40px rgba(70, 65, 160, 0.16);
+
+  --font-family: 'Inter', 'Segoe UI', 'Noto Sans Sinhala', 'Iskoola Pota', 'Nirmala UI', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Cascadia Code', Consolas, monospace;
+  --font-size-scale: 1;
+  --line-height: 1.5;
+  --density: 0;
+
+  --fx-gradient: none;
+  --fx-glow: none;
+  --fx-overlay: none;
+  --fx-tilt: 0;
+  --fx-parallax: 0;
+  --fx-animate-bg: 0;
+
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --dur-fast: 120ms;
+  --dur: 180ms;
+  --dur-slow: 280ms;
+  --transition-fast: 120ms var(--ease);
+  --transition-med: 180ms var(--ease);
+
+  /* Motion system (enter/exit/separate) — Josh Comeau patterns */
+  --ease-entrance: cubic-bezier(0.16, 1, 0.3, 1);   /* decelerate — enter */
+  --ease-exit: cubic-bezier(0.7, 0, 0.84, 0);        /* accelerate — exit */
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);  /* overshoot — playful */
+  --dur-entrance: 320ms;
+  --dur-stagger: 50ms;
+
+  /* Elevation ladder for floating layers (dropdown / dialog / toast) */
+  --elev-1: var(--shadow-md);
+  --elev-2: 0 2px 6px -2px rgba(70, 65, 160, 0.1), 0 12px 28px -8px rgba(70, 65, 160, 0.16);
+  --elev-3: 0 4px 10px -4px rgba(70, 65, 160, 0.12), 0 24px 56px -12px rgba(70, 65, 160, 0.22);
+
+  /* ---------- Z-index scale (single ladder, no ad-hoc numbers) ---------- */
+  --z-content: 1;
+  --z-sidebar: 30;
+  --z-topbar: 40;
+  --z-dropdown: 100;
+  --z-sticky: 200;
+  --z-modal: 300;
+  --z-palette: 310;
+  --z-toast: 400;
+
+  /* ---------- 3D tiles: soft floaty (default) ---------- */
+  --3d-depth: 18px;
+  --3d-lift: 1.7;
+  --3d-radius: 18px;
+  --3d-surface: linear-gradient(145deg, color-mix(in srgb, var(--bg-card) 92%, var(--c-primary)), color-mix(in srgb, var(--bg-card) 97%, var(--c-secondary)));
+  --3d-border: color-mix(in srgb, var(--c-primary) 38%, var(--border));
+  --3d-shadow: 0 1px 0 color-mix(in srgb, #ffffff 55%, transparent) inset,
+    0 -10px 24px -18px color-mix(in srgb, var(--c-primary) 40%, transparent) inset,
+    0 20px 38px -22px color-mix(in srgb, var(--c-primary) 65%, transparent),
+    0 34px 62px -34px rgba(70, 65, 160, 0.35);
+  --3d-sheen: color-mix(in srgb, var(--c-primary) 26%, transparent);
+
+  /* spacing scale (rem) */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-10: 2.5rem;
+  --space-12: 3rem;
+}
+
+[data-theme='dark'] {
+  --c-primary: #7c3aed;
+  --c-primary-hover: #8b5cf6;
+  --c-primary-contrast: #ffffff;
+  --c-secondary: #22d3ee;
+  --c-secondary-contrast: #062b33;
+  --c-secondary-hover: #56e0f5;
+
+  --bg-page: #0a0a14;
+  --bg-sidebar: #0e0e1a;
+  --bg-card: #121222;
+  --bg-surface: #171732;
+  --bg-input: #191938;
+  --bg-hover: #20204a;
+
+  --text: #e9e8fa;
+  --text-muted: #a3a1c9;
+  --text-strong: #ffffff;
+  --text-on-accent: #ffffff;
+
+  --border: #262550;
+  --border-strong: #37366b;
+  --focus: #7c3aed;
+
+  --success: #34d399;
+  --warning: #fbbf24;
+  --error: #e11d48;
+  --info: #60a5fa;
+
+  --radius: 12px;
+  --radius-sm: 10px;
+  --radius-lg: 18px;
+  --border-weight: 1px;
+
+  --shadow-sm: 0 1px 2px rgba(2, 2, 12, 0.45);
+  --shadow-md: 0 6px 18px rgba(2, 2, 12, 0.55);
+  --shadow-lg: 0 12px 40px rgba(2, 2, 12, 0.65);
+
+  --elev-1: 0 1px 0 color-mix(in srgb, #ffffff 6%, transparent) inset, 0 8px 24px -12px rgba(0, 0, 0, 0.55);
+  --elev-2: 0 1px 0 color-mix(in srgb, #ffffff 8%, transparent) inset, 0 12px 32px -12px rgba(0, 0, 0, 0.65);
+  --elev-3: 0 1px 0 color-mix(in srgb, #ffffff 10%, transparent) inset, 0 24px 56px -16px rgba(0, 0, 0, 0.75);
+
+  /* ---------- 3D tiles: deep glass ---------- */
+  --3d-depth: 28px;
+  --3d-lift: 1.75;
+  --3d-radius: 18px;
+  --3d-surface: linear-gradient(150deg, color-mix(in srgb, var(--bg-card) 90%, var(--c-primary)), color-mix(in srgb, var(--bg-card) 96%, #000000));
+  --3d-border: color-mix(in srgb, var(--c-primary) 62%, transparent);
+  --3d-shadow: 0 1px 0 color-mix(in srgb, #ffffff 14%, transparent) inset,
+    0 -1px 0 color-mix(in srgb, #000000 70%, transparent) inset,
+    0 26px 50px -24px color-mix(in srgb, var(--c-primary) 90%, transparent),
+    0 44px 78px -40px rgba(0, 0, 0, 0.85);
+  --3d-sheen: color-mix(in srgb, var(--c-primary) 46%, transparent);
+
+  --fx-gradient: none;
+  --fx-glow: none;
+  --fx-overlay: none;
+  --fx-tilt: 0;
+  --fx-parallax: 0;
+  --fx-animate-bg: 0;
+}
+
+[data-theme='light'] {
+  --c-primary: #4f46e5;
+  --c-primary-hover: #4338ca;
+  --c-primary-contrast: #ffffff;
+  --c-secondary: #f59e0b;
+  --c-secondary-contrast: #231a02;
+  --c-secondary-hover: #fbbf24;
+
+  --bg-page: #f7f8fd;
+  --bg-sidebar: #ffffff;
+  --bg-card: #ffffff;
+  --bg-surface: #eff1fa;
+  --bg-input: #ffffff;
+  --bg-hover: #e4e8f7;
+
+  --text: #181b34;
+  --text-muted: #585e80;
+  --text-strong: #0b0e24;
+  --text-on-accent: #ffffff;
+
+  --border: #dee3f1;
+  --border-strong: #bfc7e2;
+  --focus: #4f46e5;
+
+  --success: #059669;
+  --warning: #d97706;
+  --error: #dc2626;
+  --info: #2563eb;
+
+  --radius: 8px;
+  --radius-sm: 6px;
+  --radius-lg: 14px;
+  --border-weight: 1px;
+
+  --shadow-sm: 0 1px 2px rgba(35, 45, 100, 0.05);
+  --shadow-md: 0 4px 14px rgba(35, 45, 100, 0.08);
+  --shadow-lg: 0 10px 32px rgba(35, 45, 100, 0.12);
+
+  --elev-1: var(--shadow-md);
+  --elev-2: 0 2px 6px -2px rgba(35, 45, 100, 0.08), 0 14px 32px -10px rgba(35, 45, 100, 0.16);
+  --elev-3: 0 4px 10px -4px rgba(35, 45, 100, 0.1), 0 28px 60px -14px rgba(35, 45, 100, 0.2);
+
+  /* ---------- 3D tiles: editorial = flat, rule accent ---------- */
+  --3d-depth: 0px;
+  --3d-radius: 2px;
+  --3d-surface: var(--bg-card);
+  --3d-border: var(--border);
+  --3d-shadow: none;
+  --3d-sheen: transparent;
+
+  --fx-gradient: none;
+}
+
+[data-theme='classic'] {
+  --c-primary: #2f6bef;
+  --c-primary-hover: #1d54e0;
+  --c-primary-contrast: #ffffff;
+  --c-secondary: #5e7191;
+  --c-secondary-contrast: #ffffff;
+  --c-secondary-hover: #46536b;
+
+  --bg-page: #f2f4f8;
+  --bg-sidebar: #ffffff;
+  --bg-card: #ffffff;
+  --bg-surface: #f7f9fc;
+  --bg-input: #ffffff;
+  --bg-hover: #e9edf5;
+
+  --text: #101828;
+  --text-muted: #5b6474;
+  --text-strong: #050b18;
+  --text-on-accent: #ffffff;
+
+  --border: #dde2ec;
+  --border-strong: #c1c9da;
+  --focus: #2f6bef;
+
+  --success: #16a34a;
+  --warning: #dc6803;
+  --error: #d92d20;
+  --info: #1570ef;
+
+  --radius: 6px;
+  --radius-sm: 4px;
+  --radius-lg: 10px;
+  --border-weight: 1px;
+
+  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06);
+  --shadow-md: 0 4px 10px rgba(15, 23, 42, 0.08);
+  --shadow-lg: 0 8px 24px rgba(15, 23, 42, 0.1);
+
+  --elev-1: var(--shadow-sm);
+  --elev-2: var(--shadow-md);
+  --elev-3: var(--shadow-lg);
+
+  /* ---------- 3D tiles: classic = zero 3D ---------- */
+  --3d-depth: 0px;
+  --3d-radius: 4px;
+  --3d-surface: var(--bg-card);
+  --3d-border: var(--border);
+  --3d-shadow: none;
+  --3d-sheen: transparent;
+}
+
+[data-theme='gaming'] {
+  --c-primary: #00f0ff;
+  --c-primary-hover: #6ffaff;
+  --c-primary-contrast: #03151a;
+  --c-secondary: #d6117d;
+  --c-secondary-contrast: #ffffff;
+  --c-secondary-hover: #b70e6a;
+
+  --bg-page: #04060d;
+  --bg-sidebar: #080d18;
+  --bg-card: #0b1322;
+  --bg-surface: #0d1729;
+  --bg-input: #0c1526;
+  --bg-hover: #152340;
+
+  --text: #dbf5ff;
+  --text-muted: #7e9cc0;
+  --text-strong: #ffffff;
+  --text-on-accent: #03151a;
+
+  --border: #182a4a;
+  --border-strong: #274a80;
+  --focus: #00f0ff;
+
+  --success: #00e58a;
+  --warning: #ffc53d;
+  --error: #ff4d6d;
+  --info: #3d9bff;
+
+  --radius: 14px;
+  --radius-sm: 11px;
+  --radius-lg: 20px;
+  --border-weight: 1px;
+
+  --shadow-sm: 0 1px 3px rgba(0, 240, 255, 0.08);
+  --shadow-md: 0 6px 20px rgba(0, 240, 255, 0.14);
+  --shadow-lg: 0 12px 44px rgba(214, 17, 125, 0.22);
+
+  --elev-1: 0 0 0 1px rgba(0, 240, 255, 0.12) inset, 0 10px 26px -14px rgba(0, 240, 255, 0.35);
+  --elev-2: 0 0 0 1px rgba(0, 240, 255, 0.16) inset, 0 16px 38px -16px rgba(0, 240, 255, 0.45);
+  --elev-3: 0 0 0 1px rgba(0, 240, 255, 0.2) inset, 0 26px 60px -20px rgba(214, 17, 125, 0.4);
+
+  /* ---------- 3D tiles: neon HUD ---------- */
+  --3d-depth: 36px;
+  --3d-lift: 1.85;
+  --3d-radius: 6px;
+  --3d-surface: linear-gradient(160deg, color-mix(in srgb, var(--bg-card) 88%, var(--c-primary)), color-mix(in srgb, var(--bg-card) 84%, var(--c-secondary)));
+  --3d-border: color-mix(in srgb, var(--c-primary) 78%, transparent);
+  --3d-shadow: 0 0 0 1px color-mix(in srgb, var(--c-primary) 45%, transparent) inset,
+    0 0 32px -10px color-mix(in srgb, var(--c-primary) 55%, transparent) inset,
+    0 24px 50px -20px color-mix(in srgb, var(--c-primary) 100%, transparent),
+    0 42px 76px -34px color-mix(in srgb, var(--c-secondary) 95%, transparent);
+  --3d-sheen: color-mix(in srgb, var(--c-secondary) 58%, transparent);
+
+  --fx-gradient: radial-gradient(1200px 600px at 15% -10%, rgba(0, 240, 255, 0.18), transparent 55%),
+    radial-gradient(1000px 520px at 110% 20%, rgba(214, 17, 125, 0.15), transparent 55%);
+  --fx-glow: 0 0 26px rgba(0, 240, 255, 0.38);
+  --fx-overlay: linear-gradient(180deg, rgba(0, 240, 255, 0.05), rgba(214, 17, 125, 0.05));
+  --fx-tilt: 1;
+  --fx-parallax: 1;
+  --fx-animate-bg: 1;
+}
+
+/* ============================================================
+   HACKING — terminal / CRT.
+   Phosphor green on near-black, hairline borders, square corners
+   and a scanline overlay. Deliberately NOT a dark Classic: Classic
+   is a light, calm admin panel; this one is a shell.
+   ============================================================ */
+[data-theme='hacking'] {
+  --c-primary: #22d37a;
+  --c-primary-hover: #3ee68f;
+  --c-primary-contrast: #04140c;
+  --c-secondary: #0ea5a4;
+  --c-secondary-contrast: #001413;
+  --c-secondary-hover: #17bdbb;
+
+  --bg-page: #050a08;
+  --bg-sidebar: #07110d;
+  --bg-card: #0a1712;
+  --bg-surface: #0d1f17;
+  --bg-input: #0a1712;
+  --bg-hover: #12301f;
+
+  --text: #d7ffe8;
+  --text-muted: #6f9c85;
+  --text-strong: #ffffff;
+  --text-on-accent: #04140c;
+
+  --border: #123326;
+  --border-strong: #1d533b;
+  --focus: #22d37a;
+
+  --success: #22d37a;
+  --warning: #e3b341;
+  --error: #ff5c6c;
+  --info: #4cc2ff;
+
+  --radius: 4px;
+  --radius-sm: 3px;
+  --radius-lg: 6px;
+  --border-weight: 1px;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.55);
+  --shadow-md: 0 6px 18px rgba(0, 0, 0, 0.6);
+  --shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.7);
+
+  --elev-1: 0 0 0 1px rgba(34, 211, 122, 0.14) inset, 0 8px 22px -14px rgba(0, 0, 0, 0.8);
+  --elev-2: 0 0 0 1px rgba(34, 211, 122, 0.2) inset, 0 14px 34px -16px rgba(0, 0, 0, 0.85);
+  --elev-3: 0 0 0 1px rgba(34, 211, 122, 0.26) inset, 0 24px 56px -20px rgba(0, 0, 0, 0.9);
+
+  /* ---------- 3D tiles: flat CRT panel (tilt is dialled almost out) ---------- */
+  --3d-depth: 10px;
+  --3d-lift: 1.3;
+  --3d-radius: 4px;
+  --3d-surface: linear-gradient(160deg, color-mix(in srgb, var(--bg-card) 94%, var(--c-primary)), color-mix(in srgb, var(--bg-card) 98%, #000000));
+  --3d-border: color-mix(in srgb, var(--c-primary) 42%, transparent);
+  --3d-shadow: 0 0 0 1px color-mix(in srgb, var(--c-primary) 22%, transparent) inset,
+    0 0 18px -8px color-mix(in srgb, var(--c-primary) 42%, transparent) inset,
+    0 16px 34px -22px rgba(0, 0, 0, 0.9);
+  --3d-sheen: color-mix(in srgb, var(--c-primary) 30%, transparent);
+
+  --fx-gradient: radial-gradient(1100px 520px at 50% -20%, rgba(34, 211, 122, 0.14), transparent 60%),
+    radial-gradient(900px 480px at 90% 110%, rgba(14, 165, 164, 0.1), transparent 60%);
+  --fx-glow: 0 0 22px rgba(34, 211, 122, 0.32);
+  --fx-overlay: none;
+  --fx-tilt: 0.15;
+  --fx-parallax: 0.3;
+  --fx-animate-bg: 1;
+
+  /* Monospace by default — a terminal is not set in Inter. */
+  --font-family: 'JetBrains Mono', 'Cascadia Code', 'Consolas', 'Noto Sans Sinhala', 'Iskoola Pota', ui-monospace, monospace;
+}
+
+/* ============================================================
+   REDESIGN TOKENS (D-084) — appended once, derived from the
+   semantic tokens above so they are automatically correct in
+   every preset.
+
+   These exist because the audit found three things the design
+   system could not express and pages were therefore hardcoding:
+
+     1. Surface DEPTH.  `--bg-card` and `--bg-surface` are both
+        one step from the page, so a sidebar, a topbar and a card
+        all read as the same plane. The three-tier rail/header/
+        body ladder fixes the shell without touching any preset.
+
+     2. A semantic STATUS ramp.  `--success / --warning / --error
+        / --info` are brand-ish colours, not connection states.
+        A VPN needs ONLINE / DEGRADED / OFFLINE / PENDING and
+        those must not be re-invented per page.
+
+     3. One connection ACCENT.  A VPN surface has to be
+        identifiable at a glance across six presets.
+
+   Rule: every value below is a `color-mix()` of an existing
+   token or `transparent`. No new literals, so a preset edit
+   propagates here for free and no page needs a colour literal.
+   ============================================================ */
+:root,
+[data-theme] {
+  /* ---- Three-tier surface ladder (rail → header → body) ---- */
+  --panel-rail: color-mix(in srgb, var(--bg-sidebar) 94%, var(--c-primary));
+  --panel-header: color-mix(in srgb, var(--bg-card) 88%, var(--bg-surface));
+  --panel-body: var(--bg-page);
+  /* Hairline that separates stacked shell layers without a shadow. */
+  --panel-divider: color-mix(in srgb, var(--border) 80%, transparent);
+
+  /* ---- Semantic connection / resource states ---- */
+  --state-online: var(--success);
+  --state-degraded: var(--warning);
+  --state-offline: var(--error);
+  --state-pending: var(--info);
+  --state-neutral: var(--text-muted);
+
+  /* Tinted washes — safe on card backgrounds in light AND dark. */
+  --state-online-wash: color-mix(in srgb, var(--state-online) 12%, transparent);
+  --state-degraded-wash: color-mix(in srgb, var(--state-degraded) 12%, transparent);
+  --state-offline-wash: color-mix(in srgb, var(--state-offline) 12%, transparent);
+  --state-pending-wash: color-mix(in srgb, var(--state-pending) 12%, transparent);
+
+  /* ---- The one connection accent (VPN surfaces only) ---- */
+  --vpn-accent: var(--c-secondary);
+  --vpn-accent-wash: color-mix(in srgb, var(--vpn-accent) 12%, transparent);
+  --vpn-accent-edge: color-mix(in srgb, var(--vpn-accent) 38%, var(--border));
+
+  /* ---- Focus ring, composed so it can never be invisible ---- */
+  --ring-focus: 0 0 0 2px var(--bg-card), 0 0 0 4px var(--focus);
+}
+
+

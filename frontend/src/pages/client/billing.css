@@ -1,0 +1,128 @@
+/*
+ * Payments & Billing (`pages/client/ClientBillingPage.tsx`).
+ *
+ * Every selector is scoped under `.bil`, and the file is imported only by that
+ * page, so it ships as its own route-split chunk.
+ *
+ * NO COLOUR LITERALS. Only tokens `client.css` and `offers.css` already prove
+ * exist in every preset - a misspelt token renders as an unset value and the
+ * block looks unstyled, which is the failure this repository has now hit twice.
+ */
+
+.bil__actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+/* ---- "nothing is waiting" -------------------------------------------- */
+
+.bil__calm {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: var(--space-3, 12px);
+  border: 1px solid var(--border);
+  border-radius: var(--radius, 10px);
+  background: var(--bg-surface);
+}
+
+.bil__calm-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-weight: 640;
+  color: var(--text);
+}
+
+.bil__calm-note {
+  margin: 0;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+/* ---- the open-order list --------------------------------------------- */
+
+.bil__list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.bil__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius, 10px);
+  background: var(--bg-surface);
+}
+
+.bil__row-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.bil__row-amount {
+  font-weight: 650;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.bil__row-meta {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+
+/* A status chip, not a colour-only signal: the word is always present. */
+.bil__row-status {
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 0.6875rem;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  border: 1px solid color-mix(in srgb, var(--warning) 50%, var(--border));
+  background: color-mix(in srgb, var(--warning) 12%, transparent);
+  color: var(--warning);
+}
+
+/* ---- the full-statement hand-off ------------------------------------- */
+
+.bil__statement {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.bil__statement-note {
+  margin: 0;
+  font-size: 0.8125rem;
+  line-height: 1.55;
+  color: var(--text-muted);
+}
+
+.bil__statement-count {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Touch targets: 44px where a coarse pointer is in use. */
+@media (pointer: coarse) {
+  .bil__actions .ui-btn {
+    min-height: 44px;
+  }
+}

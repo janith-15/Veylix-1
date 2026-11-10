@@ -1,0 +1,108 @@
+/* The VPN's panel identity — readable and copyable (D-091.4).
+ *
+ * The readable form is the account plus a kind chip; the copy button always
+ * carries the exact panel email. Both must fit on one line on a phone, so the
+ * account truncates (with a title) rather than pushing the button out of reach. */
+
+.pid {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.pid--block {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+}
+
+.pid__text {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.pid__account {
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: var(--t-sm2, 12px);
+  color: var(--text-strong);
+  /* The full value is in the title and in the copy button's label, so
+     truncation here costs nothing that cannot be recovered. */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 22ch;
+}
+
+.pid__chip {
+  flex: 0 0 auto;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: var(--t-xs, 11px);
+  font-weight: 600;
+  border: 1px solid var(--border, rgba(127, 127, 160, 0.28));
+  background: var(--surface-3, rgba(127, 127, 160, 0.12));
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+/* The kind chip uses the same token family as the status badges instead of a
+   literal colour, so a theme change cannot leave it unreadable. */
+.pid__chip[data-kind='premium'] {
+  border-color: var(--accent-border, rgba(120, 160, 255, 0.45));
+  background: var(--accent-soft, rgba(120, 160, 255, 0.14));
+  color: var(--text-strong);
+}
+
+.pid__server {
+  font-size: var(--t-xs, 11px);
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.pid__copy {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  border: 1px solid var(--border, rgba(127, 127, 160, 0.28));
+  border-radius: var(--radius-sm, 8px);
+  background: var(--surface-2, rgba(127, 127, 160, 0.06));
+  color: var(--text-muted);
+  font-size: var(--t-xs, 11px);
+  font-weight: 600;
+  cursor: pointer;
+  /* A 28px-tall control is the smallest that still meets the touch-target
+     guidance on a phone; it grows to 32px there. */
+  min-height: 28px;
+}
+
+.pid__copy:hover {
+  color: var(--text-strong);
+  border-color: var(--accent-border, rgba(120, 160, 255, 0.45));
+}
+
+.pid__copy:focus-visible {
+  outline: 2px solid var(--accent, #6f8cff);
+  outline-offset: 2px;
+}
+
+.pid--missing {
+  font-size: var(--t-sm2, 12px);
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+@media (max-width: 560px) {
+  .pid__copy {
+    min-height: 32px;
+  }
+
+  .pid__account {
+    max-width: 16ch;
+  }
+}

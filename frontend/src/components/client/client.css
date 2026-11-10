@@ -1,0 +1,309 @@
+/* ---------------------------------------------------------------------------
+ * Client Portal shell — S3 foundation.
+ *
+ * Rules this file follows, without exception:
+ *   - NO colour, radius, shadow, spacing or font is written as a literal. Every
+ *     value is an existing custom property, so all six presets and all
+ *     ten-per-preset sub-themes apply here with no further work.
+ *   - NO new design token is defined. The theme system is the single owner of
+ *     those, and this file is a consumer.
+ *   - Breakpoints are stated at the six widths the portal is verified at:
+ *     360, 390, 768, 1024, 1440, 1920. Between them the layout is intrinsically
+ *     fluid (auto-fill grids), so no width is left unhandled.
+ * ------------------------------------------------------------------------- */
+
+/* --- page frame ---------------------------------------------------------- */
+
+.client-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  /* Long client lists are the norm; contain layout work to this subtree so a
+     card re-render does not invalidate the whole document on a 1 vCPU host. */
+  contain: layout style;
+}
+
+.client-page__summary {
+  margin: 0;
+}
+
+.client-page__toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.client-page__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+/* --- named section ------------------------------------------------------ */
+
+.client-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.client-section__head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  border-bottom: 1px solid var(--border);
+}
+
+/* `.vpn-section-title` owns the type and colour; the border lives on the head
+   row so the heading and its count share one baseline rule. */
+.client-section__title {
+  border-bottom: 0;
+  padding-bottom: 0;
+  margin: 0 0 6px;
+}
+
+.client-section__actions {
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+/* --- search + filter bar ------------------------------------------------ */
+
+.client-filters {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.client-filters__search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 1 1 220px;
+  min-width: 0;
+  max-width: 380px;
+}
+
+.client-filters__icon {
+  position: absolute;
+  left: 10px;
+  color: var(--text-muted);
+  pointer-events: none;
+}
+
+.client-filters__input {
+  width: 100%;
+  padding: 8px 30px 8px 32px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--bg-input, var(--bg-surface));
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  /* The browser's own search affordance is removed because this component
+     renders its own clear button, which is keyboard reachable and labelled. */
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.client-filters__input::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.client-filters__input::placeholder {
+  color: var(--text-muted);
+}
+
+.client-filters__input:focus-visible {
+  outline: 2px solid var(--focus, var(--c-primary));
+  outline-offset: 1px;
+}
+
+.client-filters__clear {
+  position: absolute;
+  right: 6px;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.client-filters__clear:hover {
+  color: var(--text);
+  background: var(--bg-hover);
+}
+
+.client-filters__clear:focus-visible {
+  outline: 2px solid var(--focus, var(--c-primary));
+  outline-offset: 1px;
+}
+
+.client-filters__group {
+  min-width: 0;
+}
+
+.client-filters__select {
+  padding: 8px 10px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--bg-input, var(--bg-surface));
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+  max-width: 100%;
+}
+
+.client-filters__select:focus-visible {
+  outline: 2px solid var(--focus, var(--c-primary));
+  outline-offset: 1px;
+}
+
+/* --- VPN card grid (used by My VPNs and the dashboard inventory) --------- */
+
+.client-vpn-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: var(--space-4);
+  align-items: start;
+}
+
+/* --- 1024: laptop — cards keep two columns without squeezing ------------ */
+
+@media (max-width: 1024px) {
+  .client-vpn-grid {
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  }
+}
+
+/* --- 768: tablet — the search field takes its own row ------------------- */
+
+@media (max-width: 768px) {
+  .client-filters__search {
+    flex: 1 1 100%;
+    max-width: none;
+  }
+
+  .client-filters__group {
+    flex: 1 1 auto;
+  }
+
+  .client-filters__select {
+    width: 100%;
+  }
+}
+
+/* --- 390 (and every small phone): one column ---------------------------- */
+
+@media (max-width: 390px) {
+  .client-vpn-grid {
+    grid-template-columns: 1fr;
+    gap: var(--space-3);
+  }
+
+  .client-filters {
+    gap: 6px;
+  }
+
+  .client-filters__select {
+    font-size: 12.5px;
+    padding: 7px 8px;
+  }
+
+  .client-section__head {
+    align-items: flex-start;
+  }
+}
+
+/* --- 360: narrowest supported width ------------------------------------ */
+
+@media (max-width: 360px) {
+  .client-page {
+    gap: var(--space-3);
+  }
+
+  .client-vpn-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* --- 1440: cap the working width so a card row stays readable ---------- */
+
+@media (min-width: 1440px) {
+  .client-vpn-grid {
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  }
+}
+
+/* --- 1920: more columns rather than wider cards ------------------------- */
+
+@media (min-width: 1920px) {
+  .client-vpn-grid {
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  }
+}
+
+/* --- wide data tables degrade to a scrollable block -------------------- */
+
+@media (max-width: 640px) {
+  .client-page table {
+    display: block;
+    overflow-x: auto;
+  }
+}
+
+/* --- coarse pointer: finger-sized targets on the Client surfaces --------
+ *
+ * S3-5 (UI/UX defect board). The four control families below were added by S3
+ * and were measurably under the 44x44 thumb minimum of D-056/D-058:
+ *
+ *   .client-filters__clear    22 x 22   (client.css)
+ *   .client-filters__select  ~33 tall   (8px padding + 13px text)
+ *   .client-filters__input   ~32 tall   (8px padding + 13px text)
+ *   .ui-pagination__btn       32 x 32   (ui.css:591 — shared rule, unchanged)
+ *
+ * The fix lives HERE, scoped to the Client portal, rather than in touch.css:
+ * `touch.css` and the shared `.ui-pagination__btn` rule serve every screen, and
+ * enlarging them would change operator density on pages this work does not own
+ * (that is board row U18, deliberately left OPEN).
+ *
+ * The rule is scoped to `pointer: coarse` for the same reason D-058 scoped
+ * touch.css that way: a mouse is precise and 32-33px rows are a deliberate
+ * desktop density choice, while a thumb is not. Desktop is therefore untouched.
+ * ---------------------------------------------------------------------- */
+
+@media (pointer: coarse) {
+  .client-filters__input,
+  .client-filters__select {
+    min-height: 44px;
+  }
+
+  /* An icon-only button has no text to grow with, so its width needs the
+     floor too — it was 22px square in both directions. */
+  .client-filters__clear {
+    width: 44px;
+    height: 44px;
+  }
+
+  /* Client-scoped override of the shared 32x32 rule. The descendant selector
+     keeps every non-client pagination control on the original size. */
+  .client-page .ui-pagination__btn {
+    min-width: 44px;
+    height: 44px;
+  }
+}

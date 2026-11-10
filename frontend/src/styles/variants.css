@@ -1,0 +1,127 @@
+﻿/* ============================================================
+   VEYLIX VPN - Sub-theme skins ([data-variant])
+   Each main theme matches variants differ in more than colour:
+   card shape, borders, shadows and surface follow the variant.
+   ============================================================ */
+
+/* ---------- MODERN ---------- */
+[data-variant='soft'] .ui-card {
+  border-radius: var(--radius-lg);
+  border-color: transparent;
+  box-shadow: 0 1px 2px rgba(15, 15, 40, 0.05), 0 10px 24px -12px color-mix(in srgb, var(--c-primary) 55%, transparent);
+}
+[data-variant='aurora'] .ui-card {
+  border: 1px solid color-mix(in srgb, var(--c-primary) 40%, transparent);
+  background-image: linear-gradient(135deg, color-mix(in srgb, var(--c-primary) 14%, var(--bg-card)), color-mix(in srgb, var(--c-secondary) 12%, var(--bg-card)));
+  box-shadow: 0 18px 40px -22px color-mix(in srgb, var(--c-secondary) 70%, transparent);
+}
+[data-variant='minimal'] .ui-card {
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  box-shadow: none;
+}
+[data-variant='minimal'] .ui-card__title { font-weight: 600; }
+[data-variant='frosted'] .ui-card {
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--bg-card) 62%, transparent);
+  -webkit-backdrop-filter: blur(24px) saturate(1.5);
+  backdrop-filter: blur(24px) saturate(1.5);
+  border: 1px solid color-mix(in srgb, #ffffff 60%, transparent);
+}
+
+/* ---------- DARK ---------- */
+[data-variant='deep-glass'] .ui-card {
+  border: 1px solid color-mix(in srgb, var(--c-primary) 30%, var(--border));
+  box-shadow: 0 24px 48px -24px rgba(0, 0, 0, 0.85);
+}
+[data-variant='void'] .ui-card {
+  border: 1px solid color-mix(in srgb, var(--c-primary) 55%, transparent);
+  box-shadow: 0 0 28px -10px color-mix(in srgb, var(--c-primary) 90%, transparent);
+}
+[data-variant='void'] .ui-card__title {
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--c-primary);
+}
+
+/* ---------- LIGHT ---------- */
+[data-variant='editorial'] .ui-card {
+  border-radius: 2px;
+  border: 1px solid var(--border);
+  border-top: 3px solid var(--c-primary);
+  box-shadow: none;
+}
+[data-variant='editorial'] .ui-card__header {
+  border-bottom: 1px solid var(--border);
+  padding-bottom: var(--space-2);
+}
+[data-variant='editorial'] .ui-card__title {
+  font-size: 0.78rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+[data-variant='paper'] .ui-card {
+  border-radius: 3px;
+  border: 1px solid var(--border);
+  border-top: 3px solid var(--c-secondary);
+}
+[data-variant='clean'] .ui-card {
+  border-radius: 12px;
+  border-color: transparent;
+  box-shadow: 0 6px 20px -14px color-mix(in srgb, var(--c-primary) 50%, transparent);
+}
+[data-variant='soft-grey'] .ui-card {
+  border-radius: 14px;
+  border-color: color-mix(in srgb, var(--border) 60%, transparent);
+  box-shadow: none;
+}
+
+/* ---------- CLASSIC ---------- */
+[data-variant='flat-admin'] .ui-card,
+[data-variant='compact'] .ui-card,
+[data-variant='legacy'] .ui-card {
+  border-radius: 0;
+  box-shadow: none;
+}
+[data-variant='flat-admin'] .ui-card { border: 1px solid var(--border); }
+[data-variant='compact'] .ui-card { border: 1px solid var(--border); padding: var(--space-2); }
+[data-variant='legacy'] .ui-card {
+  border: 2px solid var(--border-strong);
+  box-shadow: 2px 2px 0 var(--border-strong);
+}
+
+/* ---------- GAMING ---------- */
+[data-variant='neon-hud'] .ui-card {
+  --clip: 16px;
+  border-radius: 4px;
+  clip-path: polygon(var(--clip) 0, 100% 0, 100% calc(100% - var(--clip)), calc(100% - var(--clip)) 100%, 0 100%, 0 var(--clip));
+  border: 1px solid color-mix(in srgb, var(--c-primary) 55%, transparent);
+  box-shadow: 0 0 30px -12px color-mix(in srgb, var(--c-primary) 90%, transparent);
+}
+[data-variant='cyberpunk'] .ui-card {
+  border-radius: 2px;
+  border: 2px solid var(--c-primary);
+  box-shadow: 4px 4px 0 color-mix(in srgb, var(--c-secondary) 70%, transparent);
+}
+[data-variant='cyberpunk'] .ui-card__title {
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font-family: var(--font-mono);
+}
+[data-variant='terminal'] .ui-card {
+  border-radius: 0;
+  border: 1px solid var(--border-strong);
+}
+[data-variant='terminal'] .ui-card__title {
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  font-family: var(--font-mono);
+}
+[data-variant='retrowave'] .ui-card {
+  --clip: 14px;
+  border-radius: 3px;
+  clip-path: polygon(var(--clip) 0, 100% 0, 100% calc(100% - var(--clip)), calc(100% - var(--clip)) 100%, 0 100%, 0 var(--clip));
+  border: 1px solid color-mix(in srgb, var(--c-primary) 60%, transparent);
+  background-image: linear-gradient(180deg, color-mix(in srgb, var(--c-secondary) 16%, transparent), transparent 60%);
+}

@@ -1,0 +1,105 @@
+{
+  "version": 1.1,
+  "atDirectives": [
+    {
+      "name": "@theme",
+      "description": "Tailwind CSS v4 at-rule: defines design tokens (colors, spacing, radii, easing…) that generate utilities.",
+      "references": [
+        {
+          "name": "Tailwind CSS — Theme variables",
+          "url": "https://tailwindcss.com/docs/theme"
+        }
+      ]
+    },
+    {
+      "name": "@custom-variant",
+      "description": "Tailwind CSS v4 at-rule: registers a custom variant (e.g. a dark-mode or state selector).",
+      "references": [
+        {
+          "name": "Tailwind CSS — Adding custom variants",
+          "url": "https://tailwindcss.com/docs/adding-custom-styles#adding-custom-variants"
+        }
+      ]
+    },
+    {
+      "name": "@utility",
+      "description": "Tailwind CSS v4 at-rule: defines a custom utility class.",
+      "references": [
+        {
+          "name": "Tailwind CSS — Adding custom utilities",
+          "url": "https://tailwindcss.com/docs/adding-custom-styles#adding-custom-utilities"
+        }
+      ]
+    },
+    {
+      "name": "@variant",
+      "description": "Tailwind CSS v4 at-rule: scopes the following rules to a variant (e.g. @variant dark { … }).",
+      "references": [
+        {
+          "name": "Tailwind CSS — Using variants with @variant",
+          "url": "https://tailwindcss.com/docs/adding-custom-styles#using-variants"
+        }
+      ]
+    },
+    {
+      "name": "@apply",
+      "description": "Tailwind CSS at-rule: inlines existing utility classes into a custom CSS rule.",
+      "references": [
+        {
+          "name": "Tailwind CSS — Using @apply",
+          "url": "https://tailwindcss.com/docs/adding-custom-styles#using-apply"
+        }
+      ]
+    },
+    {
+      "name": "@plugin",
+      "description": "Tailwind CSS at-rule: loads a legacy JavaScript plugin from CSS.",
+      "references": [
+        {
+          "name": "Tailwind CSS — Plugins",
+          "url": "https://tailwindcss.com/docs/plugins"
+        }
+      ]
+    },
+    {
+      "name": "@config",
+      "description": "Tailwind CSS v4 at-rule: opts into a legacy JavaScript config file.",
+      "references": [
+        {
+          "name": "Tailwind CSS — Using a JavaScript config file",
+          "url": "https://tailwindcss.com/docs/upgrade-guide#using-a-javascript-config-file"
+        }
+      ]
+    },
+    {
+      "name": "@source",
+      "description": "Tailwind CSS v4 at-rule: registers additional content paths for class detection.",
+      "references": [
+        {
+          "name": "Tailwind CSS — Detecting classes in source files",
+          "url": "https://tailwindcss.com/docs/detecting-classes-in-source-files"
+        }
+      ]
+    },
+    {
+      "name": "@reference",
+      "description": "Tailwind CSS v4 at-rule: imports theme/utilities for reference without emitting CSS.",
+      "references": [
+        {
+          "name": "Tailwind CSS — Function and directive reference",
+          "url": "https://tailwindcss.com/docs/functions-and-directives#reference-directive"
+        }
+      ]
+    }
+  ],
+  "properties": [
+    {
+      "name": "--spacing",
+      "description": "Tailwind CSS v4 spacing scale base (used by padding, margin, gap, etc.)."
+    },
+    {
+      "name": "--color-primary",
+      "description": "Veylix token alias for the primary accent colour."
+    }
+  ]
+}

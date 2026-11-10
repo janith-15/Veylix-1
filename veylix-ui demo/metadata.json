@@ -1,0 +1,6 @@
+{
+  "name": "Veylix - VPN Business Management Platform",
+  "description": "Enterprise self-hosted VPN management and automation layer for 3X-UI panels, multi-tenant resellers, client provisioning, inventory, and billing.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

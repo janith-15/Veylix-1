@@ -1,0 +1,2042 @@
+?   	veylix/backend/cmd/accounttool	[no test files]
+?   	veylix/backend/cmd/dbcheck	[no test files]
+?   	veylix/backend/cmd/dbexec	[no test files]
+?   	veylix/backend/cmd/limitprobe	[no test files]
+?   	veylix/backend/cmd/ob	[no test files]
+?   	veylix/backend/cmd/outboxprobe	[no test files]
+?   	veylix/backend/cmd/panelprobe	[no test files]
+?   	veylix/backend/cmd/pwreset	[no test files]
+?   	veylix/backend/cmd/seedacct	[no test files]
+?   	veylix/backend/cmd/seeddemo	[no test files]
+?   	veylix/backend/cmd/seedpremium	[no test files]
+?   	veylix/backend/cmd/veylixd	[no test files]
+=== RUN   TestRedactStripsEverySecretShape
+--- PASS: TestRedactStripsEverySecretShape (0.00s)
+=== RUN   TestRedactLeavesOrdinaryTextAlone
+--- PASS: TestRedactLeavesOrdinaryTextAlone (0.00s)
+=== RUN   TestFingerprintNeverRevealsTheValue
+--- PASS: TestFingerprintNeverRevealsTheValue (0.00s)
+=== RUN   TestStatusReportsNotInstalledWithoutWritingAnything
+status:      NOT INSTALLED (/tmp/TestStatusReportsNotInstalledWithoutWritingAnything4277230889/001/bin/veylixd)
+             run install.sh to install, or check VEYLIX_BIN_DIR
+--- PASS: TestStatusReportsNotInstalledWithoutWritingAnything (0.01s)
+=== RUN   TestStatusJSONCarriesEveryField
+--- PASS: TestStatusJSONCarriesEveryField (0.00s)
+=== RUN   TestReadinessWordHasNoFourthState
+--- PASS: TestReadinessWordHasNoFourthState (0.00s)
+=== RUN   TestDryRunUninstallDeletesNothing
+
+==> [1] stop and disable
+[dry-run] systemctl disable --now veylixd
+
+==> [2] remove unit and binaries
+[dry-run] rm -f /tmp/TestDryRunUninstallDeletesNothing2936319992/001/etc/veylixd.service
+[dry-run] rm -f /tmp/TestDryRunUninstallDeletesNothing2936319992/001/bin/veylixd
+[dry-run] systemctl daemon-reload
+
+==> [3] done
+Service removed. Preserved:
+  /tmp/TestDryRunUninstallDeletesNothing2936319992/001/lib  (database + keys)
+  /tmp/TestDryRunUninstallDeletesNothing2936319992/001/etc
+  /tmp/TestDryRunUninstallDeletesNothing2936319992/001/backups  (backups)
+
+Re-install with install.sh; it refuses while the database exists.
+To delete the data as well: vpn-platformctl uninstall --purge-data
+Removing Veylix never deletes a 3X-UI client (D-027.3).
+--- PASS: TestDryRunUninstallDeletesNothing (0.00s)
+=== RUN   TestDryRunPurgeDeletesNothing
+
+This will PERMANENTLY DELETE:
+  /tmp/TestDryRunPurgeDeletesNothing2168156550/001/lib  (the database)
+  /tmp/TestDryRunPurgeDeletesNothing2168156550/001/etc  (both keys)
+It will NOT delete any client from 3X-UI.
+
+[dry-run] would ask you to type "vpn.example.com" to confirm the purge
+
+==> [4] stop and disable
+[dry-run] systemctl disable --now veylixd
+
+==> [5] remove unit and binaries
+[dry-run] systemctl daemon-reload
+
+==> [6] purge data
+[dry-run] rm -rf /tmp/TestDryRunPurgeDeletesNothing2168156550/001/lib
+[dry-run] rm -rf /tmp/TestDryRunPurgeDeletesNothing2168156550/001/etc
+
+Data purged. Removing Veylix never deletes a 3X-UI client (D-027.3).
+--- PASS: TestDryRunPurgeDeletesNothing (0.00s)
+=== RUN   TestUninstallPreservesDataByDefault
+
+==> [7] stop and disable
+vpn-platformctl: WARNING: could not stop veylixd: systemctl disable --now veylixd: exit status 1
+Failed to disable unit: Access denied as the requested operation requires interactive authentication. However, interactive authentication has not been enabled by the calling program.
+
+==> [8] remove unit and binaries
+removed /tmp/TestUninstallPreservesDataByDefault2958787500/001/etc/veylixd.service
+removed /tmp/TestUninstallPreservesDataByDefault2958787500/001/bin/veylixd
+removed /tmp/TestUninstallPreservesDataByDefault2958787500/001/bin/veylixd.prev
+vpn-platformctl: WARNING: daemon-reload failed: systemctl daemon-reload: exit status 1
+Reload daemon failed: Access denied as the requested operation requires interactive authentication. However, interactive authentication has not been enabled by the calling program.
+
+==> [9] done
+Service removed. Preserved:
+  /tmp/TestUninstallPreservesDataByDefault2958787500/001/lib  (database + keys)
+  /tmp/TestUninstallPreservesDataByDefault2958787500/001/etc
+  /tmp/TestUninstallPreservesDataByDefault2958787500/001/backups  (backups)
+
+Re-install with install.sh; it refuses while the database exists.
+To delete the data as well: vpn-platformctl uninstall --purge-data
+Removing Veylix never deletes a 3X-UI client (D-027.3).
+--- PASS: TestUninstallPreservesDataByDefault (0.12s)
+=== RUN   TestPurgeRefusesWithoutAConfiguredDomain
+--- PASS: TestPurgeRefusesWithoutAConfiguredDomain (0.00s)
+=== RUN   TestVerifyChecksumAcceptsAndRejects
+checksum ok: veylixd-linux-amd64 (a11a4045c89f...)
+--- PASS: TestVerifyChecksumAcceptsAndRejects (0.00s)
+=== RUN   TestVerifyChecksumAbortsOnMissingEntry
+--- PASS: TestVerifyChecksumAbortsOnMissingEntry (0.00s)
+=== RUN   TestValidateDomain
+--- PASS: TestValidateDomain (0.00s)
+=== RUN   TestRenderDomainReplacesThePlaceholder
+--- PASS: TestRenderDomainReplacesThePlaceholder (0.00s)
+=== RUN   TestRepairRefusesWhenNotInstalled
+--- PASS: TestRepairRefusesWhenNotInstalled (0.00s)
+=== RUN   TestRepairDryRunTouchesNothing
+
+==> [10] configuration
+environment file present: /tmp/TestRepairDryRunTouchesNothing4221146263/001/etc/veylix.env
+vpn-platformctl: WARNING: /tmp/TestRepairDryRunTouchesNothing4221146263/001/etc/veylixd.service is missing; re-install the unit with install.sh
+repair does not write to /tmp/TestRepairDryRunTouchesNothing4221146263/001/lib or /tmp/TestRepairDryRunTouchesNothing4221146263/001/etc
+
+==> [11] systemd reload
+[dry-run] systemctl daemon-reload
+[dry-run] systemctl restart veylixd
+
+==> [12] caddy validation
+vpn-platformctl: SKIPPED: caddy validation - caddy is not installed or the Caddyfile is absent
+
+==> [13] readiness
+[dry-run] would wait for http://127.0.0.1:1/api/ready
+--- PASS: TestRepairDryRunTouchesNothing (0.00s)
+=== RUN   TestRollbackWithoutPreviousBinaryRefuses
+--- PASS: TestRollbackWithoutPreviousBinaryRefuses (0.00s)
+=== RUN   TestRollbackRefusesWithoutBackupScript
+
+==> [14] current state
+vpn-platformctl: WARNING: the running service is not readable: cannot reach http://127.0.0.1:1: Get "http://127.0.0.1:1/api/ready": dial tcp 127.0.0.1:1: connect: connection refused
+--- PASS: TestRollbackRefusesWithoutBackupScript (0.00s)
+=== RUN   TestRollbackDryRunPrintsTheBackupAndChangesNothing
+
+==> [15] current state
+vpn-platformctl: WARNING: the running service is not readable: cannot reach http://127.0.0.1:1: Get "http://127.0.0.1:1/api/ready": dial tcp 127.0.0.1:1: connect: connection refused
+
+==> [16] backup
+[dry-run] bash /tmp/TestRollbackDryRunPrintsTheBackupAndChangesNothing1834992331/002/veylix-backup.sh backup
+
+==> [17] swap the previous binary back
+[dry-run] install -m 0755 /tmp/TestRollbackDryRunPrintsTheBackupAndChangesNothing1834992331/001/bin/veylixd.prev /tmp/TestRollbackDryRunPrintsTheBackupAndChangesNothing1834992331/001/bin/veylixd
+
+==> [18] restart
+[dry-run] systemctl restart veylixd
+
+==> [19] readiness
+[dry-run] would wait for http://127.0.0.1:1/api/ready
+
+rollback complete; the previous binary is kept at /tmp/TestRollbackDryRunPrintsTheBackupAndChangesNothing1834992331/001/bin/veylixd.prev
+no backup directory was reported, so nothing was restored. If the database
+was migrated, restore one explicitly: vpn-platformctl restore /tmp/TestRollbackDryRunPrintsTheBackupAndChangesNothing1834992331/001/backups/<timestamp>
+--- PASS: TestRollbackDryRunPrintsTheBackupAndChangesNothing (0.00s)
+=== RUN   TestRollbackBackupFailureStopsBeforeTheSwap
+
+==> [20] current state
+vpn-platformctl: WARNING: the running service is not readable: cannot reach http://127.0.0.1:1: Get "http://127.0.0.1:1/api/ready": dial tcp 127.0.0.1:1: connect: connection refused
+
+==> [21] backup
+veylix-backup: disk full
+--- PASS: TestRollbackBackupFailureStopsBeforeTheSwap (0.01s)
+=== RUN   TestRollbackRestoreDefaultsToTheBackupItJustTook
+
+==> [22] current state
+vpn-platformctl: WARNING: the running service is not readable: cannot reach http://127.0.0.1:1: Get "http://127.0.0.1:1/api/ready": dial tcp 127.0.0.1:1: connect: connection refused
+
+==> [23] backup
+[dry-run] bash /tmp/TestRollbackRestoreDefaultsToTheBackupItJustTook3773351767/002/veylix-backup.sh backup
+
+==> [24] swap the previous binary back
+[dry-run] install -m 0755 /tmp/TestRollbackRestoreDefaultsToTheBackupItJustTook3773351767/001/bin/veylixd.prev /tmp/TestRollbackRestoreDefaultsToTheBackupItJustTook3773351767/001/bin/veylixd
+
+==> [25] restart
+[dry-run] systemctl restart veylixd
+
+==> [26] readiness
+[dry-run] would wait for http://127.0.0.1:1/api/ready
+
+rollback complete; the previous binary is kept at /tmp/TestRollbackRestoreDefaultsToTheBackupItJustTook3773351767/001/bin/veylixd.prev
+no backup directory was reported, so nothing was restored. If the database
+was migrated, restore one explicitly: vpn-platformctl restore /tmp/TestRollbackRestoreDefaultsToTheBackupItJustTook3773351767/001/backups/<timestamp>
+--- PASS: TestRollbackRestoreDefaultsToTheBackupItJustTook (0.00s)
+=== RUN   TestRollbackSkipBackupIsDeliberateAndAllowed
+
+==> [27] current state
+vpn-platformctl: WARNING: the running service is not readable: cannot reach http://127.0.0.1:1: Get "http://127.0.0.1:1/api/ready": dial tcp 127.0.0.1:1: connect: connection refused
+
+==> [28] backup
+vpn-platformctl: WARNING: --skip-backup was passed: the state being replaced is NOT backed up
+
+==> [29] swap the previous binary back
+[dry-run] install -m 0755 /tmp/TestRollbackSkipBackupIsDeliberateAndAllowed416557434/001/bin/veylixd.prev /tmp/TestRollbackSkipBackupIsDeliberateAndAllowed416557434/001/bin/veylixd
+
+==> [30] restart
+[dry-run] systemctl restart veylixd
+
+==> [31] readiness
+[dry-run] would wait for http://127.0.0.1:1/api/ready
+
+rollback complete; the previous binary is kept at /tmp/TestRollbackSkipBackupIsDeliberateAndAllowed416557434/001/bin/veylixd.prev
+no backup directory was reported, so nothing was restored. If the database
+was migrated, restore one explicitly: vpn-platformctl restore /tmp/TestRollbackSkipBackupIsDeliberateAndAllowed416557434/001/backups/<timestamp>
+--- PASS: TestRollbackSkipBackupIsDeliberateAndAllowed (0.00s)
+=== RUN   TestBackupDirFromOutputOnlyTrustsTheConfiguredRoot
+--- PASS: TestBackupDirFromOutputOnlyTrustsTheConfiguredRoot (0.00s)
+=== RUN   TestRequireVersionAgreement
+--- PASS: TestRequireVersionAgreement (0.00s)
+=== RUN   TestUpdateRefusesWithoutBackupScript
+
+==> [32] current state
+vpn-platformctl: WARNING: the running service is not readable: cannot reach http://127.0.0.1:1: Get "http://127.0.0.1:1/api/ready": dial tcp 127.0.0.1:1: connect: connection refused
+vpn-platformctl: WARNING: continuing: upgrading a stopped service is a legitimate repair
+
+==> [33] backup
+--- PASS: TestUpdateRefusesWithoutBackupScript (0.00s)
+=== RUN   TestUpdateRejectsUnknownChannel
+--- PASS: TestUpdateRejectsUnknownChannel (0.00s)
+=== RUN   TestUpdateRefusesWhenNotInstalled
+--- PASS: TestUpdateRefusesWhenNotInstalled (0.00s)
+=== RUN   TestUnknownCommandIsAUsageError
+--- PASS: TestUnknownCommandIsAUsageError (0.00s)
+=== RUN   TestKnownCommandsDoNotPanic
+[dry-run] systemctl is-active --quiet veylixd
+status:      NOT INSTALLED (/usr/local/bin/veylixd)
+             run install.sh to install, or check VEYLIX_BIN_DIR
+vpn-platformctl dev doctor (GOOS=linux GOARCH=amd64)
+FAIL  veylixd installed
+      -> install it at /usr/local/bin/veylixd, or set VEYLIX_BIN_DIR
+FAIL  veylixd.prev kept for rollback
+      -> no previous binary yet: the first update will create one
+FAIL  backup script present
+      -> expected /etc/veylix/deploy/veylix-backup.sh; it ships in the release bundle as deploy/veylix-backup.sh - set VEYLIX_DEPLOY_DIR (or re-install). Without it BOTH update and rollback refuse to run
+FAIL  database present
+      -> no database at /var/lib/veylix/veylix.db: run install.sh, or check VEYLIX_DATA_DIR
+FAIL  enc.key present
+      -> missing enc.key makes every sealed panel token unrecoverable; restore it from backup
+FAIL  session.key present
+      -> missing session.key only signs everyone out
+FAIL  environment file present
+      -> expected /etc/veylix/veylix.env (mode 0600); re-render it with 'vpn-platformctl repair'
+FAIL  systemd unit present
+      -> expected /etc/systemd/system/veylixd.service; re-render it with 'vpn-platformctl repair'
+[dry-run] systemctl is-active --quiet veylixd
+ok    service active
+FAIL  readiness
+      -> cannot reach http://127.0.0.1:1: Get "http://127.0.0.1:1/api/ready": dial tcp 127.0.0.1:1: connect: connection refused
+
+
+==> [34] backup
+
+==> [35] stop and disable
+[dry-run] systemctl disable --now veylixd
+
+==> [36] remove unit and binaries
+[dry-run] systemctl daemon-reload
+
+==> [37] done
+Service removed. Preserved:
+  /var/lib/veylix  (database + keys)
+  /etc/veylix
+  /var/backups/veylix  (backups)
+
+Re-install with install.sh; it refuses while the database exists.
+To delete the data as well: vpn-platformctl uninstall --purge-data
+Removing Veylix never deletes a 3X-UI client (D-027.3).
+--- PASS: TestKnownCommandsDoNotPanic (0.00s)
+=== RUN   TestReleaseURLsMatchTheArtifactNames
+--- PASS: TestReleaseURLsMatchTheArtifactNames (0.00s)
+=== RUN   TestConfiguredDomain
+--- PASS: TestConfiguredDomain (0.00s)
+=== RUN   TestAppendEnvIfMissingDoesNotRewrite
+--- PASS: TestAppendEnvIfMissingDoesNotRewrite (0.00s)
+=== RUN   TestProbeReadyReadsTheRealFields
+--- PASS: TestProbeReadyReadsTheRealFields (0.00s)
+=== RUN   TestProbeReadyFailsOnAnUnreachableService
+--- PASS: TestProbeReadyFailsOnAnUnreachableService (0.00s)
+=== RUN   TestProbeReadyFailsOnANon200
+--- PASS: TestProbeReadyFailsOnANon200 (0.00s)
+=== RUN   TestRemoveAllRefusesSuspiciousPaths
+    main_test.go:699: removeAll("C:\\") = nil, want a refusal
+--- FAIL: TestRemoveAllRefusesSuspiciousPaths (0.00s)
+=== RUN   TestGuardDeletableAllowsALeaf
+--- PASS: TestGuardDeletableAllowsALeaf (0.00s)
+=== RUN   TestRemoveAllDeletesALeafDirectory
+--- PASS: TestRemoveAllDeletesALeafDirectory (0.00s)
+=== RUN   TestUpdateDowngradeRefusedWithoutAllowFlag
+
+==> [38] current state
+running: schema_version=21 ui=embedded:85_files
+version: v1.5.0
+--- PASS: TestUpdateDowngradeRefusedWithoutAllowFlag (0.00s)
+=== RUN   TestUpdateDowngradeNeedsRestoreBackup
+
+==> [39] current state
+running: schema_version=21 ui=embedded:85_files
+version: v1.5.0
+--- PASS: TestUpdateDowngradeNeedsRestoreBackup (0.00s)
+=== RUN   TestUpdateDowngradeRejectsMissingBackupDir
+
+==> [40] current state
+running: schema_version=21 ui=embedded:85_files
+version: v1.5.0
+--- PASS: TestUpdateDowngradeRejectsMissingBackupDir (0.00s)
+=== RUN   TestUpdateUpgradeIsNotTreatedAsDowngrade
+
+==> [41] current state
+running: schema_version=21 ui=embedded:85_files
+version: v1.3.0
+
+==> [42] backup
+--- PASS: TestUpdateUpgradeIsNotTreatedAsDowngrade (0.00s)
+=== RUN   TestVersionsReadsTheReleaseFeed
+{
+  "installed": "dev",
+  "releases": [
+    {
+      "tag": "v1.5.0",
+      "published_at": "2026-11-10T00:00:00Z",
+      "is_current": false,
+      "is_latest": true,
+      "notes_url": "https://x/v1.5.0"
+    },
+    {
+      "tag": "v1.3.0",
+      "published_at": "2026-10-28T00:00:00Z",
+      "is_current": false,
+      "is_latest": false,
+      "notes_url": "https://x/v1.3.0"
+    }
+  ],
+  "repo": "owner/repo"
+}
+--- PASS: TestVersionsReadsTheReleaseFeed (0.00s)
+FAIL
+FAIL	veylix/backend/cmd/vpn-platformctl	0.194s
+?   	veylix/backend/cmd/vpnprobe	[no test files]
+=== RUN   TestSignInFailureIsNotNotified
+--- PASS: TestSignInFailureIsNotNotified (0.00s)
+=== RUN   TestRefusalTitlesAreSpecific
+--- PASS: TestRefusalTitlesAreSpecific (0.00s)
+=== RUN   TestSummariseNeverEchoesTheReadersOwnID
+--- PASS: TestSummariseNeverEchoesTheReadersOwnID (0.00s)
+PASS
+ok  	veylix/backend/internal/audit	0.003s
+=== RUN   TestClientIP
+=== RUN   TestClientIP/direct_peer,_no_header
+=== RUN   TestClientIP/non-loopback_peer_ignores_spoofed_header
+=== RUN   TestClientIP/loopback_peer_trusts_first_entry
+=== RUN   TestClientIP/loopback_peer,_single_entry
+=== RUN   TestClientIP/loopback_peer,_no_header
+=== RUN   TestClientIP/loopback_peer,_garbage_header_falls_back
+=== RUN   TestClientIP/IPv6_loopback_peer
+=== RUN   TestClientIP/IPv6_loopback_peer,_no_header
+--- PASS: TestClientIP (0.00s)
+    --- PASS: TestClientIP/direct_peer,_no_header (0.00s)
+    --- PASS: TestClientIP/non-loopback_peer_ignores_spoofed_header (0.00s)
+    --- PASS: TestClientIP/loopback_peer_trusts_first_entry (0.00s)
+    --- PASS: TestClientIP/loopback_peer,_single_entry (0.00s)
+    --- PASS: TestClientIP/loopback_peer,_no_header (0.00s)
+    --- PASS: TestClientIP/loopback_peer,_garbage_header_falls_back (0.00s)
+    --- PASS: TestClientIP/IPv6_loopback_peer (0.00s)
+    --- PASS: TestClientIP/IPv6_loopback_peer,_no_header (0.00s)
+=== RUN   TestTrustForwardedProto
+--- PASS: TestTrustForwardedProto (0.00s)
+=== RUN   TestSessionCookieIsStrict
+--- PASS: TestSessionCookieIsStrict (0.00s)
+=== RUN   TestVerifyLinkIsEmailed
+--- PASS: TestVerifyLinkIsEmailed (0.00s)
+=== RUN   TestVerifyLinkWithoutRelayIsOutbox
+--- PASS: TestVerifyLinkWithoutRelayIsOutbox (0.00s)
+=== RUN   TestVerifyLinkReportsOutboxWhenSendFails
+--- PASS: TestVerifyLinkReportsOutboxWhenSendFails (0.00s)
+=== RUN   TestVerifyDeliveryIsServerLevel
+--- PASS: TestVerifyDeliveryIsServerLevel (0.00s)
+=== RUN   TestVerifyTokenDefaultsTo24Hours
+--- PASS: TestVerifyTokenDefaultsTo24Hours (0.00s)
+=== RUN   TestGoogleLinkingRules
+=== RUN   TestGoogleLinkingRules/new_e-mail_creates_a_client_account
+=== RUN   TestGoogleLinkingRules/existing_verified_e-mail_is_linked,_not_duplicated
+=== RUN   TestGoogleLinkingRules/existing_e-mail_+_UNVERIFIED_google_address_is_refused
+--- PASS: TestGoogleLinkingRules (0.00s)
+    --- PASS: TestGoogleLinkingRules/new_e-mail_creates_a_client_account (0.00s)
+    --- PASS: TestGoogleLinkingRules/existing_verified_e-mail_is_linked,_not_duplicated (0.00s)
+    --- PASS: TestGoogleLinkingRules/existing_e-mail_+_UNVERIFIED_google_address_is_refused (0.00s)
+=== RUN   TestGoogleSecondLoginDoesNotCreateAnAccount
+--- PASS: TestGoogleSecondLoginDoesNotCreateAnAccount (0.00s)
+=== RUN   TestOAuthStateIsSingleUse
+--- PASS: TestOAuthStateIsSingleUse (0.00s)
+=== RUN   TestGoogleWithoutCredentialsFailsClosed
+--- PASS: TestGoogleWithoutCredentialsFailsClosed (0.00s)
+=== RUN   TestHashPasswordRejectsShortPassword
+--- PASS: TestHashPasswordRejectsShortPassword (0.00s)
+=== RUN   TestHashPasswordProducesArgon2id
+--- PASS: TestHashPasswordProducesArgon2id (0.17s)
+=== RUN   TestVerifyPassword
+--- PASS: TestVerifyPassword (0.36s)
+=== RUN   TestHashPasswordIsSalted
+--- PASS: TestHashPasswordIsSalted (0.17s)
+=== RUN   TestVerifyPasswordRejectsMalformedHash
+--- PASS: TestVerifyPasswordRejectsMalformedHash (0.00s)
+=== RUN   TestNeedsRehashDetectsWeakerParameters
+--- PASS: TestNeedsRehashDetectsWeakerParameters (0.08s)
+=== RUN   TestValidatePasswordPolicyRejectsGuessableValues
+--- PASS: TestValidatePasswordPolicyRejectsGuessableValues (0.00s)
+=== RUN   TestValidatePasswordPolicyAcceptsStrongPassword
+--- PASS: TestValidatePasswordPolicyAcceptsStrongPassword (0.00s)
+=== RUN   TestHashPasswordAppliesFullPolicy
+--- PASS: TestHashPasswordAppliesFullPolicy (0.00s)
+=== RUN   TestGeneratedPasswordsArePolicyValid
+=== RUN   TestGeneratedPasswordsArePolicyValid/readable
+=== RUN   TestGeneratedPasswordsArePolicyValid/passphrase
+=== RUN   TestGeneratedPasswordsArePolicyValid/base32
+--- PASS: TestGeneratedPasswordsArePolicyValid (0.00s)
+    --- PASS: TestGeneratedPasswordsArePolicyValid/readable (0.00s)
+    --- PASS: TestGeneratedPasswordsArePolicyValid/passphrase (0.00s)
+    --- PASS: TestGeneratedPasswordsArePolicyValid/base32 (0.00s)
+=== RUN   TestGeneratedPasswordsDiffer
+--- PASS: TestGeneratedPasswordsDiffer (0.00s)
+=== RUN   TestReadablePatternShape
+--- PASS: TestReadablePatternShape (0.00s)
+=== RUN   TestUnknownPatternIsRefused
+--- PASS: TestUnknownPatternIsRefused (0.00s)
+=== RUN   TestUnverifiedAccountCannotSignIn
+--- PASS: TestUnverifiedAccountCannotSignIn (0.23s)
+=== RUN   TestPortalsAreSeparate
+--- PASS: TestPortalsAreSeparate (0.39s)
+=== RUN   TestUsernameLoginAndLastSeen
+--- PASS: TestUsernameLoginAndLastSeen (0.15s)
+=== RUN   TestRateLimiterAllowsBurstThenBlocks
+--- PASS: TestRateLimiterAllowsBurstThenBlocks (0.00s)
+=== RUN   TestRateLimiterIsPerKey
+--- PASS: TestRateLimiterIsPerKey (0.00s)
+=== RUN   TestRateLimiterRefills
+--- PASS: TestRateLimiterRefills (0.60s)
+=== RUN   TestRateLimiterReset
+--- PASS: TestRateLimiterReset (0.00s)
+=== RUN   TestRateLimiterIsSafeForConcurrentUse
+--- PASS: TestRateLimiterIsSafeForConcurrentUse (0.00s)
+=== RUN   TestClientIPIgnoresForwardedHeaderFromNonLoopback
+--- PASS: TestClientIPIgnoresForwardedHeaderFromNonLoopback (0.00s)
+=== RUN   TestClientIPTrustsForwardedFromLoopbackProxy
+--- PASS: TestClientIPTrustsForwardedFromLoopbackProxy (0.00s)
+=== RUN   TestPermissionMatrix
+--- PASS: TestPermissionMatrix (0.00s)
+=== RUN   TestUnknownPermissionDeniesEveryone
+--- PASS: TestUnknownPermissionDeniesEveryone (0.00s)
+=== RUN   TestRequireReturnsForbiddenForMissingPerms
+--- PASS: TestRequireReturnsForbiddenForMissingPerms (0.00s)
+=== RUN   TestCanViewResource
+--- PASS: TestCanViewResource (0.00s)
+=== RUN   TestDirectSaleOwnership
+--- PASS: TestDirectSaleOwnership (0.00s)
+=== RUN   TestCanMutateResource
+--- PASS: TestCanMutateResource (0.00s)
+=== RUN   TestCanAccessServer
+--- PASS: TestCanAccessServer (0.00s)
+=== RUN   TestRoleValid
+--- PASS: TestRoleValid (0.00s)
+=== RUN   TestSealerRoundTrip
+--- PASS: TestSealerRoundTrip (0.00s)
+=== RUN   TestSealUsesFreshNonce
+--- PASS: TestSealUsesFreshNonce (0.00s)
+=== RUN   TestSealIsBoundToAAD
+--- PASS: TestSealIsBoundToAAD (0.00s)
+=== RUN   TestSealDetectsTampering
+--- PASS: TestSealDetectsTampering (0.00s)
+=== RUN   TestSealRejectsWrongKeySize
+--- PASS: TestSealRejectsWrongKeySize (0.00s)
+=== RUN   TestOpenRejectsShortCiphertext
+--- PASS: TestOpenRejectsShortCiphertext (0.00s)
+=== RUN   TestHashTokenIsStableAndIrreversible
+--- PASS: TestHashTokenIsStableAndIrreversible (0.00s)
+=== RUN   TestRegisterCreatesClientOnly
+--- PASS: TestRegisterCreatesClientOnly (0.12s)
+=== RUN   TestRegisterRejectsDuplicateEmail
+--- PASS: TestRegisterRejectsDuplicateEmail (0.21s)
+=== RUN   TestRegisterRejectsBadEmailAndWeakPassword
+--- PASS: TestRegisterRejectsBadEmailAndWeakPassword (0.01s)
+=== RUN   TestAuthenticateSucceedsAndFails
+--- PASS: TestAuthenticateSucceedsAndFails (0.31s)
+=== RUN   TestAuthenticateSuspendedUserIsForbidden
+--- PASS: TestAuthenticateSuspendedUserIsForbidden (0.29s)
+=== RUN   TestLoginRateLimitBlocksAfterBurst
+--- PASS: TestLoginRateLimitBlocksAfterBurst (1.05s)
+=== RUN   TestBootstrapOnlyRunsOnce
+--- PASS: TestBootstrapOnlyRunsOnce (0.08s)
+=== RUN   TestBootstrapForbiddenAfterAnyUserExists
+--- PASS: TestBootstrapForbiddenAfterAnyUserExists (0.12s)
+=== RUN   TestChangePasswordRotatesCredential
+--- PASS: TestChangePasswordRotatesCredential (0.53s)
+=== RUN   TestChangePasswordRejectsWrongCurrentPassword
+--- PASS: TestChangePasswordRejectsWrongCurrentPassword (0.31s)
+=== RUN   TestChangePasswordEnforcesPolicyOnTheNewValue
+--- PASS: TestChangePasswordEnforcesPolicyOnTheNewValue (0.20s)
+=== RUN   TestChangePasswordForUnknownUserIsUnauthenticated
+--- PASS: TestChangePasswordForUnknownUserIsUnauthenticated (0.03s)
+=== RUN   TestChangePasswordFirstSetNeedsNoCurrent
+--- PASS: TestChangePasswordFirstSetNeedsNoCurrent (0.43s)
+=== RUN   TestOnlyOneSuperAdminCanExist
+--- PASS: TestOnlyOneSuperAdminCanExist (0.22s)
+=== RUN   TestDemotingTheOwnerIsAllowedOnceOnly
+    service_test.go:427: a plain admin demoting the owner = <nil> (forbidden, as expected)
+--- PASS: TestDemotingTheOwnerIsAllowedOnceOnly (0.26s)
+=== RUN   TestSessionLifecycle
+--- PASS: TestSessionLifecycle (0.01s)
+=== RUN   TestSessionStoresOnlyFingerprint
+--- PASS: TestSessionStoresOnlyFingerprint (0.02s)
+=== RUN   TestExpiredSessionIsRejectedAndPurged
+--- PASS: TestExpiredSessionIsRejectedAndPurged (0.04s)
+=== RUN   TestSuspendedUserSessionIsRejected
+--- PASS: TestSuspendedUserSessionIsRejected (0.01s)
+=== RUN   TestEmptyTokenIsUnauthenticated
+--- PASS: TestEmptyTokenIsUnauthenticated (0.01s)
+=== RUN   TestRevokeAllForUser
+--- PASS: TestRevokeAllForUser (0.01s)
+PASS
+ok  	veylix/backend/internal/auth	6.460s
+=== RUN   TestVerifyIDTokenAcceptsAValidToken
+--- PASS: TestVerifyIDTokenAcceptsAValidToken (0.12s)
+=== RUN   TestVerifyIDTokenRefusesBadTokens
+--- PASS: TestVerifyIDTokenRefusesBadTokens (0.11s)
+=== RUN   TestVerifyIDTokenRefusesAlgorithmDowngrades
+--- PASS: TestVerifyIDTokenRefusesAlgorithmDowngrades (0.16s)
+=== RUN   TestUnconfiguredClientRefusesEverything
+--- PASS: TestUnconfiguredClientRefusesEverything (0.00s)
+=== RUN   TestHandshakeIsRandomAndChallengesCorrectly
+--- PASS: TestHandshakeIsRandomAndChallengesCorrectly (0.08s)
+=== RUN   TestAuthCodeURLCarriesTheNonce
+--- PASS: TestAuthCodeURLCarriesTheNonce (0.00s)
+PASS
+ok  	veylix/backend/internal/auth/google	0.477s
+=== RUN   TestLoadAppliesDefaults
+--- PASS: TestLoadAppliesDefaults (0.01s)
+=== RUN   TestLoadFailsClosedWithoutEncryptionKey
+--- PASS: TestLoadFailsClosedWithoutEncryptionKey (0.00s)
+=== RUN   TestLoadRejectsShortKey
+--- PASS: TestLoadRejectsShortKey (0.00s)
+=== RUN   TestLoadRejectsNonBase64Key
+--- PASS: TestLoadRejectsNonBase64Key (0.00s)
+=== RUN   TestSecureCookiesDecision
+--- PASS: TestSecureCookiesDecision (0.00s)
+=== RUN   TestStringDoesNotLeakSecrets
+--- PASS: TestStringDoesNotLeakSecrets (0.00s)
+=== RUN   TestGoogleConfiguredRejectsPlaceholders
+=== RUN   TestGoogleConfiguredRejectsPlaceholders/template_placeholders_are_not_configured
+=== RUN   TestGoogleConfiguredRejectsPlaceholders/a_well-shaped_client_is_configured
+=== RUN   TestGoogleConfiguredRejectsPlaceholders/empty_id
+=== RUN   TestGoogleConfiguredRejectsPlaceholders/empty_secret
+=== RUN   TestGoogleConfiguredRejectsPlaceholders/missing_redirect
+=== RUN   TestGoogleConfiguredRejectsPlaceholders/id_without_the_google_suffix
+=== RUN   TestGoogleConfiguredRejectsPlaceholders/secret_without_the_GOCSPX_prefix
+--- PASS: TestGoogleConfiguredRejectsPlaceholders (0.00s)
+    --- PASS: TestGoogleConfiguredRejectsPlaceholders/template_placeholders_are_not_configured (0.00s)
+    --- PASS: TestGoogleConfiguredRejectsPlaceholders/a_well-shaped_client_is_configured (0.00s)
+    --- PASS: TestGoogleConfiguredRejectsPlaceholders/empty_id (0.00s)
+    --- PASS: TestGoogleConfiguredRejectsPlaceholders/empty_secret (0.00s)
+    --- PASS: TestGoogleConfiguredRejectsPlaceholders/missing_redirect (0.00s)
+    --- PASS: TestGoogleConfiguredRejectsPlaceholders/id_without_the_google_suffix (0.00s)
+    --- PASS: TestGoogleConfiguredRejectsPlaceholders/secret_without_the_GOCSPX_prefix (0.00s)
+=== RUN   TestDisplayZoneDefaultsToColombo
+--- PASS: TestDisplayZoneDefaultsToColombo (0.00s)
+=== RUN   TestDisplayZoneIsIndependentOfHostZone
+--- PASS: TestDisplayZoneIsIndependentOfHostZone (0.00s)
+=== RUN   TestUnloadableDisplayZoneFallsBackToUTC
+2026/11/10 03:21:32 WARN config: display timezone could not be loaded; falling back to UTC requested=Mars/Olympus_Mons note="timestamps are stored as UTC epoch either way"
+--- PASS: TestUnloadableDisplayZoneFallsBackToUTC (0.00s)
+=== RUN   TestLoadPublishesTheDisplayZone
+    display_timezone_test.go:72: config needs secrets to load in this environment
+--- SKIP: TestLoadPublishesTheDisplayZone (0.00s)
+=== RUN   TestResolveLifecycleModeDefaultsToOff
+--- PASS: TestResolveLifecycleModeDefaultsToOff (0.00s)
+=== RUN   TestLoadDefaultsLifecycleToOff
+--- PASS: TestLoadDefaultsLifecycleToOff (0.00s)
+PASS
+ok  	veylix/backend/internal/config	0.018s
+=== RUN   TestSeverOutageNeverProducesRevoked
+--- PASS: TestSeverOutageNeverProducesRevoked (0.00s)
+=== RUN   TestSeverOutageKeepsTerminalStates
+--- PASS: TestSeverOutageKeepsTerminalStates (0.00s)
+=== RUN   TestTransitions
+--- PASS: TestTransitions (0.00s)
+=== RUN   TestMustTransitionReturnsSentinel
+--- PASS: TestMustTransitionReturnsSentinel (0.00s)
+=== RUN   TestIsTerminal
+--- PASS: TestIsTerminal (0.00s)
+=== RUN   TestPanelIdentityIsDeterministic
+--- PASS: TestPanelIdentityIsDeterministic (0.00s)
+=== RUN   TestOutboxKeyShape
+--- PASS: TestOutboxKeyShape (0.00s)
+=== RUN   TestQuotaReleasingStatuses
+--- PASS: TestQuotaReleasingStatuses (0.00s)
+=== RUN   TestPanelEmailIsClientAndKind
+--- PASS: TestPanelEmailIsClientAndKind (0.00s)
+=== RUN   TestPanelSubIdStaysDeterministic
+--- PASS: TestPanelSubIdStaysDeterministic (0.00s)
+=== RUN   TestPanelSlotsOnlyMoveForward
+--- PASS: TestPanelSlotsOnlyMoveForward (0.00s)
+=== RUN   TestPanelFindNextFreeSlot
+--- PASS: TestPanelFindNextFreeSlot (0.00s)
+=== RUN   TestQuoteFromRates
+--- PASS: TestQuoteFromRates (0.00s)
+=== RUN   TestQuoteAppliesMinimum
+--- PASS: TestQuoteAppliesMinimum (0.00s)
+=== RUN   TestQuoteRejectsOutOfRange
+=== RUN   TestQuoteRejectsOutOfRange/traffic_too_high
+=== RUN   TestQuoteRejectsOutOfRange/days_too_high
+=== RUN   TestQuoteRejectsOutOfRange/devices_too_high
+=== RUN   TestQuoteRejectsOutOfRange/ips_too_high
+=== RUN   TestQuoteRejectsOutOfRange/no_traffic
+=== RUN   TestQuoteRejectsOutOfRange/everything_zero
+=== RUN   TestQuoteRejectsOutOfRange/negative
+--- PASS: TestQuoteRejectsOutOfRange (0.00s)
+    --- PASS: TestQuoteRejectsOutOfRange/traffic_too_high (0.00s)
+    --- PASS: TestQuoteRejectsOutOfRange/days_too_high (0.00s)
+    --- PASS: TestQuoteRejectsOutOfRange/devices_too_high (0.00s)
+    --- PASS: TestQuoteRejectsOutOfRange/ips_too_high (0.00s)
+    --- PASS: TestQuoteRejectsOutOfRange/no_traffic (0.00s)
+    --- PASS: TestQuoteRejectsOutOfRange/everything_zero (0.00s)
+    --- PASS: TestQuoteRejectsOutOfRange/negative (0.00s)
+=== RUN   TestQuoteRefusesWhenNoRatesSet
+--- PASS: TestQuoteRefusesWhenNoRatesSet (0.00s)
+=== RUN   TestQuoteRefusesAboveCeiling
+--- PASS: TestQuoteRefusesAboveCeiling (0.00s)
+PASS
+ok  	veylix/backend/internal/domain	0.015s
+=== RUN   TestAssignedVPNIsVisibleToItsClientAsPremium
+--- PASS: TestAssignedVPNIsVisibleToItsClientAsPremium (0.12s)
+=== RUN   TestUnassignedPanelClientIsTheOnlyUntaggedRow
+--- PASS: TestUnassignedPanelClientIsTheOnlyUntaggedRow (0.09s)
+=== RUN   TestOwnedPanelClientIsAlwaysAssigned
+=== RUN   TestOwnedPanelClientIsAlwaysAssigned/panel_could_not_resolve_the_owner
+=== RUN   TestOwnedPanelClientIsAlwaysAssigned/panel_confirms_the_owner
+--- PASS: TestOwnedPanelClientIsAlwaysAssigned (0.00s)
+    --- PASS: TestOwnedPanelClientIsAlwaysAssigned/panel_could_not_resolve_the_owner (0.00s)
+    --- PASS: TestOwnedPanelClientIsAlwaysAssigned/panel_confirms_the_owner (0.00s)
+=== RUN   TestAssignPanelClientRoute
+2026/11/10 03:21:33 INFO http method=POST path=/api/auth/login status=200 bytes=109 ms=153
+2026/11/10 03:21:33 INFO http method=POST path=/api/panel-clients/1/direct-3xui-1/assign status=201 bytes=117 ms=1
+--- PASS: TestAssignPanelClientRoute (0.40s)
+=== RUN   TestAssignRouteRefusesFreeKind
+2026/11/10 03:21:34 INFO http method=POST path=/api/auth/login status=200 bytes=109 ms=90
+2026/11/10 03:21:34 WARN http method=POST path=/api/panel-clients/1/direct-3xui-9/assign status=422 bytes=140 ms=0
+--- PASS: TestAssignRouteRefusesFreeKind (0.27s)
+=== RUN   TestAssignRenameWhenAsked
+2026/11/10 03:21:34 INFO http method=POST path=/api/auth/login status=200 bytes=109 ms=81
+2026/11/10 03:21:34 INFO http method=POST path=/api/panel-clients/1/direct-3xui-2/assign status=201 bytes=125 ms=1
+--- PASS: TestAssignRenameWhenAsked (0.26s)
+=== RUN   TestAssignRouteRefusesNonClient
+2026/11/10 03:21:34 INFO http method=POST path=/api/auth/login status=200 bytes=109 ms=61
+2026/11/10 03:21:34 WARN http method=POST path=/api/panel-clients/1/direct-3xui-2/assign status=422 bytes=93 ms=0
+2026/11/10 03:21:34 WARN http method=POST path=/api/panel-clients/1/direct-3xui-2/assign status=422 bytes=78 ms=0
+--- PASS: TestAssignRouteRefusesNonClient (0.23s)
+=== RUN   TestAssignRouteKeepsNameWhenRenameFails
+2026/11/10 03:21:34 INFO http method=POST path=/api/auth/login status=200 bytes=109 ms=59
+2026/11/10 03:21:34 INFO http method=POST path=/api/panel-clients/1/direct-3xui-3/assign status=201 bytes=189 ms=1
+--- PASS: TestAssignRouteKeepsNameWhenRenameFails (0.19s)
+=== RUN   TestAssignRouteRefusesDoubleAssign
+2026/11/10 03:21:34 INFO http method=POST path=/api/auth/login status=200 bytes=109 ms=65
+2026/11/10 03:21:34 INFO http method=POST path=/api/panel-clients/1/direct-3xui-4/assign status=201 bytes=117 ms=1
+2026/11/10 03:21:34 WARN http method=POST path=/api/panel-clients/1/direct-3xui-4/assign status=409 bytes=104 ms=0
+--- PASS: TestAssignRouteRefusesDoubleAssign (0.18s)
+=== RUN   TestClientDeleteLocksTheAccountOut
+--- PASS: TestClientDeleteLocksTheAccountOut (0.36s)
+=== RUN   TestClientDeleteIsTerminal
+--- PASS: TestClientDeleteIsTerminal (0.31s)
+=== RUN   TestClientDeleteRefusesWhileVPNsExist
+--- PASS: TestClientDeleteRefusesWhileVPNsExist (0.30s)
+=== RUN   TestClientDeleteIsIdempotent
+--- PASS: TestClientDeleteIsIdempotent (0.31s)
+=== RUN   TestSuperAdminCanResetAClientPassword
+--- PASS: TestSuperAdminCanResetAClientPassword (0.60s)
+=== RUN   TestClientResetRefusesSelf
+--- PASS: TestClientResetRefusesSelf (0.23s)
+=== RUN   TestSameOriginCSRF
+=== RUN   TestSameOriginCSRF/same-origin_allowed
+=== RUN   TestSameOriginCSRF/cross-origin_blocked
+=== RUN   TestSameOriginCSRF/browser_fetch_with_no_Origin_blocked
+=== RUN   TestSameOriginCSRF/browser_navigation_with_no_Origin_blocked
+=== RUN   TestSameOriginCSRF/scriptless_API_client_allowed
+=== RUN   TestSameOriginCSRF/GET_is_never_blocked
+=== RUN   TestSameOriginCSRF/configured_public_origin_allowed_behind_a_proxy
+--- PASS: TestSameOriginCSRF (0.00s)
+    --- PASS: TestSameOriginCSRF/same-origin_allowed (0.00s)
+    --- PASS: TestSameOriginCSRF/cross-origin_blocked (0.00s)
+    --- PASS: TestSameOriginCSRF/browser_fetch_with_no_Origin_blocked (0.00s)
+    --- PASS: TestSameOriginCSRF/browser_navigation_with_no_Origin_blocked (0.00s)
+    --- PASS: TestSameOriginCSRF/scriptless_API_client_allowed (0.00s)
+    --- PASS: TestSameOriginCSRF/GET_is_never_blocked (0.00s)
+    --- PASS: TestSameOriginCSRF/configured_public_origin_allowed_behind_a_proxy (0.00s)
+=== RUN   TestForwardedProtoOnlyFromLoopback
+--- PASS: TestForwardedProtoOnlyFromLoopback (0.00s)
+=== RUN   TestPanicIsLoggedANDHidden
+--- PASS: TestPanicIsLoggedANDHidden (0.00s)
+=== RUN   TestAbortHandlerIsNotLoggedAsAPanic
+--- PASS: TestAbortHandlerIsNotLoggedAsAPanic (0.00s)
+=== RUN   TestAccessLogRecordsStatusAndHidesQuery
+--- PASS: TestAccessLogRecordsStatusAndHidesQuery (0.00s)
+=== RUN   TestAccessLogSkipsStaticAssets
+--- PASS: TestAccessLogSkipsStaticAssets (0.00s)
+=== RUN   TestStatusWriterStillStreams
+--- PASS: TestStatusWriterStillStreams (0.00s)
+=== RUN   TestOrderTimeline
+--- PASS: TestOrderTimeline (0.54s)
+=== RUN   TestOrderProofChannelOverHTTP
+--- PASS: TestOrderProofChannelOverHTTP (0.45s)
+=== RUN   TestPaymentMethodExposesChannels
+--- PASS: TestPaymentMethodExposesChannels (0.32s)
+=== RUN   TestBlockWithoutVPNIsRefused
+--- PASS: TestBlockWithoutVPNIsRefused (0.32s)
+=== RUN   TestOrderMethodChangeOverHTTP
+--- PASS: TestOrderMethodChangeOverHTTP (0.38s)
+=== RUN   TestOverviewRefusesResellersAndClients
+=== RUN   TestOverviewRefusesResellersAndClients/client
+=== RUN   TestOverviewRefusesResellersAndClients/admin
+=== RUN   TestOverviewRefusesResellersAndClients/super_admin
+--- PASS: TestOverviewRefusesResellersAndClients (0.00s)
+    --- PASS: TestOverviewRefusesResellersAndClients/client (0.00s)
+    --- PASS: TestOverviewRefusesResellersAndClients/admin (0.00s)
+    --- PASS: TestOverviewRefusesResellersAndClients/super_admin (0.00s)
+=== RUN   TestOverviewAnonymousIs401
+--- PASS: TestOverviewAnonymousIs401 (0.00s)
+=== RUN   TestOverviewReturnsBothSections
+--- PASS: TestOverviewReturnsBothSections (0.00s)
+=== RUN   TestOverviewNamesAFailedSectionInsteadOfBlanking
+--- PASS: TestOverviewNamesAFailedSectionInsteadOfBlanking (0.00s)
+=== RUN   TestOverviewWithoutAStoreSays503
+--- PASS: TestOverviewWithoutAStoreSays503 (0.00s)
+=== RUN   TestClientSeesAllPremiumPackages
+--- PASS: TestClientSeesAllPremiumPackages (0.29s)
+=== RUN   TestPlanListCarriesTheRenderedFields
+--- PASS: TestPlanListCarriesTheRenderedFields (0.31s)
+=== RUN   TestResellerCannotOwnCustom
+--- PASS: TestResellerCannotOwnCustom (0.28s)
+=== RUN   TestPanelCacheServesRepeatedReadsFromOnePanelCall
+--- PASS: TestPanelCacheServesRepeatedReadsFromOnePanelCall (0.00s)
+=== RUN   TestPanelCacheRefetchesAfterTTL
+--- PASS: TestPanelCacheRefetchesAfterTTL (0.00s)
+=== RUN   TestPanelCacheNeverCachesAFailureAsSuccess
+--- PASS: TestPanelCacheNeverCachesAFailureAsSuccess (0.00s)
+=== RUN   TestPanelCacheRetestsOutageQuickly
+--- PASS: TestPanelCacheRetestsOutageQuickly (0.00s)
+=== RUN   TestPanelCacheCollapsesConcurrentReads
+--- PASS: TestPanelCacheCollapsesConcurrentReads (0.08s)
+=== RUN   TestPanelCacheInvalidateForcesReread
+--- PASS: TestPanelCacheInvalidateForcesReread (0.00s)
+=== RUN   TestNewCachedPanelInspectorKeepsNil
+--- PASS: TestNewCachedPanelInspectorKeepsNil (0.00s)
+=== RUN   TestServerClientSummary
+--- PASS: TestServerClientSummary (0.00s)
+=== RUN   TestServerClientFilters
+=== RUN   TestServerClientFilters/no_filter
+=== RUN   TestServerClientFilters/free
+=== RUN   TestServerClientFilters/premium
+=== RUN   TestServerClientFilters/untagged
+=== RUN   TestServerClientFilters/assigned
+=== RUN   TestServerClientFilters/unassigned
+=== RUN   TestServerClientFilters/exhausted
+=== RUN   TestServerClientFilters/expiring
+=== RUN   TestServerClientFilters/search_by_owner_name
+=== RUN   TestServerClientFilters/search_by_email
+=== RUN   TestServerClientFilters/search_by_offer
+=== RUN   TestServerClientFilters/bad_tag
+=== RUN   TestServerClientFilters/bad_assigned
+=== RUN   TestServerClientFilters/bad_usage
+--- PASS: TestServerClientFilters (0.00s)
+    --- PASS: TestServerClientFilters/no_filter (0.00s)
+    --- PASS: TestServerClientFilters/free (0.00s)
+    --- PASS: TestServerClientFilters/premium (0.00s)
+    --- PASS: TestServerClientFilters/untagged (0.00s)
+    --- PASS: TestServerClientFilters/assigned (0.00s)
+    --- PASS: TestServerClientFilters/unassigned (0.00s)
+    --- PASS: TestServerClientFilters/exhausted (0.00s)
+    --- PASS: TestServerClientFilters/expiring (0.00s)
+    --- PASS: TestServerClientFilters/search_by_owner_name (0.00s)
+    --- PASS: TestServerClientFilters/search_by_email (0.00s)
+    --- PASS: TestServerClientFilters/search_by_offer (0.00s)
+    --- PASS: TestServerClientFilters/bad_tag (0.00s)
+    --- PASS: TestServerClientFilters/bad_assigned (0.00s)
+    --- PASS: TestServerClientFilters/bad_usage (0.00s)
+=== RUN   TestPasswordChangeSendsNotification
+--- PASS: TestPasswordChangeSendsNotification (0.00s)
+=== RUN   TestPasswordChangeWithoutRelayReportsOutbox
+--- PASS: TestPasswordChangeWithoutRelayReportsOutbox (0.00s)
+=== RUN   TestForgotReportsOutboxWithoutRelay
+--- PASS: TestForgotReportsOutboxWithoutRelay (0.26s)
+=== RUN   TestForgotReportsSMTPSWhenDelivered
+--- PASS: TestForgotReportsSMTPSWhenDelivered (0.28s)
+=== RUN   TestForgotReportsOutboxOnWireOnlyWhenNoRelay
+--- PASS: TestForgotReportsOutboxOnWireOnlyWhenNoRelay (0.18s)
+=== RUN   TestForgotDeliveryIsSameForUnknownAccount
+--- PASS: TestForgotDeliveryIsSameForUnknownAccount (0.18s)
+=== RUN   TestForgotDoesNotRevealAccounts
+--- PASS: TestForgotDoesNotRevealAccounts (0.24s)
+=== RUN   TestResetCodeIsSingleUse
+--- PASS: TestResetCodeIsSingleUse (0.40s)
+=== RUN   TestResetCodeBurnsAfterMaxAttempts
+--- PASS: TestResetCodeBurnsAfterMaxAttempts (0.49s)
+=== RUN   TestResetCodeExpires
+--- PASS: TestResetCodeExpires (0.22s)
+=== RUN   TestResetRevokesEverySession
+--- PASS: TestResetRevokesEverySession (0.32s)
+=== RUN   TestResetEnforcesPasswordPolicy
+--- PASS: TestResetEnforcesPasswordPolicy (0.36s)
+=== RUN   TestQuoteFromRatesOverHTTP
+--- PASS: TestQuoteFromRatesOverHTTP (0.19s)
+=== RUN   TestQuoteRefusesOutOfRangeOverHTTP
+--- PASS: TestQuoteRefusesOutOfRangeOverHTTP (0.18s)
+=== RUN   TestQuoteRefusesBeforeRatesExist
+--- PASS: TestQuoteRefusesBeforeRatesExist (0.18s)
+=== RUN   TestPricingReadRequiresOperator
+--- PASS: TestPricingReadRequiresOperator (0.18s)
+=== RUN   TestRegisterIsRateLimited
+--- PASS: TestRegisterIsRateLimited (0.18s)
+=== RUN   TestRegisterSendsVerificationLink
+--- PASS: TestRegisterSendsVerificationLink (0.13s)
+=== RUN   TestRegisterSurvivesVerificationFailure
+--- PASS: TestRegisterSurvivesVerificationFailure (0.12s)
+=== RUN   TestUnverifiedLoginMentionsTheLink
+--- PASS: TestUnverifiedLoginMentionsTheLink (0.00s)
+=== RUN   TestLoginRefusesGoogleOnlyAccountWithItsOwnCode
+--- PASS: TestLoginRefusesGoogleOnlyAccountWithItsOwnCode (0.06s)
+=== RUN   TestPasswordNotSetMapsToItsOwnStatusCode
+--- PASS: TestPasswordNotSetMapsToItsOwnStatusCode (0.00s)
+=== RUN   TestAssignmentReusesThePlatformCarrier
+--- PASS: TestAssignmentReusesThePlatformCarrier (0.06s)
+=== RUN   TestOfferCreateRefusesMissingInbound
+--- PASS: TestOfferCreateRefusesMissingInbound (0.18s)
+=== RUN   TestProtocolSurvivesMissingInbound
+--- PASS: TestProtocolSurvivesMissingInbound (0.18s)
+=== RUN   TestRegisterDoesNotIssueASessionForAnUnverifiedAccount
+--- PASS: TestRegisterDoesNotIssueASessionForAnUnverifiedAccount (0.18s)
+=== RUN   TestMonthlyLimitHonoursThePerClientOverride
+--- PASS: TestMonthlyLimitHonoursThePerClientOverride (0.06s)
+=== RUN   TestRaisedLimitAllowsTheNextClaim
+--- PASS: TestRaisedLimitAllowsTheNextClaim (0.06s)
+=== RUN   TestAdminCanChangeAClientsEmailThroughTheCode
+--- PASS: TestAdminCanChangeAClientsEmailThroughTheCode (0.31s)
+=== RUN   TestAdminEmailChangeRefusesAWrongCode
+--- PASS: TestAdminEmailChangeRefusesAWrongCode (0.29s)
+=== RUN   TestAdminEmailChangeRefusesATakenAddress
+--- PASS: TestAdminEmailChangeRefusesATakenAddress (0.18s)
+=== RUN   TestAdminEmailChangeRequiresClientManage
+--- PASS: TestAdminEmailChangeRequiresClientManage (0.31s)
+=== RUN   TestUnverifiedAccountCanRequestANewLink
+--- PASS: TestUnverifiedAccountCanRequestANewLink (0.11s)
+=== RUN   TestResendAnswersTheSameForUnknownAndVerified
+--- PASS: TestResendAnswersTheSameForUnknownAndVerified (0.06s)
+=== RUN   TestResendIsGenericWithNoRelay
+--- PASS: TestResendIsGenericWithNoRelay (0.14s)
+=== RUN   TestOperatorIssuedCodeRedeems
+--- PASS: TestOperatorIssuedCodeRedeems (2.54s)
+=== RUN   TestHealthIsIndependentOfDatabase
+--- PASS: TestHealthIsIndependentOfDatabase (0.00s)
+=== RUN   TestReadyReportsSchemaVersion
+--- PASS: TestReadyReportsSchemaVersion (0.00s)
+=== RUN   TestReadyFailsClosedWhenDatabaseIsDown
+--- PASS: TestReadyFailsClosedWhenDatabaseIsDown (0.00s)
+=== RUN   TestUnknownAPIRouteReturnsEnvelope
+--- PASS: TestUnknownAPIRouteReturnsEnvelope (0.00s)
+=== RUN   TestSettingsGetReturnsTheMaskedView
+--- PASS: TestSettingsGetReturnsTheMaskedView (0.00s)
+=== RUN   TestSettingsGetDerivesTheExpectedRedirectFromTheRequestHost
+--- PASS: TestSettingsGetDerivesTheExpectedRedirectFromTheRequestHost (0.00s)
+=== RUN   TestSettingsPutPassesTheActorAndSecret
+--- PASS: TestSettingsPutPassesTheActorAndSecret (0.00s)
+=== RUN   TestSettingsPutRejectsInvalidJSON
+--- PASS: TestSettingsPutRejectsInvalidJSON (0.00s)
+=== RUN   TestSettingsPutMapsValidationTo400
+--- PASS: TestSettingsPutMapsValidationTo400 (0.00s)
+=== RUN   TestSettingsAreRefusedForNonSuperAdmins
+--- PASS: TestSettingsAreRefusedForNonSuperAdmins (0.00s)
+=== RUN   TestSettingsAbsentWhenServiceIsNil
+--- PASS: TestSettingsAbsentWhenServiceIsNil (0.00s)
+=== RUN   TestSPADeepLinkServesIndex
+--- PASS: TestSPADeepLinkServesIndex (0.01s)
+=== RUN   TestSPAServesAssetsImmutable
+--- PASS: TestSPAServesAssetsImmutable (0.00s)
+=== RUN   TestSPAMissingFileIs404
+--- PASS: TestSPAMissingFileIs404 (0.00s)
+=== RUN   TestSPAHeadHasNoBody
+--- PASS: TestSPAHeadHasNoBody (0.00s)
+=== RUN   TestSPARejectsNonGet
+--- PASS: TestSPARejectsNonGet (0.00s)
+=== RUN   TestSPAStatusRequiresIndex
+--- PASS: TestSPAStatusRequiresIndex (0.00s)
+=== RUN   TestRouterKeepsApi404AsJSON
+--- PASS: TestRouterKeepsApi404AsJSON (0.00s)
+=== RUN   TestReadyReportsUIStatus
+--- PASS: TestReadyReportsUIStatus (0.00s)
+=== RUN   TestStaffRoutesRefuseNonSuperAdmins
+=== RUN   TestStaffRoutesRefuseNonSuperAdmins/admin/list
+=== RUN   TestStaffRoutesRefuseNonSuperAdmins/admin/detail
+=== RUN   TestStaffRoutesRefuseNonSuperAdmins/admin/create
+=== RUN   TestStaffRoutesRefuseNonSuperAdmins/admin/patch
+=== RUN   TestStaffRoutesRefuseNonSuperAdmins/admin/reset
+=== RUN   TestStaffRoutesRefuseNonSuperAdmins/client/client_list
+=== RUN   TestStaffRoutesRefuseNonSuperAdmins/client/client_create
+=== RUN   TestStaffRoutesRefuseNonSuperAdmins/client/client_reset
+--- PASS: TestStaffRoutesRefuseNonSuperAdmins (0.00s)
+    --- PASS: TestStaffRoutesRefuseNonSuperAdmins/admin/list (0.00s)
+    --- PASS: TestStaffRoutesRefuseNonSuperAdmins/admin/detail (0.00s)
+    --- PASS: TestStaffRoutesRefuseNonSuperAdmins/admin/create (0.00s)
+    --- PASS: TestStaffRoutesRefuseNonSuperAdmins/admin/patch (0.00s)
+    --- PASS: TestStaffRoutesRefuseNonSuperAdmins/admin/reset (0.00s)
+    --- PASS: TestStaffRoutesRefuseNonSuperAdmins/client/client_list (0.00s)
+    --- PASS: TestStaffRoutesRefuseNonSuperAdmins/client/client_create (0.00s)
+    --- PASS: TestStaffRoutesRefuseNonSuperAdmins/client/client_reset (0.00s)
+=== RUN   TestStaffCreateRejectsUnknownRole
+=== RUN   TestStaffCreateRejectsUnknownRole/role=client
+=== RUN   TestStaffCreateRejectsUnknownRole/role=root
+=== RUN   TestStaffCreateRejectsUnknownRole/role=SUPERADMIN
+=== RUN   TestStaffCreateRejectsUnknownRole/role=super-admin
+--- PASS: TestStaffCreateRejectsUnknownRole (0.00s)
+    --- PASS: TestStaffCreateRejectsUnknownRole/role=client (0.00s)
+    --- PASS: TestStaffCreateRejectsUnknownRole/role=root (0.00s)
+    --- PASS: TestStaffCreateRejectsUnknownRole/role=SUPERADMIN (0.00s)
+    --- PASS: TestStaffCreateRejectsUnknownRole/role=super-admin (0.00s)
+=== RUN   TestStaffCreateDefaultsEmptyRoleToAdmin
+--- PASS: TestStaffCreateDefaultsEmptyRoleToAdmin (0.00s)
+=== RUN   TestStaffResetPasswordRefusesSelf
+--- PASS: TestStaffResetPasswordRefusesSelf (0.00s)
+=== RUN   TestStaffPatchValidationOrder
+=== RUN   TestStaffPatchValidationOrder/bad_status
+=== RUN   TestStaffPatchValidationOrder/quota_negative
+=== RUN   TestStaffPatchValidationOrder/quota_too_large
+=== RUN   TestStaffPatchValidationOrder/nothing_to_change
+=== RUN   TestStaffPatchValidationOrder/bad_json
+--- PASS: TestStaffPatchValidationOrder (0.00s)
+    --- PASS: TestStaffPatchValidationOrder/bad_status (0.00s)
+    --- PASS: TestStaffPatchValidationOrder/quota_negative (0.00s)
+    --- PASS: TestStaffPatchValidationOrder/quota_too_large (0.00s)
+    --- PASS: TestStaffPatchValidationOrder/nothing_to_change (0.00s)
+    --- PASS: TestStaffPatchValidationOrder/bad_json (0.00s)
+=== RUN   TestSyncRunTriggersAPass
+--- PASS: TestSyncRunTriggersAPass (0.00s)
+=== RUN   TestSyncRunAcceptsAnEmptyBody
+--- PASS: TestSyncRunAcceptsAnEmptyBody (0.00s)
+=== RUN   TestSyncRunRejectsMalformedBody
+--- PASS: TestSyncRunRejectsMalformedBody (0.00s)
+=== RUN   TestSyncRoutesAbsentWithoutARunner
+--- PASS: TestSyncRoutesAbsentWithoutARunner (0.00s)
+=== RUN   TestSyncRunRefusesAClient
+--- PASS: TestSyncRunRefusesAClient (0.00s)
+=== RUN   TestBuildVersionNeverReturnsEmpty
+--- PASS: TestBuildVersionNeverReturnsEmpty (0.00s)
+=== RUN   TestSystemVersionReportsTheRunningBuild
+--- PASS: TestSystemVersionReportsTheRunningBuild (0.00s)
+=== RUN   TestSystemVersionFallsBackWhenTheServiceFails
+--- PASS: TestSystemVersionFallsBackWhenTheServiceFails (0.00s)
+=== RUN   TestSystemVersionWorksWithNoServiceWired
+--- PASS: TestSystemVersionWorksWithNoServiceWired (0.00s)
+=== RUN   TestSystemVersionFillsSchemaAndUI
+--- PASS: TestSystemVersionFillsSchemaAndUI (0.00s)
+=== RUN   TestSystemVersionWithoutHealthReader
+--- PASS: TestSystemVersionWithoutHealthReader (0.00s)
+=== RUN   TestSystemReleasesListsVersions
+--- PASS: TestSystemReleasesListsVersions (0.00s)
+=== RUN   TestSystemReleasesWithNoServiceIs503
+--- PASS: TestSystemReleasesWithNoServiceIs503 (0.00s)
+=== RUN   TestSystemReleasesSurfacesAFeedFailure
+--- PASS: TestSystemReleasesSurfacesAFeedFailure (0.00s)
+=== RUN   TestUpdateCheckReportsAnAvailableUpdate
+--- PASS: TestUpdateCheckReportsAnAvailableUpdate (0.00s)
+=== RUN   TestUpdateCheckFailureIs200WithAnExplicitError
+--- PASS: TestUpdateCheckFailureIs200WithAnExplicitError (0.00s)
+=== RUN   TestUpdateCheckWithNoServiceIs503
+--- PASS: TestUpdateCheckWithNoServiceIs503 (0.00s)
+=== RUN   TestReadyReportsTheVersion
+--- PASS: TestReadyReportsTheVersion (0.00s)
+=== RUN   TestReadyReportsDevForAnUnstampedBuild
+--- PASS: TestReadyReportsDevForAnUnstampedBuild (0.00s)
+=== RUN   TestSystemRoutesAreBehindAuth
+--- PASS: TestSystemRoutesAreBehindAuth (0.00s)
+=== RUN   TestTransferRouteMovesVPN
+--- PASS: TestTransferRouteMovesVPN (0.17s)
+=== RUN   TestTransferRouteRefusesSelf
+--- PASS: TestTransferRouteRefusesSelf (0.16s)
+=== RUN   TestTransferRouteRefusesNonClient
+--- PASS: TestTransferRouteRefusesNonClient (0.15s)
+=== RUN   TestTransferRouteRefusesUnknownVPN
+--- PASS: TestTransferRouteRefusesUnknownVPN (0.14s)
+=== RUN   TestTransferRouteRequiresTarget
+--- PASS: TestTransferRouteRequiresTarget (0.15s)
+=== RUN   TestTransferRouteHistory
+--- PASS: TestTransferRouteHistory (0.15s)
+=== RUN   TestTransferRouteAuditsTheMove
+--- PASS: TestTransferRouteAuditsTheMove (0.15s)
+=== RUN   TestAdminVPNSummaryBuckets
+--- PASS: TestAdminVPNSummaryBuckets (0.00s)
+=== RUN   TestTransferDoesNotDuplicateTheVPN
+--- PASS: TestTransferDoesNotDuplicateTheVPN (0.15s)
+=== RUN   TestUsageRangeWindow
+--- PASS: TestUsageRangeWindow (0.00s)
+=== RUN   TestAdminVPNFilterMatches
+--- PASS: TestAdminVPNFilterMatches (0.00s)
+=== RUN   TestPanelMissingIsNotHealthy
+--- PASS: TestPanelMissingIsNotHealthy (0.00s)
+=== RUN   TestAdminVPNPaginationWindowsTheFilteredSet
+--- PASS: TestAdminVPNPaginationWindowsTheFilteredSet (0.00s)
+=== RUN   TestAdminVPNPaginationValuesAreValidated
+--- PASS: TestAdminVPNPaginationValuesAreValidated (0.00s)
+=== RUN   TestAdminVPNHandlerPaginatesResponseBody
+--- PASS: TestAdminVPNHandlerPaginatesResponseBody (0.00s)
+=== RUN   TestAdminVPNFilterRefusesUnknownValues
+--- PASS: TestAdminVPNFilterRefusesUnknownValues (0.00s)
+=== RUN   TestAdminSortPutsUnassignedFirst
+--- PASS: TestAdminSortPutsUnassignedFirst (0.00s)
+=== RUN   TestSQLVPNListerNamesServerAndSeller
+--- PASS: TestSQLVPNListerNamesServerAndSeller (0.05s)
+=== RUN   TestSQLVPNListerHasNoSellerWhenNoneAssigned
+--- PASS: TestSQLVPNListerHasNoSellerWhenNoneAssigned (0.05s)
+=== RUN   TestSQLVPNListerClientSeesOwnVPNs
+--- PASS: TestSQLVPNListerClientSeesOwnVPNs (0.05s)
+=== RUN   TestSQLVPNListerAdminNeverSeesUntagged
+--- PASS: TestSQLVPNListerAdminNeverSeesUntagged (0.05s)
+=== RUN   TestQuotaMeForReseller
+--- PASS: TestQuotaMeForReseller (0.23s)
+=== RUN   TestQuotaMeForClientIsZeroNotForbidden
+--- PASS: TestQuotaMeForClientIsZeroNotForbidden (0.14s)
+=== RUN   TestQuotaMeRequiresAuth
+--- PASS: TestQuotaMeRequiresAuth (0.05s)
+=== RUN   TestAdminRoutesRequireSuperAdmin
+--- PASS: TestAdminRoutesRequireSuperAdmin (0.26s)
+=== RUN   TestCreateAdminRejectsWeakPasswordAndClients
+--- PASS: TestCreateAdminRejectsWeakPasswordAndClients (0.21s)
+=== RUN   TestSuspendAdminRevokesLiveSession
+--- PASS: TestSuspendAdminRevokesLiveSession (0.28s)
+=== RUN   TestSuperAdminCannotSuspendSelf
+--- PASS: TestSuperAdminCannotSuspendSelf (0.10s)
+=== RUN   TestSetQuotaLimitOnNonAdminIsNotFound
+--- PASS: TestSetQuotaLimitOnNonAdminIsNotFound (0.16s)
+=== RUN   TestAssignServersGivesResellerScope
+--- PASS: TestAssignServersGivesResellerScope (0.24s)
+=== RUN   TestAssignServersIsReplaceNotMerge
+--- PASS: TestAssignServersIsReplaceNotMerge (0.24s)
+=== RUN   TestAssignServersRejectsNonAdmin
+--- PASS: TestAssignServersRejectsNonAdmin (0.14s)
+=== RUN   TestAssignServersRejectsUnknownServer
+--- PASS: TestAssignServersRejectsUnknownServer (0.23s)
+=== RUN   TestAssignServersRequiresSuperAdmin
+--- PASS: TestAssignServersRequiresSuperAdmin (0.23s)
+=== RUN   TestAssignServersAnonymousIs401
+--- PASS: TestAssignServersAnonymousIs401 (0.05s)
+=== RUN   TestClientsVisibilityIsRoleScoped
+--- PASS: TestClientsVisibilityIsRoleScoped (0.38s)
+=== RUN   TestClientsShowsSellerScope
+--- PASS: TestClientsShowsSellerScope (0.28s)
+=== RUN   TestAuditKindFilterIsServerSide
+--- PASS: TestAuditKindFilterIsServerSide (0.10s)
+=== RUN   TestAuditRefusesAnUnknownKind
+--- PASS: TestAuditRefusesAnUnknownKind (0.09s)
+=== RUN   TestAuditActorAndSearchFilters
+--- PASS: TestAuditActorAndSearchFilters (0.10s)
+=== RUN   TestAuditTimeWindowBounds
+--- PASS: TestAuditTimeWindowBounds (0.09s)
+=== RUN   TestAuditPaginationEchoesItsWindow
+--- PASS: TestAuditPaginationEchoesItsWindow (0.09s)
+=== RUN   TestAuthFlowEndToEnd
+--- PASS: TestAuthFlowEndToEnd (0.10s)
+=== RUN   TestLoginRejectsWrongPassword
+--- PASS: TestLoginRejectsWrongPassword (0.14s)
+=== RUN   TestBootstrapThenLoginAsSuperAdmin
+--- PASS: TestBootstrapThenLoginAsSuperAdmin (0.18s)
+=== RUN   TestChangePasswordRotatesSessions
+--- PASS: TestChangePasswordRotatesSessions (0.36s)
+=== RUN   TestChangePasswordRequiresAuthentication
+--- PASS: TestChangePasswordRequiresAuthentication (0.05s)
+=== RUN   TestSetupStatusReflectsBootstrap
+--- PASS: TestSetupStatusReflectsBootstrap (0.09s)
+=== RUN   TestSuperAdminCreatesAdminWhoCanLogin
+--- PASS: TestSuperAdminCreatesAdminWhoCanLogin (0.22s)
+=== RUN   TestForgedSessionCookieIsRejected
+--- PASS: TestForgedSessionCookieIsRejected (0.05s)
+=== RUN   TestCrossOriginPostIsBlocked
+--- PASS: TestCrossOriginPostIsBlocked (0.05s)
+=== RUN   TestNotificationsArePrivateToTheirOwner
+--- PASS: TestNotificationsArePrivateToTheirOwner (0.23s)
+=== RUN   TestPaymentLifecycleIsGuarded
+--- PASS: TestPaymentLifecycleIsGuarded (0.15s)
+=== RUN   TestPaymentWithoutAnAccountIsRefused
+--- PASS: TestPaymentWithoutAnAccountIsRefused (0.05s)
+=== RUN   TestDirectoryScopesWhoCanBeAddressed
+--- PASS: TestDirectoryScopesWhoCanBeAddressed (0.48s)
+=== RUN   TestChatAccessIsParticipantOnly
+--- PASS: TestChatAccessIsParticipantOnly (0.54s)
+=== RUN   TestChatMessageLifecycle
+--- PASS: TestChatMessageLifecycle (0.35s)
+=== RUN   TestHwidRoutesAreRegistered
+--- PASS: TestHwidRoutesAreRegistered (0.00s)
+=== RUN   TestHwidRoutesRejectBadIDs
+--- PASS: TestHwidRoutesRejectBadIDs (0.00s)
+=== RUN   TestHwidRoutesNilServiceIs503
+--- PASS: TestHwidRoutesNilServiceIs503 (0.00s)
+=== RUN   TestHwidRoutesRequireAPrincipal
+--- PASS: TestHwidRoutesRequireAPrincipal (0.00s)
+=== RUN   TestMeReturnsDisplayNameAndCreatedAt
+--- PASS: TestMeReturnsDisplayNameAndCreatedAt (0.10s)
+=== RUN   TestMePublishesTheDisplayTimezone
+--- PASS: TestMePublishesTheDisplayTimezone (0.10s)
+=== RUN   TestMeStaysUsableWhenTheAccountCannotBeRead
+--- PASS: TestMeStaysUsableWhenTheAccountCannotBeRead (0.10s)
+=== RUN   TestLogoutOthersKeepsThisSession
+--- PASS: TestLogoutOthersKeepsThisSession (0.19s)
+=== RUN   TestLogoutOthersRequiresASession
+--- PASS: TestLogoutOthersRequiresASession (0.05s)
+=== RUN   TestAuditFansOutIntoTheInbox
+--- PASS: TestAuditFansOutIntoTheInbox (0.12s)
+=== RUN   TestClientSeesPremiumCatalogueButNotInFreeList
+--- PASS: TestClientSeesPremiumCatalogueButNotInFreeList (0.11s)
+=== RUN   TestPremiumCatalogueIsAuthenticated
+--- PASS: TestPremiumCatalogueIsAuthenticated (0.05s)
+=== RUN   TestOffersClientSeesOnlyFree
+--- PASS: TestOffersClientSeesOnlyFree (0.12s)
+=== RUN   TestOffersSuperAdminSeesBoth
+--- PASS: TestOffersSuperAdminSeesBoth (0.09s)
+=== RUN   TestOffersAnonymousIs401
+--- PASS: TestOffersAnonymousIs401 (0.05s)
+=== RUN   TestOffersCreateRequiresSuperAdmin
+--- PASS: TestOffersCreateRequiresSuperAdmin (0.09s)
+=== RUN   TestOffersCreateValidates
+=== RUN   TestOffersCreateValidates/bad_kind
+=== RUN   TestOffersCreateValidates/blank_name
+=== RUN   TestOffersCreateValidates/no_server
+=== RUN   TestOffersCreateValidates/negative_limit
+--- PASS: TestOffersCreateValidates (0.10s)
+    --- PASS: TestOffersCreateValidates/bad_kind (0.00s)
+    --- PASS: TestOffersCreateValidates/blank_name (0.00s)
+    --- PASS: TestOffersCreateValidates/no_server (0.00s)
+    --- PASS: TestOffersCreateValidates/negative_limit (0.00s)
+=== RUN   TestOffersCreateAndPatch
+--- PASS: TestOffersCreateAndPatch (0.09s)
+=== RUN   TestOffersPatchUnknownIs404
+--- PASS: TestOffersPatchUnknownIs404 (0.10s)
+=== RUN   TestOffersDeactivateHidesFromClient
+--- PASS: TestOffersDeactivateHidesFromClient (0.15s)
+=== RUN   TestSuperAdminTagsPanelClient
+--- PASS: TestSuperAdminTagsPanelClient (0.09s)
+=== RUN   TestRetaggingIsAllowedWhileUnissued
+--- PASS: TestRetaggingIsAllowedWhileUnissued (0.10s)
+=== RUN   TestTagIsRefusedOnceIssued
+--- PASS: TestTagIsRefusedOnceIssued (0.10s)
+=== RUN   TestTagRejectsUnknownValue
+--- PASS: TestTagRejectsUnknownValue (0.12s)
+=== RUN   TestTaggingRequiresSuperAdmin
+--- PASS: TestTaggingRequiresSuperAdmin (0.26s)
+=== RUN   TestPaymentsEnvelopeStatesTruncation
+--- PASS: TestPaymentsEnvelopeStatesTruncation (0.12s)
+=== RUN   TestPingScopeFromQuery
+--- PASS: TestPingScopeFromQuery (0.00s)
+=== RUN   TestReleaseGraceAndLocalOnlyRemoval
+--- PASS: TestReleaseGraceAndLocalOnlyRemoval (0.25s)
+=== RUN   TestPurgeRouteRefusesResellersAndAnonymous
+--- PASS: TestPurgeRouteRefusesResellersAndAnonymous (0.33s)
+=== RUN   TestSuperAdminReleaseRequiresAReason
+--- PASS: TestSuperAdminReleaseRequiresAReason (0.14s)
+=== RUN   TestUsageHourlyBucketsD000
+--- PASS: TestUsageHourlyBucketsD000 (0.10s)
+=== RUN   TestSpeedHistoryDerivesRateFromCounters
+--- PASS: TestSpeedHistoryDerivesRateFromCounters (0.10s)
+=== RUN   TestNewUsageRoutesRefuseStrangers
+=== RUN   TestNewUsageRoutesRefuseStrangers/stranger/usage/hourly
+=== RUN   TestNewUsageRoutesRefuseStrangers/anonymous/usage/hourly
+=== RUN   TestNewUsageRoutesRefuseStrangers/stranger/speed-history
+=== RUN   TestNewUsageRoutesRefuseStrangers/anonymous/speed-history
+--- PASS: TestNewUsageRoutesRefuseStrangers (0.10s)
+    --- PASS: TestNewUsageRoutesRefuseStrangers/stranger/usage/hourly (0.00s)
+    --- PASS: TestNewUsageRoutesRefuseStrangers/anonymous/usage/hourly (0.00s)
+    --- PASS: TestNewUsageRoutesRefuseStrangers/stranger/speed-history (0.00s)
+    --- PASS: TestNewUsageRoutesRefuseStrangers/anonymous/speed-history (0.00s)
+=== RUN   TestNewUsageRoutesRefuseMisspelledRange
+--- PASS: TestNewUsageRoutesRefuseMisspelledRange (0.09s)
+=== RUN   TestPingHistoryRequiresSampleStore
+--- PASS: TestPingHistoryRequiresSampleStore (0.10s)
+=== RUN   TestVPNUsageAgainstCapacity
+--- PASS: TestVPNUsageAgainstCapacity (0.10s)
+=== RUN   TestUsageLimitComesFromPanelNotCreateTime
+--- PASS: TestUsageLimitComesFromPanelNotCreateTime (0.09s)
+=== RUN   TestUsageHistoryOwnerReadsOwnVPN
+--- PASS: TestUsageHistoryOwnerReadsOwnVPN (0.09s)
+=== RUN   TestUsageHistoryHidesAnotherUsersVPN
+--- PASS: TestUsageHistoryHidesAnotherUsersVPN (0.09s)
+=== RUN   TestUsageHistoryRequiresAuth
+--- PASS: TestUsageHistoryRequiresAuth (0.05s)
+=== RUN   TestUsageUnknownVPNIs404
+--- PASS: TestUsageUnknownVPNIs404 (0.14s)
+=== RUN   TestServerMetricsRoleScoping
+--- PASS: TestServerMetricsRoleScoping (0.18s)
+=== RUN   TestSyncStatusIsNotForClients
+--- PASS: TestSyncStatusIsNotForClients (0.21s)
+=== RUN   TestUsageWindowNamedRanges
+--- PASS: TestUsageWindowNamedRanges (0.00s)
+=== RUN   TestUsageWindowUnknownRangeIsRefused
+--- PASS: TestUsageWindowUnknownRangeIsRefused (0.00s)
+=== RUN   TestResolveWindowCustomBounds
+=== RUN   TestResolveWindowCustomBounds/both_bounds
+=== RUN   TestResolveWindowCustomBounds/future_until_is_clamped
+=== RUN   TestResolveWindowCustomBounds/inverted_window_refused
+=== RUN   TestResolveWindowCustomBounds/equal_bounds_refused
+=== RUN   TestResolveWindowCustomBounds/half_specified_keeps_the_named_range
+=== RUN   TestResolveWindowCustomBounds/custom_range_without_bounds_refused
+=== RUN   TestResolveWindowCustomBounds/one_bound_moves_a_named_range
+=== RUN   TestResolveWindowCustomBounds/unknown_range_still_refused
+--- PASS: TestResolveWindowCustomBounds (0.00s)
+    --- PASS: TestResolveWindowCustomBounds/both_bounds (0.00s)
+    --- PASS: TestResolveWindowCustomBounds/future_until_is_clamped (0.00s)
+    --- PASS: TestResolveWindowCustomBounds/inverted_window_refused (0.00s)
+    --- PASS: TestResolveWindowCustomBounds/equal_bounds_refused (0.00s)
+    --- PASS: TestResolveWindowCustomBounds/half_specified_keeps_the_named_range (0.00s)
+    --- PASS: TestResolveWindowCustomBounds/custom_range_without_bounds_refused (0.00s)
+    --- PASS: TestResolveWindowCustomBounds/one_bound_moves_a_named_range (0.00s)
+    --- PASS: TestResolveWindowCustomBounds/unknown_range_still_refused (0.00s)
+=== RUN   TestResolveWindowEchoesOneClock
+--- PASS: TestResolveWindowEchoesOneClock (0.00s)
+=== RUN   TestUsageHistorySplitsUpDownTotal
+--- PASS: TestUsageHistorySplitsUpDownTotal (0.12s)
+=== RUN   TestUsageRangesDifferFromEachOther
+--- PASS: TestUsageRangesDifferFromEachOther (0.11s)
+=== RUN   TestUsageRangeTypoIsRefused
+--- PASS: TestUsageRangeTypoIsRefused (0.12s)
+=== RUN   TestOrderWithPlanBuildsTheVpnOnConfirm
+--- PASS: TestOrderWithPlanBuildsTheVpnOnConfirm (0.18s)
+=== RUN   TestConfirmingAPlanlessOrderSettlesCashOnly
+--- PASS: TestConfirmingAPlanlessOrderSettlesCashOnly (0.17s)
+=== RUN   TestPlanOrderRefusedWhenSettlementServiceIsMissing
+--- PASS: TestPlanOrderRefusedWhenSettlementServiceIsMissing (0.17s)
+=== RUN   TestOfferCreateRefusesAnInboundFromAnotherPanel
+--- PASS: TestOfferCreateRefusesAnInboundFromAnotherPanel (0.11s)
+=== RUN   TestClientCannotConfirmPayments
+--- PASS: TestClientCannotConfirmPayments (0.14s)
+=== RUN   TestFreeConcurrentCapIsEnforced
+--- PASS: TestFreeConcurrentCapIsEnforced (0.10s)
+=== RUN   TestFreeClaimUsageIsReadable
+--- PASS: TestFreeClaimUsageIsReadable (0.10s)
+=== RUN   TestRefusedCreateRefundsTheFreeClaim
+--- PASS: TestRefusedCreateRefundsTheFreeClaim (0.09s)
+=== RUN   TestVPNLinksAndPingScope
+--- PASS: TestVPNLinksAndPingScope (0.23s)
+=== RUN   TestDormantRoutePutsVPNToSleep
+--- PASS: TestDormantRoutePutsVPNToSleep (0.09s)
+=== RUN   TestWakeRouteClearsDormancy
+--- PASS: TestWakeRouteClearsDormancy (0.09s)
+=== RUN   TestDormantIsIdempotent
+--- PASS: TestDormantIsIdempotent (0.10s)
+=== RUN   TestDormantRouteRefusesOtherOwnersVPN
+--- PASS: TestDormantRouteRefusesOtherOwnersVPN (0.15s)
+=== RUN   TestDormantRouteRefusesAnonymous
+--- PASS: TestDormantRouteRefusesAnonymous (0.09s)
+=== RUN   TestUntaggedPanelClientIsSuperAdminOnly
+--- PASS: TestUntaggedPanelClientIsSuperAdminOnly (0.26s)
+=== RUN   TestTaggingPublishesPanelClient
+--- PASS: TestTaggingPublishesPanelClient (0.10s)
+=== RUN   TestVPNListRejectsUnknownTagFilter
+--- PASS: TestVPNListRejectsUnknownTagFilter (0.10s)
+=== RUN   TestPanelOutageDegradesToList
+--- PASS: TestPanelOutageDegradesToList (0.09s)
+=== RUN   TestUnreadablePanelWithNoLocalRowsIsAnError
+--- PASS: TestUnreadablePanelWithNoLocalRowsIsAnError (0.09s)
+=== RUN   TestPanelAndLocalRowsMerge
+--- PASS: TestPanelAndLocalRowsMerge (0.09s)
+=== RUN   TestAdminConsoleUsesThePanelBackedLister
+--- PASS: TestAdminConsoleUsesThePanelBackedLister (0.10s)
+=== RUN   TestClientProvisionsFreeOffer
+--- PASS: TestClientProvisionsFreeOffer (0.10s)
+=== RUN   TestIssuingVPNLocksItsTag
+--- PASS: TestIssuingVPNLocksItsTag (0.10s)
+=== RUN   TestClientCannotProvisionPremium
+--- PASS: TestClientCannotProvisionPremium (0.10s)
+=== RUN   TestVPNRoutesRequireAuth
+--- PASS: TestVPNRoutesRequireAuth (0.05s)
+=== RUN   TestVPNsAreScopedPerOwner
+--- PASS: TestVPNsAreScopedPerOwner (0.14s)
+=== RUN   TestRevokeRespondsAcceptedUntilConfirmed
+--- PASS: TestRevokeRespondsAcceptedUntilConfirmed (0.10s)
+=== RUN   TestRejectedCreateDoesNotLockTag
+--- PASS: TestRejectedCreateDoesNotLockTag (0.09s)
+=== RUN   TestVpnListPublishesStatusChangedAt
+--- PASS: TestVpnListPublishesStatusChangedAt (0.14s)
+PASS
+ok  	veylix/backend/internal/httpapi	32.268s
+=== RUN   TestAddStoresTokenSealedAndNeverReturnsIt
+--- PASS: TestAddStoresTokenSealedAndNeverReturnsIt (0.05s)
+=== RUN   TestAddRecordsFailureInsteadOfClaimingActive
+--- PASS: TestAddRecordsFailureInsteadOfClaimingActive (0.02s)
+=== RUN   TestAddRejectsInvalidInput
+--- PASS: TestAddRejectsInvalidInput (0.03s)
+=== RUN   TestAddRejectsDuplicatePanelURL
+--- PASS: TestAddRejectsDuplicatePanelURL (0.02s)
+=== RUN   TestTestReReadsSealedTokenAndUpdatesStatus
+--- PASS: TestTestReReadsSealedTokenAndUpdatesStatus (0.05s)
+=== RUN   TestTestUnknownIntegrationIsNotFound
+--- PASS: TestTestUnknownIntegrationIsNotFound (0.03s)
+=== RUN   TestInboundsCachesMetadata
+--- PASS: TestInboundsCachesMetadata (0.02s)
+=== RUN   TestInboundsReturnsLocalIDNotPanelID
+--- PASS: TestInboundsReturnsLocalIDNotPanelID (0.04s)
+=== RUN   TestDisableAndRemove
+--- PASS: TestDisableAndRemove (0.01s)
+=== RUN   TestUpdateRotatesTokenAndRevalidatesPanel
+--- PASS: TestUpdateRotatesTokenAndRevalidatesPanel (0.01s)
+=== RUN   TestUpdateRejectsUrlChangeWithoutNewToken
+--- PASS: TestUpdateRejectsUrlChangeWithoutNewToken (0.02s)
+=== RUN   TestUpdateRejectsInvalidPanelURL
+--- PASS: TestUpdateRejectsInvalidPanelURL (0.02s)
+=== RUN   TestUpdateNeverLeaksTheTokenInAudit
+--- PASS: TestUpdateNeverLeaksTheTokenInAudit (0.02s)
+=== RUN   TestPurgeDeletesTheWholeServer
+--- PASS: TestPurgeDeletesTheWholeServer (0.02s)
+=== RUN   TestPurgeRefusesWhenVpnInstancesExist
+--- PASS: TestPurgeRefusesWhenVpnInstancesExist (0.03s)
+=== RUN   TestPanelClientsReportsPanelTruth
+--- PASS: TestPanelClientsReportsPanelTruth (0.02s)
+=== RUN   TestServerClientListShowsBuyer
+--- PASS: TestServerClientListShowsBuyer (0.03s)
+=== RUN   TestPanelClientsJoinsTagAndAssignment
+--- PASS: TestPanelClientsJoinsTagAndAssignment (0.02s)
+=== RUN   TestPanelClientsKeepsLargeTrafficLimits
+--- PASS: TestPanelClientsKeepsLargeTrafficLimits (0.02s)
+=== RUN   TestPanelClientsLimitIsNotScaledTwice
+--- PASS: TestPanelClientsLimitIsNotScaledTwice (0.02s)
+=== RUN   TestPanelClientsTreatsRevokedAsNotAssigned
+--- PASS: TestPanelClientsTreatsRevokedAsNotAssigned (0.02s)
+=== RUN   TestPanelClientsPerformsNoWrites
+--- PASS: TestPanelClientsPerformsNoWrites (0.02s)
+=== RUN   TestAuditTrailIsWrittenWithoutSecrets
+--- PASS: TestAuditTrailIsWrittenWithoutSecrets (0.03s)
+=== RUN   TestDevicesReadsThePanel
+--- PASS: TestDevicesReadsThePanel (0.03s)
+=== RUN   TestDevicesEmptyEmailIsRejected
+--- PASS: TestDevicesEmptyEmailIsRejected (0.01s)
+=== RUN   TestRevokeDeviceConfirmsTheRemoval
+--- PASS: TestRevokeDeviceConfirmsTheRemoval (0.01s)
+=== RUN   TestRevokeDeviceRefusesUnconfirmedRemoval
+--- PASS: TestRevokeDeviceRefusesUnconfirmedRemoval (0.01s)
+=== RUN   TestRevokeAlreadyAbsentDeviceIsSuccess
+--- PASS: TestRevokeAlreadyAbsentDeviceIsSuccess (0.02s)
+PASS
+ok  	veylix/backend/internal/integrations	0.690s
+=== RUN   TestUnconfiguredSenderRefuses
+--- PASS: TestUnconfiguredSenderRefuses (0.00s)
+=== RUN   TestConfiguredNeedsHostAndFrom
+--- PASS: TestConfiguredNeedsHostAndFrom (0.00s)
+=== RUN   TestBuildMessageIsMultipartWithEscapedHtml
+--- PASS: TestBuildMessageIsMultipartWithEscapedHtml (0.00s)
+=== RUN   TestSendRefusesAnInvalidRecipient
+--- PASS: TestSendRefusesAnInvalidRecipient (0.00s)
+=== RUN   TestSendDeliversThroughARealSMTPConversation
+--- PASS: TestSendDeliversThroughARealSMTPConversation (0.00s)
+=== RUN   TestSendReportsARefusedRecipient
+--- PASS: TestSendReportsARefusedRecipient (0.00s)
+=== RUN   TestSendFailsFastWhenTheRelayIsDown
+--- PASS: TestSendFailsFastWhenTheRelayIsDown (0.00s)
+PASS
+ok  	veylix/backend/internal/mail	0.008s
+=== RUN   TestHealthParsesRealPanelPayload
+--- PASS: TestHealthParsesRealPanelPayload (0.00s)
+=== RUN   TestHealthMapsAuthFailuresToReauthRequired
+--- PASS: TestHealthMapsAuthFailuresToReauthRequired (0.00s)
+=== RUN   TestWrongBasePathIsUnavailableNotReauth
+--- PASS: TestWrongBasePathIsUnavailableNotReauth (0.00s)
+=== RUN   TestUnreachablePanelIsConnectionUnavailable
+--- PASS: TestUnreachablePanelIsConnectionUnavailable (0.90s)
+=== RUN   TestInboundsUsesOptionsEndpoint
+--- PASS: TestInboundsUsesOptionsEndpoint (0.00s)
+=== RUN   TestGetIsRetriedOnTransportFailure
+--- PASS: TestGetIsRetriedOnTransportFailure (0.91s)
+=== RUN   TestPostIsNeverRetried
+--- PASS: TestPostIsNeverRetried (0.00s)
+=== RUN   TestAddClientSendsDocumentedBody
+--- PASS: TestAddClientSendsDocumentedBody (0.00s)
+=== RUN   TestAddClientSendsLimitHwid
+--- PASS: TestAddClientSendsLimitHwid (0.00s)
+=== RUN   TestGetClientDecodesFullRecord
+--- PASS: TestGetClientDecodesFullRecord (0.00s)
+=== RUN   TestGetClientAcceptsUnnestedRecord
+--- PASS: TestGetClientAcceptsUnnestedRecord (0.00s)
+=== RUN   TestGetClientReturnsNilWhenAbsent
+--- PASS: TestGetClientReturnsNilWhenAbsent (0.00s)
+=== RUN   TestUpdateClientSendsCompleteRecord
+--- PASS: TestUpdateClientSendsCompleteRecord (0.00s)
+=== RUN   TestUpdateClientCannotInjectPath
+--- PASS: TestUpdateClientCannotInjectPath (0.00s)
+=== RUN   TestLinksUsesDocumentedEndpoint
+--- PASS: TestLinksUsesDocumentedEndpoint (0.00s)
+=== RUN   TestLinksEmptyWhenAbsent
+--- PASS: TestLinksEmptyWhenAbsent (0.00s)
+=== RUN   TestLinksCannotInjectPath
+--- PASS: TestLinksCannotInjectPath (0.00s)
+=== RUN   TestHwidsDecodesDeviceList
+--- PASS: TestHwidsDecodesDeviceList (0.00s)
+=== RUN   TestDeleteHwidUsesDeleteVerb
+--- PASS: TestDeleteHwidUsesDeleteVerb (0.00s)
+=== RUN   TestDeleteHwidTreats404AsSuccess
+--- PASS: TestDeleteHwidTreats404AsSuccess (0.00s)
+=== RUN   TestClientExistsHandlesPanelRecordNotFoundEnvelope
+--- PASS: TestClientExistsHandlesPanelRecordNotFoundEnvelope (0.00s)
+=== RUN   TestClientExistsDistinguishesStates
+--- PASS: TestClientExistsDistinguishesStates (0.00s)
+=== RUN   TestClientEmailCannotInjectPath
+--- PASS: TestClientEmailCannotInjectPath (0.00s)
+=== RUN   TestErrorsNeverContainToken
+--- PASS: TestErrorsNeverContainToken (0.00s)
+=== RUN   TestRedirectsAreNotFollowed
+--- PASS: TestRedirectsAreNotFollowed (0.00s)
+=== RUN   TestValidateEmailRejectsTraversalAndUnsafeChars
+--- PASS: TestValidateEmailRejectsTraversalAndUnsafeChars (0.00s)
+=== RUN   TestInvalidEmailPerformsNoRequest
+--- PASS: TestInvalidEmailPerformsNoRequest (0.00s)
+=== RUN   TestNewRejectsMissingInputs
+--- PASS: TestNewRejectsMissingInputs (0.00s)
+=== RUN   TestRetriedGetResendsItsBody
+--- PASS: TestRetriedGetResendsItsBody (0.30s)
+=== RUN   TestDialGuardRefusesLoopbackWithoutThePrivatePolicy
+--- PASS: TestDialGuardRefusesLoopbackWithoutThePrivatePolicy (0.90s)
+=== RUN   TestDialGuardRefusesCloudMetadataEvenWithThePrivatePolicy
+--- PASS: TestDialGuardRefusesCloudMetadataEvenWithThePrivatePolicy (0.00s)
+=== RUN   TestSetClientEnabledConfirmsThePanelActuallyChanged
+--- PASS: TestSetClientEnabledConfirmsThePanelActuallyChanged (0.00s)
+=== RUN   TestSetClientEnabledSucceedsWhenThePanelReallyDisabledIt
+--- PASS: TestSetClientEnabledSucceedsWhenThePanelReallyDisabledIt (0.00s)
+=== RUN   TestParseTargetRejectsDangerousURLs
+=== RUN   TestParseTargetRejectsDangerousURLs/http_scheme
+=== RUN   TestParseTargetRejectsDangerousURLs/file_scheme
+=== RUN   TestParseTargetRejectsDangerousURLs/gopher_scheme
+=== RUN   TestParseTargetRejectsDangerousURLs/loopback_literal
+=== RUN   TestParseTargetRejectsDangerousURLs/loopback_v6
+=== RUN   TestParseTargetRejectsDangerousURLs/localhost_name
+=== RUN   TestParseTargetRejectsDangerousURLs/private_10/8
+=== RUN   TestParseTargetRejectsDangerousURLs/private_172.16
+=== RUN   TestParseTargetRejectsDangerousURLs/private_192.168
+=== RUN   TestParseTargetRejectsDangerousURLs/metadata
+=== RUN   TestParseTargetRejectsDangerousURLs/alibaba_metadata
+=== RUN   TestParseTargetRejectsDangerousURLs/embedded_credentials
+=== RUN   TestParseTargetRejectsDangerousURLs/query_string
+=== RUN   TestParseTargetRejectsDangerousURLs/fragment
+=== RUN   TestParseTargetRejectsDangerousURLs/unresolvable
+=== RUN   TestParseTargetRejectsDangerousURLs/dns_rebinding
+=== RUN   TestParseTargetRejectsDangerousURLs/resolves_to_private
+--- PASS: TestParseTargetRejectsDangerousURLs (0.00s)
+    --- PASS: TestParseTargetRejectsDangerousURLs/http_scheme (0.00s)
+    --- PASS: TestParseTargetRejectsDangerousURLs/file_scheme (0.00s)
+    --- PASS: TestParseTargetRejectsDangerousURLs/gopher_scheme (0.00s)
+    --- PASS: TestParseTargetRejectsDangerousURLs/loopback_literal (0.00s)
+    --- PASS: TestParseTargetRejectsDangerousURLs/loopback_v6 (0.00s)
+    --- PASS: TestParseTargetRejectsDangerousURLs/localhost_name (0.00s)
+    --- PASS: TestParseTargetRejectsDangerousURLs/private_10/8 (0.00s)
+    --- PASS: TestParseTargetRejectsDangerousURLs/private_172.16 (0.00s)
+    --- PASS: TestParseTargetRejectsDangerousURLs/private_192.168 (0.00s)
+    --- PASS: TestParseTargetRejectsDangerousURLs/metadata (0.00s)
+    --- PASS: TestParseTargetRejectsDangerousURLs/alibaba_metadata (0.00s)
+    --- PASS: TestParseTargetRejectsDangerousURLs/embedded_credentials (0.00s)
+    --- PASS: TestParseTargetRejectsDangerousURLs/query_string (0.00s)
+    --- PASS: TestParseTargetRejectsDangerousURLs/fragment (0.00s)
+    --- PASS: TestParseTargetRejectsDangerousURLs/unresolvable (0.00s)
+    --- PASS: TestParseTargetRejectsDangerousURLs/dns_rebinding (0.00s)
+    --- PASS: TestParseTargetRejectsDangerousURLs/resolves_to_private (0.00s)
+=== RUN   TestParseTargetAcceptsPublicHTTPS
+--- PASS: TestParseTargetAcceptsPublicHTTPS (0.00s)
+=== RUN   TestParseTargetPrivateAllowedOnlyWhenEnabled
+--- PASS: TestParseTargetPrivateAllowedOnlyWhenEnabled (0.00s)
+=== RUN   TestMetadataBlockedEvenWithPrivatePolicy
+--- PASS: TestMetadataBlockedEvenWithPrivatePolicy (0.00s)
+PASS
+ok  	veylix/backend/internal/panel	3.051s
+=== RUN   TestCustomOrderNeedsServerBeforeRelease
+--- PASS: TestCustomOrderNeedsServerBeforeRelease (0.09s)
+=== RUN   TestCustomOrderReleasesWithItsOwnSpec
+--- PASS: TestCustomOrderReleasesWithItsOwnSpec (0.09s)
+=== RUN   TestReleaseTargetMustMatchServer
+--- PASS: TestReleaseTargetMustMatchServer (0.09s)
+=== RUN   TestOrderNamesTheConfirmer
+--- PASS: TestOrderNamesTheConfirmer (0.08s)
+=== RUN   TestConfirmPaymentBuildsVPN
+--- PASS: TestConfirmPaymentBuildsVPN (0.09s)
+=== RUN   TestPaymentAmountComesFromPlan
+--- PASS: TestPaymentAmountComesFromPlan (0.09s)
+=== RUN   TestConfirmPaymentPanelFailureLeavesOrderPending
+--- PASS: TestConfirmPaymentPanelFailureLeavesOrderPending (0.08s)
+=== RUN   TestConfirmIsNotRepeatable
+--- PASS: TestConfirmIsNotRepeatable (0.05s)
+=== RUN   TestConfirmRequiresTheRightActor
+--- PASS: TestConfirmRequiresTheRightActor (0.06s)
+=== RUN   TestResellerConfirmsOwnPlanOrder
+--- PASS: TestResellerConfirmsOwnPlanOrder (0.06s)
+PASS
+ok  	veylix/backend/internal/payments	0.790s
+=== RUN   TestPanelEmailIsClientAndKind
+--- PASS: TestPanelEmailIsClientAndKind (0.12s)
+=== RUN   TestPanelSlotsOnlyMoveForward
+--- PASS: TestPanelSlotsOnlyMoveForward (0.07s)
+=== RUN   TestPanelSubIdStaysDeterministic
+--- PASS: TestPanelSubIdStaysDeterministic (0.07s)
+=== RUN   TestFreeOfferIsFixedAtTwoDevices
+--- PASS: TestFreeOfferIsFixedAtTwoDevices (0.00s)
+=== RUN   TestPremiumOfferKeepsItsDeviceLimit
+--- PASS: TestPremiumOfferKeepsItsDeviceLimit (0.00s)
+=== RUN   TestFreeCapIsSerialised
+--- PASS: TestFreeCapIsSerialised (0.00s)
+=== RUN   TestSpecStillCarriesCapacityAndIdentity
+--- PASS: TestSpecStillCarriesCapacityAndIdentity (0.00s)
+=== RUN   TestSpecSetsExpiryFromDuration
+--- PASS: TestSpecSetsExpiryFromDuration (0.00s)
+=== RUN   TestProtocolDetailIsExposed
+--- PASS: TestProtocolDetailIsExposed (0.06s)
+=== RUN   TestProtocolReportsOutageHonestly
+--- PASS: TestProtocolReportsOutageHonestly (0.07s)
+=== RUN   TestLiveTrafficRate
+--- PASS: TestLiveTrafficRate (0.09s)
+=== RUN   TestLiveTrafficNeedsTwoReadings
+--- PASS: TestLiveTrafficNeedsTwoReadings (0.10s)
+=== RUN   TestBuildClientRequestSendsBothLimits
+--- PASS: TestBuildClientRequestSendsBothLimits (0.00s)
+=== RUN   TestPayloadRoundTripPreservesLimits
+--- PASS: TestPayloadRoundTripPreservesLimits (0.00s)
+=== RUN   TestReconcileSkipsDuplicateCreate
+--- PASS: TestReconcileSkipsDuplicateCreate (0.11s)
+=== RUN   TestReconcileCreatesWhenAbsent
+--- PASS: TestReconcileCreatesWhenAbsent (0.11s)
+=== RUN   TestReconcileBacksOffWhenPanelDown
+--- PASS: TestReconcileBacksOffWhenPanelDown (0.09s)
+=== RUN   TestReconcileStopsAfterMaxAttempts
+--- PASS: TestReconcileStopsAfterMaxAttempts (0.11s)
+=== RUN   TestReconcileRetriesBelowMaxAttempts
+--- PASS: TestReconcileRetriesBelowMaxAttempts (0.11s)
+=== RUN   TestPanelEmailFromKey
+--- PASS: TestPanelEmailFromKey (0.00s)
+=== RUN   TestOutboxIsIdempotent
+--- PASS: TestOutboxIsIdempotent (0.11s)
+=== RUN   TestRevokeRequiresVerification
+--- PASS: TestRevokeRequiresVerification (0.11s)
+=== RUN   TestOwnershipIsEnforced
+--- PASS: TestOwnershipIsEnforced (0.09s)
+=== RUN   TestFreeOfferRules
+--- PASS: TestFreeOfferRules (0.21s)
+=== RUN   TestReplaceCreatesTheNewVPNBeforeReleasingTheOld
+--- PASS: TestReplaceCreatesTheNewVPNBeforeReleasingTheOld (0.09s)
+=== RUN   TestReplaceBuildsADifferentVPNThenReleasesTheOld
+--- PASS: TestReplaceBuildsADifferentVPNThenReleasesTheOld (0.09s)
+=== RUN   TestReplaceRefusesAnotherOwnersVPN
+--- PASS: TestReplaceRefusesAnotherOwnersVPN (0.10s)
+=== RUN   TestReplaceRefusesWhenNoClaimRemains
+--- PASS: TestReplaceRefusesWhenNoClaimRemains (0.11s)
+=== RUN   TestReplaceRefusesAReleasedVPN
+--- PASS: TestReplaceRefusesAReleasedVPN (0.11s)
+=== RUN   TestReplaceRefusesAKindChange
+--- PASS: TestReplaceRefusesAKindChange (0.10s)
+=== RUN   TestReplaceWorksAtTheConcurrentCap
+--- PASS: TestReplaceWorksAtTheConcurrentCap (0.10s)
+=== RUN   TestCreateProvisionsAndConfirms
+--- PASS: TestCreateProvisionsAndConfirms (0.13s)
+=== RUN   TestQuotaIsEnforcedUnderConcurrency
+    service_test.go:316: ok=1 quotaErr=0, want exactly 1 success and 1 refusal
+--- FAIL: TestQuotaIsEnforcedUnderConcurrency (0.13s)
+=== RUN   TestUnreachablePanelIsUnavailableNotRevoked
+--- PASS: TestUnreachablePanelIsUnavailableNotRevoked (0.12s)
+=== RUN   TestAmbiguousWriteIsQueuedNotAssumed
+--- PASS: TestAmbiguousWriteIsQueuedNotAssumed (0.12s)
+=== RUN   TestVerifyPanelMarksAbsentVPNUnavailable
+--- PASS: TestVerifyPanelMarksAbsentVPNUnavailable (0.11s)
+=== RUN   TestVerifyPanelLeavesLiveVPNAlone
+--- PASS: TestVerifyPanelLeavesLiveVPNAlone (0.12s)
+=== RUN   TestVerifyPanelRefusesWhenPanelUnreadable
+--- PASS: TestVerifyPanelRefusesWhenPanelUnreadable (0.10s)
+=== RUN   TestSuspendReportsPanelFailureNotNotFound
+--- PASS: TestSuspendReportsPanelFailureNotNotFound (0.11s)
+=== RUN   TestRemoveAbsentDeletesLocalRecordOnly
+--- PASS: TestRemoveAbsentDeletesLocalRecordOnly (0.12s)
+=== RUN   TestCreateRefusesOfferWithoutInbound
+--- PASS: TestCreateRefusesOfferWithoutInbound (0.13s)
+=== RUN   TestCreateSendsThePanelsInboundNumber
+--- PASS: TestCreateSendsThePanelsInboundNumber (0.11s)
+=== RUN   TestCreateRefusesInboundFromAnotherServer
+--- PASS: TestCreateRefusesInboundFromAnotherServer (0.09s)
+=== RUN   TestPanelRejectionLeavesNoVPNRow
+--- PASS: TestPanelRejectionLeavesNoVPNRow (0.10s)
+=== RUN   TestPanelRejectionDoesNotClaimRevocation
+--- PASS: TestPanelRejectionDoesNotClaimRevocation (0.11s)
+=== RUN   TestRemoveAbsentRefusesLiveClient
+--- PASS: TestRemoveAbsentRefusesLiveClient (0.11s)
+=== RUN   TestRemoveAbsentRefusesClientRole
+--- PASS: TestRemoveAbsentRefusesClientRole (0.11s)
+=== RUN   TestWriteThatLandedIsAdopted
+--- PASS: TestWriteThatLandedIsAdopted (0.12s)
+=== RUN   TestUnownedPremiumPlanNeedsSuperAdminConfirm
+--- PASS: TestUnownedPremiumPlanNeedsSuperAdminConfirm (0.09s)
+=== RUN   TestResellerOwnPlanNeedsNoApproval
+--- PASS: TestResellerOwnPlanNeedsNoApproval (0.10s)
+=== RUN   TestResellerCannotReleaseForeignPlan
+--- PASS: TestResellerCannotReleaseForeignPlan (0.09s)
+=== RUN   TestResellerCannotReleaseOnUnassignedServer
+--- PASS: TestResellerCannotReleaseOnUnassignedServer (0.10s)
+=== RUN   TestPlanSlotsLimitReleases
+--- PASS: TestPlanSlotsLimitReleases (0.09s)
+=== RUN   TestForcePurgeKeepsThePanelClient
+--- PASS: TestForcePurgeKeepsThePanelClient (0.11s)
+=== RUN   TestSpecOverridesPackageLimits
+--- PASS: TestSpecOverridesPackageLimits (0.10s)
+=== RUN   TestSpecIncompleteIsRefused
+--- PASS: TestSpecIncompleteIsRefused (0.10s)
+FAIL
+FAIL	veylix/backend/internal/provisioning	5.088s
+=== RUN   TestStaleSuspendedVPNIsSetAsideAfterItsWindow
+--- PASS: TestStaleSuspendedVPNIsSetAsideAfterItsWindow (0.11s)
+=== RUN   TestExpiredVPNUsesTheShorterWindow
+--- PASS: TestExpiredVPNUsesTheShorterWindow (0.10s)
+=== RUN   TestServerUnavailableIsNeverSwept
+--- PASS: TestServerUnavailableIsNeverSwept (0.11s)
+=== RUN   TestReportModeChangesNothing
+--- PASS: TestReportModeChangesNothing (0.13s)
+=== RUN   TestReportModeAuditSaysNothingChanged
+--- PASS: TestReportModeAuditSaysNothingChanged (0.08s)
+=== RUN   TestEnforceModeRecordsUndoWindowAndKeptClient
+--- PASS: TestEnforceModeRecordsUndoWindowAndKeptClient (0.11s)
+=== RUN   TestSweepDoesNotDeleteTheRow
+--- PASS: TestSweepDoesNotDeleteTheRow (0.12s)
+=== RUN   TestActiveVPNIsNeverSwept
+--- PASS: TestActiveVPNIsNeverSwept (0.11s)
+=== RUN   TestUnsetClockIsNotTreatedAsAncient
+--- PASS: TestUnsetClockIsNotTreatedAsAncient (0.12s)
+=== RUN   TestStoreRefusesServerUnavailableAsLifecycleStatus
+--- PASS: TestStoreRefusesServerUnavailableAsLifecycleStatus (0.09s)
+=== RUN   TestSweepIsIdempotent
+--- PASS: TestSweepIsIdempotent (0.10s)
+=== RUN   TestReleaseOpensThreeDayWindow
+--- PASS: TestReleaseOpensThreeDayWindow (0.11s)
+=== RUN   TestReleaseMarksVPNReleased
+--- PASS: TestReleaseMarksVPNReleased (0.11s)
+=== RUN   TestReleaseCapturesStatusBefore
+--- PASS: TestReleaseCapturesStatusBefore (0.10s)
+=== RUN   TestReleaseDefaultsReason
+--- PASS: TestReleaseDefaultsReason (0.12s)
+=== RUN   TestReleaseTwiceIsRefused
+--- PASS: TestReleaseTwiceIsRefused (0.10s)
+=== RUN   TestReleaseOtherClientsVPNIsNotFound
+--- PASS: TestReleaseOtherClientsVPNIsNotFound (0.10s)
+=== RUN   TestReleaseMissingVPNIsNotFound
+--- PASS: TestReleaseMissingVPNIsNotFound (0.11s)
+=== RUN   TestReleaseWithoutIdentityIsRefused
+--- PASS: TestReleaseWithoutIdentityIsRefused (0.11s)
+=== RUN   TestReleaseRecordsAudit
+--- PASS: TestReleaseRecordsAudit (0.12s)
+=== RUN   TestReleaseSurvivesNilAuditLogger
+--- PASS: TestReleaseSurvivesNilAuditLogger (0.10s)
+=== RUN   TestRestoreInsideWindowSucceeds
+--- PASS: TestRestoreInsideWindowSucceeds (0.10s)
+=== RUN   TestRestoreAtDeadlineSucceeds
+--- PASS: TestRestoreAtDeadlineSucceeds (0.10s)
+=== RUN   TestRestoreAfterDeadlineIsRefused
+--- PASS: TestRestoreAfterDeadlineIsRefused (0.11s)
+=== RUN   TestRestoreIsNotRepeatable
+--- PASS: TestRestoreIsNotRepeatable (0.09s)
+=== RUN   TestRestoreOtherClientsReleaseIsNotFound
+--- PASS: TestRestoreOtherClientsReleaseIsNotFound (0.10s)
+=== RUN   TestRestoreMissingReleaseIsNotFound
+--- PASS: TestRestoreMissingReleaseIsNotFound (0.11s)
+=== RUN   TestPurgeSkipsReleaseStillInWindow
+--- PASS: TestPurgeSkipsReleaseStillInWindow (0.11s)
+=== RUN   TestPurgeSkipsReleaseAtDeadline
+--- PASS: TestPurgeSkipsReleaseAtDeadline (0.10s)
+=== RUN   TestPurgeRemovesExpiredRelease
+--- PASS: TestPurgeRemovesExpiredRelease (0.10s)
+=== RUN   TestPurgeDeletesChildrenInDependencyOrder
+--- PASS: TestPurgeDeletesChildrenInDependencyOrder (0.11s)
+=== RUN   TestPurgeIsIdempotent
+--- PASS: TestPurgeIsIdempotent (0.11s)
+=== RUN   TestPurgeSkipsReleaseRestoredSinceSelection
+--- PASS: TestPurgeSkipsReleaseRestoredSinceSelection (0.11s)
+=== RUN   TestPurgeSkipsRestoredRelease
+--- PASS: TestPurgeSkipsRestoredRelease (0.10s)
+=== RUN   TestPurgeAuditNamesWhatWasDeleted
+--- PASS: TestPurgeAuditNamesWhatWasDeleted (0.11s)
+=== RUN   TestPurgeAuditHasNoActor
+--- PASS: TestPurgeAuditHasNoActor (0.12s)
+=== RUN   TestListClientIsForcedToOwnTimeline
+--- PASS: TestListClientIsForcedToOwnTimeline (0.10s)
+=== RUN   TestListResellerCannotReadAnotherClientsTimeline
+--- PASS: TestListResellerCannotReadAnotherClientsTimeline (0.10s)
+=== RUN   TestListSuperAdminCanReadAnyClientTimeline
+--- PASS: TestListSuperAdminCanReadAnyClientTimeline (0.10s)
+=== RUN   TestListEmptyForClientWithNoReleases
+--- PASS: TestListEmptyForClientWithNoReleases (0.10s)
+=== RUN   TestPurgeRetainsTheReleaseTrail
+--- PASS: TestPurgeRetainsTheReleaseTrail (0.11s)
+=== RUN   TestPurgeNoLongerCascadesTheReleaseRow
+--- PASS: TestPurgeNoLongerCascadesTheReleaseRow (0.10s)
+=== RUN   TestPurgedReleaseRemembersItsPanelIdentity
+--- PASS: TestPurgedReleaseRemembersItsPanelIdentity (0.10s)
+=== RUN   TestPurgedReleaseSurvivesTheClientTimeline
+--- PASS: TestPurgedReleaseSurvivesTheClientTimeline (0.09s)
+=== RUN   TestReleaseTombstoneIsNotPending
+--- PASS: TestReleaseTombstoneIsNotPending (0.10s)
+=== RUN   TestPackageNeverImportsThePanel
+--- PASS: TestPackageNeverImportsThePanel (0.00s)
+=== RUN   TestPurgeWorksWithNoPanelConfigured
+--- PASS: TestPurgeWorksWithNoPanelConfigured (0.11s)
+PASS
+ok  	veylix/backend/internal/releases	4.891s
+=== RUN   TestSaveSealsTheSecretAndNeverReturnsIt
+--- PASS: TestSaveSealsTheSecretAndNeverReturnsIt (0.00s)
+=== RUN   TestResolvePrefersDatabaseOverEnvironment
+--- PASS: TestResolvePrefersDatabaseOverEnvironment (0.00s)
+=== RUN   TestSaveKeepsTheStoredSecretWhenBlank
+--- PASS: TestSaveKeepsTheStoredSecretWhenBlank (0.00s)
+=== RUN   TestSaveValidatesShapes
+--- PASS: TestSaveValidatesShapes (0.00s)
+=== RUN   TestFirstTimeNeedsASecret
+--- PASS: TestFirstTimeNeedsASecret (0.00s)
+=== RUN   TestSaveRequiresTheCallbackPath
+--- PASS: TestSaveRequiresTheCallbackPath (0.00s)
+=== RUN   TestOnGoogleChangeFiresWithTheResolvedValue
+--- PASS: TestOnGoogleChangeFiresWithTheResolvedValue (0.00s)
+PASS
+ok  	veylix/backend/internal/settings	0.007s
+=== RUN   TestAssignKeepsThePanelName
+--- PASS: TestAssignKeepsThePanelName (0.10s)
+=== RUN   TestAssignRefusesAnAlreadyHeldPanelClient
+--- PASS: TestAssignRefusesAnAlreadyHeldPanelClient (0.11s)
+=== RUN   TestAssignRefusesNonClientTarget
+--- PASS: TestAssignRefusesNonClientTarget (0.09s)
+=== RUN   TestAssignThenRenameUsesSlots
+--- PASS: TestAssignThenRenameUsesSlots (0.10s)
+=== RUN   TestAssignIsPerCustomer
+--- PASS: TestAssignIsPerCustomer (0.11s)
+=== RUN   TestClientVPNCountIsSellerScoped
+--- PASS: TestClientVPNCountIsSellerScoped (0.05s)
+=== RUN   TestAuditLogIsAppendOnly
+--- PASS: TestAuditLogIsAppendOnly (0.07s)
+=== RUN   TestAgeFromBirthday
+--- PASS: TestAgeFromBirthday (0.00s)
+=== RUN   TestFreeConcurrentCapIsThree
+--- PASS: TestFreeConcurrentCapIsThree (0.10s)
+=== RUN   TestReleaseDoesNotRefundMonthlySlot
+--- PASS: TestReleaseDoesNotRefundMonthlySlot (0.12s)
+=== RUN   TestMonthlyWindowRollsOver
+--- PASS: TestMonthlyWindowRollsOver (0.10s)
+=== RUN   TestFreeCapsArePerServer
+--- PASS: TestFreeCapsArePerServer (0.10s)
+=== RUN   TestListClientsAdminShape
+--- PASS: TestListClientsAdminShape (0.11s)
+=== RUN   TestListClientsAdminFilters
+--- PASS: TestListClientsAdminFilters (0.10s)
+=== RUN   TestClientDetailAggregate
+--- PASS: TestClientDetailAggregate (0.10s)
+=== RUN   TestClientBlockRevokesSessions
+--- PASS: TestClientBlockRevokesSessions (0.10s)
+=== RUN   TestClientFreeLimitOverride
+--- PASS: TestClientFreeLimitOverride (0.10s)
+=== RUN   TestListClientsAdminOffsetFollowsClampedLimit
+=== RUN   TestListClientsAdminOffsetFollowsClampedLimit/sane_page_size
+=== RUN   TestListClientsAdminOffsetFollowsClampedLimit/limit_above_the_ceiling
+=== RUN   TestListClientsAdminOffsetFollowsClampedLimit/limit_of_zero
+=== RUN   TestListClientsAdminOffsetFollowsClampedLimit/negative_limit
+=== RUN   TestListClientsAdminOffsetFollowsClampedLimit/negative_page
+--- PASS: TestListClientsAdminOffsetFollowsClampedLimit (0.10s)
+    --- PASS: TestListClientsAdminOffsetFollowsClampedLimit/sane_page_size (0.00s)
+    --- PASS: TestListClientsAdminOffsetFollowsClampedLimit/limit_above_the_ceiling (0.00s)
+    --- PASS: TestListClientsAdminOffsetFollowsClampedLimit/limit_of_zero (0.00s)
+    --- PASS: TestListClientsAdminOffsetFollowsClampedLimit/negative_limit (0.00s)
+    --- PASS: TestListClientsAdminOffsetFollowsClampedLimit/negative_page (0.00s)
+=== RUN   TestBlockAndUnblockVPN
+--- PASS: TestBlockAndUnblockVPN (0.09s)
+=== RUN   TestMethodChangeIsRecorded
+--- PASS: TestMethodChangeIsRecorded (0.10s)
+=== RUN   TestMethodChangeToSameIsNoop
+--- PASS: TestMethodChangeToSameIsNoop (0.09s)
+=== RUN   TestMethodChangeIsPayerOnly
+--- PASS: TestMethodChangeIsPayerOnly (0.09s)
+=== RUN   TestProofChannelIsRecorded
+--- PASS: TestProofChannelIsRecorded (0.10s)
+=== RUN   TestLifecycleMigrationBackfillsToMigrationTime
+--- PASS: TestLifecycleMigrationBackfillsToMigrationTime (0.09s)
+=== RUN   TestLifecycleMigrationIsIdempotent
+--- PASS: TestLifecycleMigrationIsIdempotent (0.08s)
+=== RUN   TestMigration0017PreservesUsers
+--- PASS: TestMigration0017PreservesUsers (0.01s)
+=== RUN   TestMigration0019RepairsSplitAssignments
+--- PASS: TestMigration0019RepairsSplitAssignments (0.09s)
+=== RUN   TestOfferPriceRoundTrips
+--- PASS: TestOfferPriceRoundTrips (0.07s)
+=== RUN   TestUpdateOfferChangesPrice
+--- PASS: TestUpdateOfferChangesPrice (0.08s)
+=== RUN   TestArchiveOfferRemovesItWithoutDestroyingIt
+--- PASS: TestArchiveOfferRemovesItWithoutDestroyingIt (0.07s)
+=== RUN   TestDeleteOfferRefusesOneThatHasBeenSold
+--- PASS: TestDeleteOfferRefusesOneThatHasBeenSold (0.10s)
+=== RUN   TestOverviewQueriesUseIndexes
+=== RUN   TestOverviewQueriesUseIndexes/monthly_trend
+    overview_index_test.go:50: plan: SEARCH payment_records USING INDEX idx_pay_status (status=?) | USE TEMP B-TREE FOR GROUP BY | 
+=== RUN   TestOverviewQueriesUseIndexes/month_window
+    overview_index_test.go:50: plan: SEARCH payment_records USING INDEX idx_pay_status (status=?) | 
+=== RUN   TestOverviewQueriesUseIndexes/quota_usage
+    overview_index_test.go:50: plan: SEARCH vpn_assignments USING COVERING INDEX idx_assign_seller (seller_user_id=? AND status=?) | 
+--- PASS: TestOverviewQueriesUseIndexes (0.10s)
+    --- PASS: TestOverviewQueriesUseIndexes/monthly_trend (0.00s)
+    --- PASS: TestOverviewQueriesUseIndexes/month_window (0.00s)
+    --- PASS: TestOverviewQueriesUseIndexes/quota_usage (0.00s)
+=== RUN   TestPaymentTotalsNetRevenue
+--- PASS: TestPaymentTotalsNetRevenue (0.10s)
+=== RUN   TestPaymentTotalsIgnoresUndatedConfirmations
+--- PASS: TestPaymentTotalsIgnoresUndatedConfirmations (0.09s)
+=== RUN   TestPaymentTotalsRefusesToSumCurrencies
+--- PASS: TestPaymentTotalsRefusesToSumCurrencies (0.09s)
+=== RUN   TestPaymentTotalsOnAnEmptyDatabase
+--- PASS: TestPaymentTotalsOnAnEmptyDatabase (0.08s)
+=== RUN   TestResellerHealthCountsTheThingsOnlyAnOwnerCanFix
+--- PASS: TestResellerHealthCountsTheThingsOnlyAnOwnerCanFix (0.07s)
+=== RUN   TestPaymentListIsCappedButTheCountIsNot
+--- PASS: TestPaymentListIsCappedButTheCountIsNot (0.08s)
+=== RUN   TestPaymentCountMatchesTheListScope
+=== RUN   TestPaymentCountMatchesTheListScope/super_admin
+=== RUN   TestPaymentCountMatchesTheListScope/admin
+=== RUN   TestPaymentCountMatchesTheListScope/client
+--- PASS: TestPaymentCountMatchesTheListScope (0.06s)
+    --- PASS: TestPaymentCountMatchesTheListScope/super_admin (0.00s)
+    --- PASS: TestPaymentCountMatchesTheListScope/admin (0.00s)
+    --- PASS: TestPaymentCountMatchesTheListScope/client (0.00s)
+=== RUN   TestPaymentCountRespectsThePendingFilter
+--- PASS: TestPaymentCountRespectsThePendingFilter (0.06s)
+=== RUN   TestPaymentCountOnAnEmptyDatabase
+--- PASS: TestPaymentCountOnAnEmptyDatabase (0.07s)
+=== RUN   TestPaymentListNamesWhoPlacedIt
+--- PASS: TestPaymentListNamesWhoPlacedIt (0.07s)
+=== RUN   TestPaymentListStatesAnAbsentPackageAsEmpty
+--- PASS: TestPaymentListStatesAnAbsentPackageAsEmpty (0.08s)
+=== RUN   TestClaimPlanSlotIsAtomic
+--- PASS: TestClaimPlanSlotIsAtomic (0.07s)
+=== RUN   TestClaimPlanSlotUnlimited
+--- PASS: TestClaimPlanSlotUnlimited (0.07s)
+=== RUN   TestCheckPlanRelease
+--- PASS: TestCheckPlanRelease (0.07s)
+=== RUN   TestCheckPlanReleaseFreeIsUngated
+--- PASS: TestCheckPlanReleaseFreeIsUngated (0.06s)
+=== RUN   TestPricingFallsBackToPlatformDefault
+--- PASS: TestPricingFallsBackToPlatformDefault (0.05s)
+=== RUN   TestServerRateOverridesGlobal
+--- PASS: TestServerRateOverridesGlobal (0.06s)
+=== RUN   TestSavePricingIsUpsert
+--- PASS: TestSavePricingIsUpsert (0.06s)
+=== RUN   TestPricingSeededRowIsZeroNotFake
+--- PASS: TestPricingSeededRowIsZeroNotFake (0.05s)
+=== RUN   TestPricingMissingScopeIsAnError
+--- PASS: TestPricingMissingScopeIsAnError (0.06s)
+=== RUN   TestProfilePatchOnlyTouchesNamedFields
+--- PASS: TestProfilePatchOnlyTouchesNamedFields (0.05s)
+=== RUN   TestUsernameIsUnique
+--- PASS: TestUsernameIsUnique (0.06s)
+=== RUN   TestEmailChangeLifecycle
+--- PASS: TestEmailChangeLifecycle (0.06s)
+=== RUN   TestEmailChangeSupersedeAndBurn
+--- PASS: TestEmailChangeSupersedeAndBurn (0.07s)
+=== RUN   TestReleaseMarksReleasedAndNeverServerUnavailable
+--- PASS: TestReleaseMarksReleasedAndNeverServerUnavailable (0.07s)
+=== RUN   TestPurgeReturnsSnapshotBeforeDeleting
+--- PASS: TestPurgeReturnsSnapshotBeforeDeleting (0.07s)
+=== RUN   TestPanelTruthSchemaIsPresent
+--- PASS: TestPanelTruthSchemaIsPresent (0.06s)
+=== RUN   TestPanelClientTagValuesAreConstrained
+--- PASS: TestPanelClientTagValuesAreConstrained (0.06s)
+=== RUN   TestPanelClientTagIsUniquePerClient
+--- PASS: TestPanelClientTagIsUniquePerClient (0.05s)
+=== RUN   TestPlanMoneySchemaIsPresent
+--- PASS: TestPlanMoneySchemaIsPresent (0.06s)
+=== RUN   TestPlanDefaultsKeepLegacyRowsMeaningful
+--- PASS: TestPlanDefaultsKeepLegacyRowsMeaningful (0.05s)
+=== RUN   TestPaymentTargetDefaultsToNullAndIsReadable
+--- PASS: TestPaymentTargetDefaultsToNullAndIsReadable (0.06s)
+=== RUN   TestPlanPurchaseRequiresRealPlan
+--- PASS: TestPlanPurchaseRequiresRealPlan (0.05s)
+=== RUN   TestListStaffIsStaffOnly
+--- PASS: TestListStaffIsStaffOnly (0.06s)
+=== RUN   TestListStaffFilters
+--- PASS: TestListStaffFilters (0.09s)
+=== RUN   TestStaffDetailNamesTheBook
+--- PASS: TestStaffDetailNamesTheBook (0.07s)
+=== RUN   TestStaffQuotaUsedCountsSales
+--- PASS: TestStaffQuotaUsedCountsSales (0.06s)
+=== RUN   TestMigrateIsIdempotent
+--- PASS: TestMigrateIsIdempotent (0.07s)
+=== RUN   TestPragmasAreApplied
+--- PASS: TestPragmasAreApplied (0.05s)
+=== RUN   TestTxRollbackLeavesNoRows
+--- PASS: TestTxRollbackLeavesNoRows (0.06s)
+=== RUN   TestDuplicatePanelEmailIsRejected
+--- PASS: TestDuplicatePanelEmailIsRejected (0.06s)
+=== RUN   TestTagLocksOnceIssued
+--- PASS: TestTagLocksOnceIssued (0.06s)
+=== RUN   TestUntaggedClientHasNoTag
+--- PASS: TestUntaggedClientHasNoTag (0.07s)
+=== RUN   TestSetClientTagRejectsUnknownValue
+--- PASS: TestSetClientTagRejectsUnknownValue (0.07s)
+=== RUN   TestLockIsIdempotent
+--- PASS: TestLockIsIdempotent (0.08s)
+=== RUN   TestTransferMovesOwner
+--- PASS: TestTransferMovesOwner (0.06s)
+=== RUN   TestTransferKeepsPanelIdentity
+--- PASS: TestTransferKeepsPanelIdentity (0.08s)
+=== RUN   TestTransferKeepsTagAndLock
+--- PASS: TestTransferKeepsTagAndLock (0.07s)
+=== RUN   TestTransferRefusesSelf
+--- PASS: TestTransferRefusesSelf (0.07s)
+=== RUN   TestTransferRefusesNonClient
+--- PASS: TestTransferRefusesNonClient (0.07s)
+=== RUN   TestTransferRefusesTerminal
+--- PASS: TestTransferRefusesTerminal (0.08s)
+=== RUN   TestTransferRefusesReleased
+--- PASS: TestTransferRefusesReleased (0.08s)
+=== RUN   TestTransferRefusesUnknownVPN
+--- PASS: TestTransferRefusesUnknownVPN (0.07s)
+=== RUN   TestTransferRefusesBlockedClient
+--- PASS: TestTransferRefusesBlockedClient (0.07s)
+=== RUN   TestTransferLeavesNothingBehindOnRefusal
+--- PASS: TestTransferLeavesNothingBehindOnRefusal (0.07s)
+=== RUN   TestTransferClosesOldAssignment
+--- PASS: TestTransferClosesOldAssignment (0.08s)
+=== RUN   TestTransferMovesFreeClaim
+--- PASS: TestTransferMovesFreeClaim (0.07s)
+=== RUN   TestTransferWithoutFreeClaimReportsNoMove
+--- PASS: TestTransferWithoutFreeClaimReportsNoMove (0.07s)
+=== RUN   TestTransferWritesHistory
+--- PASS: TestTransferWritesHistory (0.08s)
+PASS
+ok  	veylix/backend/internal/store	6.785s
+=== RUN   TestMetricsRecordNetworkRate
+--- PASS: TestMetricsRecordNetworkRate (0.10s)
+=== RUN   TestMetricsTreatCounterResetAsZero
+--- PASS: TestMetricsTreatCounterResetAsZero (0.12s)
+=== RUN   TestSyncMirrorsPanelLimits
+--- PASS: TestSyncMirrorsPanelLimits (0.10s)
+=== RUN   TestSyncMirrorIsIdempotent
+--- PASS: TestSyncMirrorIsIdempotent (0.11s)
+=== RUN   TestSyncWritesMirrorOnceForLegacyRows
+--- PASS: TestSyncWritesMirrorOnceForLegacyRows (0.12s)
+=== RUN   TestSyncClearsMirrorWhenVerificationFails
+2026/11/10 03:21:40 INFO sync: reconciled VPN presence server_id=1 absent=0 unverified=1
+--- PASS: TestSyncClearsMirrorWhenVerificationFails (0.10s)
+=== RUN   TestSchedulerSkipsOverlappingTicks
+2026/11/10 03:21:40 INFO sync scheduler started interval=20ms
+2026/11/10 03:21:40 WARN sync: server pass failed server_id=1 err="sync: list local vpns: context canceled" duration_ms=120
+2026/11/10 03:21:40 INFO sync scheduler stopped
+--- PASS: TestSchedulerSkipsOverlappingTicks (0.50s)
+=== RUN   TestSchedulerDisabledWhenIntervalIsZero
+--- PASS: TestSchedulerDisabledWhenIntervalIsZero (0.22s)
+=== RUN   TestSchedulerStopIsIdempotent
+--- PASS: TestSchedulerStopIsIdempotent (0.00s)
+=== RUN   TestSyncRecordsSnapshotAndLifetime
+--- PASS: TestSyncRecordsSnapshotAndLifetime (0.11s)
+=== RUN   TestSyncAccumulatesAcrossPasses
+--- PASS: TestSyncAccumulatesAcrossPasses (0.10s)
+=== RUN   TestSyncSurvivesRemoteResetEndToEnd
+--- PASS: TestSyncSurvivesRemoteResetEndToEnd (0.09s)
+=== RUN   TestSyncIsolatesAFailingServer
+2026/11/10 03:21:41 WARN sync: server pass failed server_id=999 err="sync: server unreachable: panel offline" duration_ms=0
+--- PASS: TestSyncIsolatesAFailingServer (0.10s)
+=== RUN   TestSyncFailureNeverRevokes
+2026/11/10 03:21:41 WARN sync: server pass failed server_id=1 err="sync: server unreachable: connection refused" duration_ms=0
+--- PASS: TestSyncFailureNeverRevokes (0.08s)
+=== RUN   TestSyncPaginatesThroughEveryClient
+2026/11/10 03:21:41 INFO sync: panel no longer holds this VPN; marked unavailable vpn_id=1 panel_email=a@panel.test from=ACTIVE
+2026/11/10 03:21:41 INFO sync: reconciled VPN presence server_id=1 absent=1 unverified=0
+--- PASS: TestSyncPaginatesThroughEveryClient (0.09s)
+=== RUN   TestSyncTimesOutOneServerOnly
+2026/11/10 03:21:41 WARN sync: server pass failed server_id=7 err="sync: server unreachable: read page 1: context deadline exceeded" duration_ms=150
+--- PASS: TestSyncTimesOutOneServerOnly (0.25s)
+=== RUN   TestSyncMarksExpiredAndDepleted
+--- PASS: TestSyncMarksExpiredAndDepleted (0.08s)
+=== RUN   TestSyncMarksTrafficDepleted
+--- PASS: TestSyncMarksTrafficDepleted (0.05s)
+=== RUN   TestSyncLeavesDormantVPNStatusAlone
+2026/11/10 03:21:42 INFO sync: panel no longer holds this VPN; marked unavailable vpn_id=1 panel_email=a@panel.test from=ACTIVE
+2026/11/10 03:21:42 INFO sync: reconciled VPN presence server_id=1 absent=1 unverified=0
+--- PASS: TestSyncLeavesDormantVPNStatusAlone (0.08s)
+=== RUN   TestSyncMarksVerifiedAbsentClient
+2026/11/10 03:21:42 INFO sync: panel no longer holds this VPN; marked unavailable vpn_id=1 panel_email=a@panel.test from=ACTIVE
+2026/11/10 03:21:42 INFO sync: reconciled VPN presence server_id=1 absent=1 unverified=0
+--- PASS: TestSyncMarksVerifiedAbsentClient (0.10s)
+=== RUN   TestSyncDoesNotMarkWhenVerificationFails
+2026/11/10 03:21:42 INFO sync: reconciled VPN presence server_id=1 absent=0 unverified=1
+--- PASS: TestSyncDoesNotMarkWhenVerificationFails (0.08s)
+=== RUN   TestSyncKeepsStatusWhenClientExistsButPageWasShort
+2026/11/10 03:21:42 INFO sync: reconciled VPN presence server_id=1 absent=0 unverified=1
+--- PASS: TestSyncKeepsStatusWhenClientExistsButPageWasShort (0.08s)
+=== RUN   TestSyncReflectsPanelDisable
+--- PASS: TestSyncReflectsPanelDisable (0.09s)
+=== RUN   TestSyncIsIdempotentWithinOneSecond
+--- PASS: TestSyncIsIdempotentWithinOneSecond (0.07s)
+=== RUN   TestFoldAccumulatesDelta
+--- PASS: TestFoldAccumulatesDelta (0.00s)
+=== RUN   TestFoldSurvivesRemoteReset
+--- PASS: TestFoldSurvivesRemoteReset (0.00s)
+=== RUN   TestFoldDetectsResetWithoutResetCount
+--- PASS: TestFoldDetectsResetWithoutResetCount (0.00s)
+=== RUN   TestFoldDetectsResetInOneDirectionOnly
+--- PASS: TestFoldDetectsResetInOneDirectionOnly (0.00s)
+=== RUN   TestFoldNeverLosesBytes
+--- PASS: TestFoldNeverLosesBytes (0.00s)
+=== RUN   TestFoldTreatsStaleResetCountAsMonotonic
+--- PASS: TestFoldTreatsStaleResetCountAsMonotonic (0.00s)
+=== RUN   TestFoldIsIdempotentForRepeatedReadings
+--- PASS: TestFoldIsIdempotentForRepeatedReadings (0.00s)
+=== RUN   TestLifetimeExceeded
+=== RUN   TestLifetimeExceeded/zero_limit_is_unlimited
+=== RUN   TestLifetimeExceeded/under_limit
+=== RUN   TestLifetimeExceeded/exactly_at_limit
+=== RUN   TestLifetimeExceeded/over_limit
+--- PASS: TestLifetimeExceeded (0.00s)
+    --- PASS: TestLifetimeExceeded/zero_limit_is_unlimited (0.00s)
+    --- PASS: TestLifetimeExceeded/under_limit (0.00s)
+    --- PASS: TestLifetimeExceeded/exactly_at_limit (0.00s)
+    --- PASS: TestLifetimeExceeded/over_limit (0.00s)
+PASS
+ok  	veylix/backend/internal/sync	2.842s
+=== RUN   TestCompareVersions
+--- PASS: TestCompareVersions (0.00s)
+=== RUN   TestParseVersion
+--- PASS: TestParseVersion (0.00s)
+=== RUN   TestSameVersion
+--- PASS: TestSameVersion (0.00s)
+=== RUN   TestCheckUpdateReportsAnAvailableUpdate
+--- PASS: TestCheckUpdateReportsAnAvailableUpdate (0.00s)
+=== RUN   TestCheckUpdateSaysUpToDateWhenCurrent
+--- PASS: TestCheckUpdateSaysUpToDateWhenCurrent (0.00s)
+=== RUN   TestCheckUpdateIgnoresPrereleases
+--- PASS: TestCheckUpdateIgnoresPrereleases (0.00s)
+=== RUN   TestCheckUpdateSaysUnknownWhenTheFeedFails
+--- PASS: TestCheckUpdateSaysUnknownWhenTheFeedFails (0.00s)
+=== RUN   TestCheckUpdateWithNoStableRelease
+--- PASS: TestCheckUpdateWithNoStableRelease (0.00s)
+=== RUN   TestReleasesAreCachedWithinTheTTL
+--- PASS: TestReleasesAreCachedWithinTheTTL (0.00s)
+=== RUN   TestCacheRefreshesAfterTheTTL
+--- PASS: TestCacheRefreshesAfterTheTTL (0.00s)
+=== RUN   TestStaleCacheSurvivesARemoteOutage
+--- PASS: TestStaleCacheSurvivesARemoteOutage (0.00s)
+=== RUN   TestNoFetcherIsAnExplicitError
+--- PASS: TestNoFetcherIsAnExplicitError (0.00s)
+=== RUN   TestMarkedReleasesFlagsCurrentAndLatest
+--- PASS: TestMarkedReleasesFlagsCurrentAndLatest (0.00s)
+=== RUN   TestGitHubFetcherReadsReleasesAndSkipsDrafts
+--- PASS: TestGitHubFetcherReadsReleasesAndSkipsDrafts (0.00s)
+=== RUN   TestGitHubFetcherReportsNotFound
+--- PASS: TestGitHubFetcherReportsNotFound (0.00s)
+=== RUN   TestGitHubFetcherReportsRateLimit
+--- PASS: TestGitHubFetcherReportsRateLimit (0.00s)
+=== RUN   TestGitHubFetcherRequiresARepo
+--- PASS: TestGitHubFetcherRequiresARepo (0.00s)
+PASS
+ok  	veylix/backend/internal/versioning	0.011s
+FAIL

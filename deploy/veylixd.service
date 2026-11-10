@@ -1,0 +1,58 @@
+[Unit]
+Description=Veylix VPN platform
+Documentation=https://github.com/your-org/veylix
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=veylix
+Group=veylix
+
+# Keys and settings live here, root-readable only (chmod 600).
+EnvironmentFile=/etc/veylix/veylix.env
+ExecStart=/usr/local/bin/veylixd
+
+# The database lives here and is the only path the service may write.
+WorkingDirectory=/var/lib/veylix
+
+Restart=on-failure
+RestartSec=3
+
+# --- Hardening -------------------------------------------------------------
+# The binary needs nothing but its data directory and its listening socket.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictNamespaces=true
+RestrictSUIDSGID=true
+RestrictRealtime=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+
+# No capabilities at all: it binds a high port on loopback.
+CapabilityBoundingSet=
+AmbientCapabilities=
+
+# The systemd sandbox allows exactly one writable path.
+ReadWritePaths=/var/lib/veylix
+
+# A 500 MB box must not be starved by the platform itself (Bible §0.9).
+MemoryMax=384M
+TasksMax=256
+
+# Graceful shutdown needs room for the WAL to checkpoint.
+TimeoutStopSec=20
+
+# Log to the journal; `journalctl -u veylixd -f` is the supported view.
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=veylixd
+
+[Install]
+WantedBy=multi-user.target
