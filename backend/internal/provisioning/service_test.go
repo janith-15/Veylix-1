@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -295,9 +296,10 @@ func TestQuotaIsEnforcedUnderConcurrency(t *testing.T) {
 
 	var wg sync.WaitGroup
 	var ok, quotaErr int32
+	var otherErrs sync.Map // index -> error; a third outcome must not vanish
 	for i := 0; i < 2; i++ {
 		wg.Add(1)
-		go func() {
+		go func(i int) {
 			defer wg.Done()
 			_, err := h.svc.Create(ctx, CreateInput{
 				OfferID: h.offer, ClientUserID: h.client, SellerID: h.admin, Actor: adminPrincipal(h.admin),
@@ -307,13 +309,29 @@ func TestQuotaIsEnforcedUnderConcurrency(t *testing.T) {
 				atomic.AddInt32(&ok, 1)
 			case errors.Is(err, ErrQuotaExceeded):
 				atomic.AddInt32(&quotaErr, 1)
+			default:
+				// A third outcome used to be swallowed by this switch, which is
+				// why the CI failure read "ok=1 quotaErr=0" with no cause: the
+				// losing request did fail, just not with the error under test.
+				// Keep it so the next red build names itself.
+				otherErrs.Store(i, err)
 			}
-		}()
+		}(i)
 	}
 	wg.Wait()
 
 	if ok != 1 || quotaErr != 1 {
-		t.Fatalf("ok=%d quotaErr=%d, want exactly 1 success and 1 refusal", ok, quotaErr)
+		var detail []string
+		otherErrs.Range(func(k, v any) bool {
+			detail = append(detail, fmt.Sprintf("req %v -> %v", k, v))
+			return true
+		})
+		if len(detail) == 0 {
+			t.Fatalf("ok=%d quotaErr=%d, want exactly 1 success and 1 refusal",
+				ok, quotaErr)
+		}
+		t.Fatalf("ok=%d quotaErr=%d, want exactly 1 success and 1 refusal; unexpected errors: %s",
+			ok, quotaErr, strings.Join(detail, "; "))
 	}
 	if got := atomic.LoadInt32(&h.fake.addCalls); got != 1 {
 		t.Fatalf("panel received %d creates, want 1", got)

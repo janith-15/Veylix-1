@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -693,8 +694,17 @@ func TestProbeReadyFailsOnANon200(t *testing.T) {
 
 func TestRemoveAllRefusesSuspiciousPaths(t *testing.T) {
 	r := runner{}
-	for _, dir := range []string{"", ".", "/", `\`, "C:\\", "/var", "/etc", "/usr",
-		"/home", "/root", "/tmp", "/opt", "/srv"} {
+	// Empty, the current directory and every root the tool refuses to treat as a
+	// leaf are cross-platform. The Windows drive-root spelling is NOT: on Linux
+	// `C:\` is an ordinary directory name, so asserting a refusal there tested
+	// the runner's OS rather than the guard. It is checked only where it means
+	// what it says.
+	always := []string{"", ".", "/", `\`, "/var", "/etc", "/usr", "/home", "/root",
+		"/tmp", "/opt", "/srv"}
+	if runtime.GOOS == "windows" {
+		always = append(always, `C:\`, `C:/`, `D:\`)
+	}
+	for _, dir := range always {
 		if err := r.removeAll(dir); err == nil {
 			t.Errorf("removeAll(%q) = nil, want a refusal", dir)
 		}
