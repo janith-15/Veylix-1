@@ -5,6 +5,7 @@ import {
   ApiError,
   api,
   type ApiGoogleSettings,
+  type ApiPublicURL,
   type ApiSystemVersion,
   type ApiUpdateCheck,
 } from '../lib/api'
@@ -37,6 +38,7 @@ export function SuperSettingsPage() {
   const [loadErr, setLoadErr] = useState<string | null>(null)
 
   const [google, setGoogle] = useState<ApiGoogleSettings | null>(null)
+  const [publicURL, setPublicURL] = useState<ApiPublicURL | null>(null)
   const [clientId, setClientId] = useState('')
   const [secret, setSecret] = useState('')
   const [redirect, setRedirect] = useState('')
@@ -44,9 +46,16 @@ export function SuperSettingsPage() {
   const [formErr, setFormErr] = useState<string | null>(null)
 
   const loadSystem = useCallback(async () => {
-    const [v, u] = await Promise.allSettled([api.systemVersion(), api.updateCheck()])
+    const [v, u, p] = await Promise.allSettled([
+      api.systemVersion(),
+      api.updateCheck(),
+      api.publicURL(),
+    ])
     if (v.status === 'fulfilled') setVersion(v.value)
     if (u.status === 'fulfilled') setUpdate(u.value)
+    // A failed read leaves publicURL null, which hides the card rather than
+    // showing an invented address.
+    if (p.status === 'fulfilled') setPublicURL(p.value)
   }, [])
 
   const loadGoogle = useCallback(async () => {
@@ -171,6 +180,44 @@ export function SuperSettingsPage() {
           <Skeleton height={60} />
         )}
       </Card>
+
+      {publicURL && (
+        <Card title="This deployment" actions={<Server size={16} aria-hidden />}>
+          <p className="ui-muted t-sm2">
+            The address Veylix is served at right now. It is read from the request you are making, not
+            from a stored setting, so it cannot drift from the reverse proxy after a domain change.
+          </p>
+          <div className="settings-copyline" data-testid="public-url">
+            <code>{publicURL.url}</code>
+            <Button
+              size="sm"
+              variant="outline"
+              leading={<Copy size={14} />}
+              onClick={() => void copyText(publicURL.url).then((ok) => ok && toast('success', 'Copied', publicURL.url))}
+            >
+              Copy
+            </Button>
+          </div>
+          <div className="settings-copyline" data-testid="public-login-url">
+            <code>{publicURL.login_url}</code>
+            <Button
+              size="sm"
+              variant="outline"
+              leading={<Copy size={14} />}
+              onClick={() =>
+                void copyText(publicURL.login_url).then((ok) => ok && toast('success', 'Copied', publicURL.login_url))
+              }
+            >
+              Copy sign-in link
+            </Button>
+          </div>
+          <p className="ui-muted t-sm2">
+            To change it, run <code>sudo vpn-platformctl</code> on the server and choose{' '}
+            <strong>Change domain</strong>. A new address needs a matching DNS record and a certificate before
+            it will work.
+          </p>
+        </Card>
+      )}
 
       <Card title="Google sign-in" actions={<KeyRound size={16} aria-hidden />}>
         <p className="ui-muted t-sm2">

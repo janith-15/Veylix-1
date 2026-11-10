@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# VEYLIX — one-line installer (bootstrap).
+# VEYLIX â€” one-line installer (bootstrap).
 #
 # This runs ONCE per host. It is not the update mechanism: after a host is
 # installed, every subsequent change (new release, new domain, backup, rollback)
@@ -7,7 +7,7 @@
 # and no schema knowledge - it resolves the release channel at run time, so a
 # project that moves on never invalidates it.
 #
-# See docs/INSTALLATION_DESIGN.md §3 for the reasoning.
+# See docs/INSTALLATION_DESIGN.md Â§3 for the reasoning.
 #
 # Usage:
 #   sudo ./install.sh --domain vpn.example.com
@@ -49,7 +49,7 @@ DEFAULT_REPO=janith-15/Veylix-1
 # it: both now assert the SHIPPED default is a usable slug, not a placeholder.
 PLACEHOLDER_REPO=$DEFAULT_REPO
 
-# --- configuration (overridable, documented in docs/INSTALL.md §F) ----------
+# --- configuration (overridable, documented in docs/INSTALL.md Â§F) ----------
 REPO=${VEYLIX_REPO:-$PLACEHOLDER_REPO}
 # Releases API origin. Overridable so a fork (or a test) can point elsewhere.
 RELEASE_API=${VEYLIX_RELEASE_API:-https://api.github.com}
@@ -76,6 +76,23 @@ SKIP_CADDY=0
 DRY_RUN=0
 LIST_VERSIONS=0
 
+# Ports. The defaults are the conventional ones, so an ordinary install on a bare
+# host is unchanged by this feature existing.
+#
+# HTTPS_PORT is the port a CUSTOMER types. It stays 443 by default because
+# `https://vpn.example.com` with no port is what people expect; a host that
+# already runs 3X-UI on 443 passes --https-port 8443 instead of moving either
+# service.
+HTTP_PORT=80
+HTTPS_PORT=443
+APP_PORT=8080
+
+# Set by parse_args when a port flag was given. The interactive prompt then
+# stays out of the way: an operator who typed --https-port has already answered,
+# and asking again (with a default that would overwrite their choice) is the kind
+# of question that trains people to press Enter without reading.
+PORTS_FROM_FLAGS=0
+
 usage() {
 	cat <<'EOF'
 VEYLIX installer
@@ -94,11 +111,23 @@ Options:
   --endpoint <url>     releases API origin for a GitHub Enterprise host
                        (default: https://api.github.com)
   --script-base <url>  legacy single-file fallback for the deployment templates
+  --http-port <port>   the port Caddy serves plain HTTP on, for the ACME
+                       challenge and the redirect (default: 80)
+  --https-port <port>  the port Caddy serves HTTPS on - this is the port a
+                       customer types (default: 443). Set 8443 when 3X-UI
+                       already holds 443 on this host.
+  --app-port <port>    the loopback port veylixd listens on, behind Caddy
+                       (default: 8080). Not reachable from the network.
   --dry-run            print every phase and change nothing
   --skip-dns           skip the DNS A-record check (recorded in the output)
-  --skip-ports         skip the port 80/443 check (recorded in the output)
+  --skip-ports         skip the port check (recorded in the output)
   --skip-caddy         install without a reverse proxy (loopback only, exit 2)
   --reuse-keys         accept existing keys in /etc/veylix (breaks recovery)
+
+Running beside 3X-UI on one host: 3X-UI normally holds 80 and 443 for Xray.
+Either move the 3X-UI inbound, or keep both and give Veylix its own ports:
+
+  sudo ./install.sh --domain vpn.example.com --http-port 8080 --https-port 8443
 
 Re-running this on an installed host is REFUSED. Use vpn-platformctl instead:
   vpn-platformctl update | rollback | domain-set | backup | restore | repair
@@ -124,6 +153,12 @@ parse_args() {
 			--skip-ports) SKIP_PORTS=1; shift ;;
 			--skip-caddy) SKIP_CADDY=1; shift ;;
 			--reuse-keys) REUSE_KEYS=1; shift ;;
+			--http-port)   HTTP_PORT=${2:-}; PORTS_FROM_FLAGS=1; shift 2 ;;
+			--http-port=*) HTTP_PORT=${1#*=}; PORTS_FROM_FLAGS=1; shift ;;
+			--https-port)   HTTPS_PORT=${2:-}; PORTS_FROM_FLAGS=1; shift 2 ;;
+			--https-port=*) HTTPS_PORT=${1#*=}; PORTS_FROM_FLAGS=1; shift ;;
+			--app-port)   APP_PORT=${2:-}; PORTS_FROM_FLAGS=1; shift 2 ;;
+			--app-port=*) APP_PORT=${1#*=}; PORTS_FROM_FLAGS=1; shift ;;
 			-h|--help)    usage; exit 0 ;;
 			*)            usage >&2; die "unknown argument: $1" 2 ;;
 		esac
@@ -221,7 +256,7 @@ resolve_deploy_dir() {
 
 	warn "no deployment templates found (no ./deploy next to the installer, no"
 	warn "$bundle, no --script-base). HTTPS and backups will be incomplete;"
-	warn "see docs/INSTALL.md §B.3 for the manual copy."
+	warn "see docs/INSTALL.md Â§B.3 for the manual copy."
 	DEPLOY_SRC=""
 	return 1
 }
@@ -255,6 +290,153 @@ list_versions() {
 # Phase 1 - preflight. Cheap checks first, so a failure costs nothing and
 # nothing has been written yet. Every failure prints the CORRECTION.
 # ---------------------------------------------------------------------------
+
+# choose_ports -> asks the operator which ports to use, unless they already said.
+#
+# This is the step the owner asked for: `bash <(curl ... install.sh)` should ask
+# about ports on the way in, with Enter meaning "the normal ones".
+#
+# Three cases, and each one is deliberate:
+#   1. A port flag was passed        -> no question. They already answered.
+#   2. --dry-run                     -> no question. A dry run must not block or
+#                                       change what the printed plan is based on;
+#                                       it reports the defaults.
+#   3. No terminal (/dev/tty absent) -> no question, keep the defaults, and SAY
+#                                       so. Prompting into the void is how an
+#                                       automated install hangs forever.
+choose_ports() {
+	if [ "$PORTS_FROM_FLAGS" -eq 1 ]; then
+		return 0
+	fi
+	if [ "$DRY_RUN" -eq 1 ]; then
+		say "ports: using the defaults ($HTTP_PORT/$HTTPS_PORT, app $APP_PORT) - --dry-run does not prompt"
+		return 0
+	fi
+	if ! has_tty; then
+		say "ports: no terminal, so using the defaults ($HTTP_PORT/$HTTPS_PORT, app $APP_PORT)"
+		say "       to change them: --http-port 8080 --https-port 8443"
+		return 0
+	fi
+
+	cat >/dev/tty <<EOF
+
+Ports. The defaults suit a server that is not already using 80 and 443.
+
+  1) Standard   - HTTPS on 443, HTTP on 80            (https://<domain>)
+  2) 3X-UI host - HTTPS on 8443, HTTP on 8080         (https://<domain>:8443)
+                  use this when 3X-UI is already on this VPS
+  3) Custom     - type your own
+
+EOF
+	printf 'Choose [1]: ' >/dev/tty
+	local choice
+	if ! read_tty choice; then
+		choice=""
+	fi
+
+	case "${choice:-1}" in
+	1)
+		HTTP_PORT=80
+		HTTPS_PORT=443
+		APP_PORT=8080
+		;;
+	2)
+		HTTP_PORT=8080
+		HTTPS_PORT=8443
+		APP_PORT=9090
+		# The caveat belongs next to the choice, not only in the docs: with
+		# 3X-UI holding 80 and 443 the certificate cannot be issued without
+		# one of them, and the operator should learn that now.
+		printf '\n  Note: for a certificate, port 80 or 443 must be free unless you use DNS-01.\n' >/dev/tty
+		printf '  If 3X-UI holds both, HTTPS issuance will fail and the installer will say so\n' >/dev/tty
+		printf '  (exit 2) rather than claim success.\n\n' >/dev/tty
+		;;
+	3)
+		ask_one_port "HTTPS port (what customers type)" 443 HTTPS_PORT || return 1
+		ask_one_port "HTTP port (ACME + redirect)" 80 HTTP_PORT || return 1
+		ask_one_port "App port (loopback only)" 8080 APP_PORT || return 1
+		;;
+	*)
+		warn "'$choice' is not 1, 2 or 3 - using the standard ports"
+		HTTP_PORT=80
+		HTTPS_PORT=443
+		APP_PORT=8080
+		;;
+	esac
+
+	say "ports: HTTPS $HTTPS_PORT, HTTP $HTTP_PORT, app $APP_PORT (127.0.0.1)"
+	return 0
+}
+
+# ask_one_port LABEL DEFAULT VARNAME -> one validated port, Enter for the default.
+#
+# Re-asks on a bad value instead of dying: a typo at an interactive prompt should
+# cost one line, not the whole install. Gives up after three tries so a scripted
+# terminal feeding garbage cannot loop forever.
+ask_one_port() {
+	local label=$1 default=$2 varname=$3 input attempt=0
+	while [ "$attempt" -lt 3 ]; do
+		attempt=$((attempt + 1))
+		printf '  %s [%s]: ' "$label" "$default" >/dev/tty
+		if ! read_tty input; then
+			input=""
+		fi
+		[ -n "$input" ] || input=$default
+		if validate_port "$input"; then
+			printf -v "$varname" '%s' "$input"
+			return 0
+		fi
+		printf '  %s is not a port. Use 1-65535.\n' "$input" >/dev/tty
+	done
+	warn "no valid $label after three tries - using $default"
+	printf -v "$varname" '%s' "$default"
+	return 0
+}
+
+# validate_ports_for_install -> 0 when the three ports are usable, 1 otherwise.
+#
+# Three separate questions, and all three are answered before anything is
+# written:
+#   1. Is each one actually a port? (validate_port)
+#   2. Are they distinct? Two services on one port is a bind failure at runtime,
+#      and detecting it here names the pair instead of producing "address already
+#      in use" from Caddy two phases later.
+#   3. Is the app port loopback-safe? VEYLIX_ADDR must stay on 127.0.0.1 - the
+#      public listener is Caddy (Bible §13.2), and the only thing that makes that
+#      true is the address we hand the binary.
+validate_ports_for_install() {
+	local name val
+	for pair in "http-port:$HTTP_PORT" "https-port:$HTTPS_PORT" "app-port:$APP_PORT"; do
+		name=${pair%%:*}
+		val=${pair#*:}
+		if ! validate_port "$val"; then
+			if [ -z "$val" ]; then
+				warn "--$name needs a port number, e.g. --$name 8443"
+			else
+				warn "--$name $val is not a usable port. Use 1-65535 (no leading zeros)."
+			fi
+			return 1
+		fi
+	done
+
+	if [ "$HTTP_PORT" = "$HTTPS_PORT" ]; then
+		warn "--http-port and --https-port are both $HTTP_PORT. They must differ: one is"
+		warn "the ACME challenge and redirect listener, the other is HTTPS itself."
+		return 1
+	fi
+	if [ "$APP_PORT" = "$HTTPS_PORT" ]; then
+		warn "--app-port and --https-port are both $APP_PORT. Caddy cannot front a service"
+		warn "that is on the same port Caddy already listens on. Pick another --app-port."
+		return 1
+	fi
+	if [ "$APP_PORT" = "$HTTP_PORT" ]; then
+		warn "--app-port and --http-port are both $APP_PORT. Pick another --app-port,"
+		warn "or Veylix will fight Caddy for it."
+		return 1
+	fi
+	return 0
+}
+
 
 preflight() {
 	phase "preflight"
@@ -300,15 +482,24 @@ preflight() {
 	fi
 
 	if [ "$SKIP_PORTS" -eq 1 ]; then
-		skip "ports 80/443" "--skip-ports was passed; Caddy may fail to bind"
+		skip "ports $HTTP_PORT/$HTTPS_PORT" "--skip-ports was passed; Caddy may fail to bind"
 	else
 		local p
-		for p in 80 443; do
+		for p in "$HTTP_PORT" "$HTTPS_PORT"; do
 			if port_in_use "$p"; then
-				die "port $p is already in use. Stop the service holding it, or re-run with --skip-ports (Caddy will then fail)."
+				# The old message said "stop the service holding it". That is
+				# correct for a stray process and WRONG for 3X-UI, which the
+				# operator needs running - it is what serves their VPN clients.
+				# Naming both remedies is the difference between a fix and an
+				# outage.
+				die "port $p is already in use.
+       If it is 3X-UI (Xray) and you need it running, give Veylix its own ports:
+         sudo ./install.sh --domain $DOMAIN --http-port 8080 --https-port 8443
+       If it is a stray process you do not need, stop it and re-run.
+       Then reach Veylix at https://$DOMAIN:8443 (note the port)."
 			fi
 		done
-		say "ports: 80 and 443 are free"
+		say "ports: $HTTP_PORT and $HTTPS_PORT are free"
 	fi
 
 	if [ "$SKIP_CADDY" -eq 1 ]; then
@@ -483,7 +674,7 @@ render_config() {
 	fi
 
 	if is_dry_run; then
-		out "[dry-run] render $env (0600 root:root) with VEYLIX_ADDR=127.0.0.1:8080"
+		out "[dry-run] render $env (0600 root:root) with VEYLIX_ADDR=127.0.0.1:$APP_PORT"
 		return 0
 	fi
 
@@ -493,9 +684,9 @@ render_config() {
 
 	umask 077
 	{
-		echo "# VEYLIX — generated by install.sh on $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+		echo "# VEYLIX â€” generated by install.sh on $(date -u +%Y-%m-%dT%H:%M:%SZ)"
 		echo "# Contains the two keys. Never commit this file."
-		echo "VEYLIX_ADDR=127.0.0.1:8080"
+		echo "VEYLIX_ADDR=127.0.0.1:$APP_PORT"
 		echo "VEYLIX_DATA_DIR=$DATA_DIR"
 		echo "VEYLIX_ENCRYPTION_KEY=$enc"
 		echo "VEYLIX_SESSION_KEY=$sess"
@@ -536,6 +727,17 @@ install_binaries() {
 		say "installed $BIN_DIR/vpn-platformctl"
 	fi
 
+	# The launcher (D-126). This is the piece 3X-UI has and Veylix did not: a
+	# short command an operator can type from muscle memory. Without it, opening
+	# the menu means remembering a 16-character binary name and prefixing sudo.
+	#
+	# A SCRIPT, not a symlink: it must survive `vpn-platformctl update`, which
+	# replaces /usr/local/bin/vpn-platformctl by rename. A symlink would keep
+	# pointing at the right path either way, but a wrapper can also notice a
+	# missing install and say so in one line instead of "No such file or
+	# directory" from bash.
+	install_launcher
+
 	# Ship the backup script with the install so vpn-platformctl can delegate to
 	# it without depending on a checkout. It comes from the resolved template
 	# source: the checkout, the release bundle, or --script-base.
@@ -546,6 +748,52 @@ install_binaries() {
 	else
 		warn "no veylix-backup.sh in the deployment templates; backups will not work until it is placed in $DEPLOY_DIR"
 	fi
+}
+
+# install_launcher writes /usr/local/bin/vey.
+#
+# It is a real file, written here rather than downloaded, so it cannot be missing
+# from a release bundle and cannot drift from the binary it launches.
+install_launcher() {
+	local target="$BIN_DIR/vey"
+
+	if is_dry_run; then
+		out "[dry-run] write $target (the \`vey\` launcher -> vpn-platformctl menu)"
+		return 0
+	fi
+
+	local tmp
+	tmp=$(mktemp)
+	cat >"$tmp" <<'LAUNCHER'
+#!/bin/sh
+# vey - open the VEYLIX control menu.
+#
+# Written by install.sh (D-126). Kept deliberately tiny and dependency-free: it
+# runs as root, so it must not source anything, evaluate anything, or take a
+# path from the environment. The one thing it does beyond exec is explain the two
+# situations where the menu cannot open.
+#
+#   vey            the menu                (`vpn-platformctl menu`)
+#   vey <command>  any other command      (`vpn-platformctl status`, ...)
+set -u
+
+CTL=/usr/local/bin/vpn-platformctl
+
+if [ ! -x "$CTL" ]; then
+	echo "vey: $CTL is missing - the Veylix binaries are not installed." >&2
+	echo "     reinstall with install.sh, or restore the binary, then try again." >&2
+	exit 1
+fi
+
+# No arguments means "show me the menu". The binary decides whether it can draw
+# one (it checks its controlling terminal) and prints usage when it cannot, so
+# there is no second copy of that decision here.
+exec "$CTL" "$@"
+LAUNCHER
+
+	run install -o root -g root -m 0755 "$tmp" "$target"
+	rm -f "$tmp"
+	say "installed $target (run \`sudo vey\` for the control menu)"
 }
 
 # ---------------------------------------------------------------------------
@@ -597,11 +845,11 @@ EOF
 	say "unit installed at $UNIT_PATH and started"
 
 	if is_dry_run; then
-		out "[dry-run] would poll http://127.0.0.1:8080/api/ready"
+		out "[dry-run] would poll http://127.0.0.1:$APP_PORT/api/ready"
 		return 0
 	fi
 
-	if ! wait_for_ready "http://127.0.0.1:8080/api/ready" 30 1; then
+	if ! wait_for_ready "http://127.0.0.1:$APP_PORT/api/ready" 30 1; then
 		warn "the service is not ready. Recent log lines:"
 		journalctl -u "$SERVICE" -n 30 --no-pager >&2 || true
 		die "veylixd did not become ready. Fix the cause, then run: vpn-platformctl doctor"
@@ -628,7 +876,7 @@ install_caddy() {
 
 	if [ "$SKIP_CADDY" -eq 1 ]; then
 		warn "--skip-caddy was passed: no reverse proxy was configured"
-		warn "the service is reachable on http://127.0.0.1:8080 only"
+		warn "the service is reachable on http://127.0.0.1:$APP_PORT only"
 		INCOMPLETE=1
 		return 0
 	fi
@@ -643,9 +891,29 @@ install_caddy() {
 	CADDY_SRC=$(deploy_file Caddyfile) || true
 	if [ -n "${CADDY_SRC:-}" ]; then
 		if would_run; then
-			sed "s|vpn\.example\.com|$DOMAIN|g" "$CADDY_SRC" >"$CADDYFILE.veylix-new"
+			# Ports first, then the domain. Order matters only in that the
+			# placeholders are unambiguous (leading/trailing double underscore),
+			# so no substitution can collide with another.
+			sed -e "s|__HTTPS_PORT__|$HTTPS_PORT|g" \
+			    -e "s|__HTTP_PORT__|$HTTP_PORT|g" \
+			    -e "s|__APP_PORT__|$APP_PORT|g" \
+			    -e "s|vpn\.example\.com|$DOMAIN|g" \
+			    "$CADDY_SRC" >"$CADDYFILE.veylix-new"
+
+			# The rendered file must contain no placeholder. A typo in the
+			# template would otherwise reach the live config as the literal text
+			# `__APP_PORT__`, which caddy validate rejects with an unhelpful
+			# message far from the cause.
+			local leftovers
+			leftovers=$(grep -o '__[A-Z_]*PORT__' "$CADDYFILE.veylix-new" 2>/dev/null | sort -u)
+			if [ -n "$leftovers" ]; then
+				rm -f "$CADDYFILE.veylix-new"
+				warn "the Caddyfile template still contained a port placeholder after rendering:"
+				printf '  %s\n' $leftovers
+				die "the deployment template and this installer disagree. Nothing was changed." 1
+			fi
 		else
-			out "[dry-run] render $CADDYFILE from $CADDY_SRC with domain $DOMAIN"
+			out "[dry-run] render $CADDYFILE from $CADDY_SRC with domain $DOMAIN, ports $HTTP_PORT/$HTTPS_PORT -> 127.0.0.1:$APP_PORT"
 		fi
 	else
 		warn "no Caddyfile in the deployment templates; skipping the proxy configuration"
@@ -729,27 +997,31 @@ warn "VEYLIX_ADMIN_EMAIL was set without VEYLIX_ADMIN_PASSWORD - skipping"
 return 0
 fi
 else
-printf '\n'
-printf 'Create the Veylix Super Admin now (leave the email blank to do it at /setup).\n'
-printf '  email: '
-read -r email || email=""
-if [ -z "$email" ]; then
-say "skipped - create the account at the /setup page"
-return 0
-fi
-printf '  display name [Super Admin]: '
-read -r name || name=""
-[ -n "$name" ] || name="Super Admin"
-printf '  password (not echoed): '
-read -rs pass || pass=""
-printf '\n'
-printf '  password again: '
-read -rs pass2 || pass2=""
-printf '\n'
-if [ "$pass" != "$pass2" ]; then
-warn "the passwords do not match - skipping; use the /setup page"
-return 0
-fi
+	if ! has_tty; then
+		# No terminal to ask in. Say so plainly instead of reading from a pipe
+		# that carries the script itself: that path either hangs or feeds the
+		# next line of install.sh in as an "answer".
+		say "no terminal, so skipping Super Admin creation - use the /setup page"
+		return 0
+	fi
+	printf '\nCreate the Veylix Super Admin now (leave the email blank to do it at /setup).\n' >/dev/tty
+	printf '  email: ' >/dev/tty
+	read_tty email || email=""
+	if [ -z "$email" ]; then
+		say "skipped - create the account at the /setup page"
+		return 0
+	fi
+	printf '  display name [Super Admin]: ' >/dev/tty
+	read_tty name || name=""
+	[ -n "$name" ] || name="Super Admin"
+	printf '  password (not echoed): ' >/dev/tty
+	read_tty_secret pass || pass=""
+	printf '  password again: ' >/dev/tty
+	read_tty_secret pass2 || pass2=""
+	if [ "$pass" != "$pass2" ]; then
+		warn "the passwords do not match - skipping; use the /setup page"
+		return 0
+	fi
 fi
 
 if [ ${#pass} -lt 12 ]; then
@@ -802,11 +1074,95 @@ printf '  1. %s/setup                    create the Super Admin' "$base"
 fi
 }
 
+# control_menu prints the VEYLIX CONTROL MENU and, when a human is actually at
+# the keyboard, offers to open it.
+#
+# Two rules make this safe:
+#   1. The menu is PRINTED unconditionally, so it lands in the install log and
+#      `bash <(curl ...) | tee` still shows the operator what exists.
+#   2. It only PROMPTS when there is a terminal to answer in. `curl ... | bash`
+#      and a CI run have none, and a prompt there would hang the installer
+#      forever.
+#
+#      The test is has_tty (/dev/tty), NOT `[ -t 0 ]`. 3X-UI's installer uses
+#      `-t 0` and it is wrong for this script: the documented invocation is
+#      `bash <(curl -Ls .../install.sh)`, where stdin is the pipe carrying the
+#      script, so `-t 0` is false at an interactive terminal and the operator is
+#      never offered the menu.
+control_menu() {
+	cat <<'EOF'
+================================================================
+  VEYLIX CONTROL MENU
+================================================================
+
+  1) Start              start veylixd
+  2) Stop               stop veylixd
+  3) Restart            restart veylixd
+  4) Status             service, readiness and database
+  5) Logs               show the end of the service log
+  6) Enable autostart   start on boot
+  7) Disable autostart  do not start on boot
+  8) Update             upgrade to the latest release
+  9) Versions           list published releases
+ 10) Downgrade          install an older release
+ 11) Backup             take a backup now
+ 12) Restore            restore from a backup
+ 13) Doctor             diagnose this host
+ 14) Repair             re-render config and reload
+ 15) Change domain      point Veylix at another domain
+ 16) Change ports       move HTTPS / HTTP / app port
+ 17) Certificate        check the TLS certificate
+ 18) Reset admin        change the Super Admin password
+ 19) Uninstall          remove the service, keep the data
+ 20) Uninstall + purge  remove EVERYTHING including data
+
+  0) Exit
+
+Type a number here to run it now, or run `vpn-platformctl` at any time.
+
+EOF
+
+	# No terminal: the printed menu is the deliverable. Return so the installer
+	# can finish instead of waiting on a read that will never arrive.
+	has_tty || return 0
+
+	printf 'Open the control menu now? [y/N] ' >/dev/tty
+	local answer
+	read_tty answer || return 0
+	case "$answer" in
+		y | Y | yes | YES)
+			printf '\n' >/dev/tty
+			# `vey` is the launcher installed a moment ago; it execs
+			# `vpn-platformctl menu`. Calling the short name here is deliberate:
+			# the command the operator sees working is the one they will type
+			# tomorrow.
+			if [ -x "$BIN_DIR/vey" ]; then
+				"$BIN_DIR/vey" || printf 'the control menu exited with %s\n' "$?"
+			else
+				vpn-platformctl menu || printf 'vpn-platformctl menu exited with %s\n' "$?"
+			fi
+			;;
+		*) printf 'Run "sudo vey" whenever you want the menu.\n' ;;
+	esac
+}
+
+#
+# The port is omitted when it is 443, because `https://host:443` is noise and
+# looks broken to the reader; it is included otherwise, because without it the
+# operator would copy a URL that does not connect.
+public_url() {
+	if [ "$HTTPS_PORT" = "443" ]; then
+		printf 'https://%s' "$DOMAIN"
+	else
+		printf 'https://%s:%s' "$DOMAIN" "$HTTPS_PORT"
+	fi
+}
+
 report() {
 	phase "first run"
 
-	local base="http://127.0.0.1:8080"
-	[ -n "$DOMAIN" ] && [ "$INCOMPLETE" -eq 0 ] && base="https://$DOMAIN"
+	local base="http://127.0.0.1:$APP_PORT"
+	[ -n "$DOMAIN" ] && [ "$INCOMPLETE" -eq 0 ] && base=$(public_url)
 
 	cat <<EOF
 
@@ -824,24 +1180,38 @@ VEYLIX is installed.
 
 $(admin_note)
 
+Ports:
+  Caddy HTTP   :$HTTP_PORT   (ACME challenge + redirect to HTTPS)
+  Caddy HTTPS  :$HTTPS_PORT   <- the port customers type
+  veylixd      :$APP_PORT   (loopback 127.0.0.1 only, never reachable from outside)
+
 Next steps:
 $(step_one)
   2. sign in and add your 3X-UI panel under Servers (it is sealed on save)
-  3. vpn-platformctl status          verify the install
-  4. vpn-platformctl backup          take the first backup
+  3. sudo vey                  open the control menu (status, logs, everything)
+  4. sudo vey status           verify the install
+  5. sudo vey backup           take the first backup
 
-Every future change is vpn-platformctl - this installer is not run again:
-  vpn-platformctl update             upgrade to the latest release
-  vpn-platformctl domain-set <fqdn>  change the domain
-  vpn-platformctl backup|restore     back up / restore
-  vpn-platformctl doctor             diagnose the host
+The control menu is `sudo vey`. Every future change is in it - this installer is
+not run again:
+
+  sudo vey                     the menu (start/stop, logs, backup, domain, ports)
+  sudo vey status              service, readiness and database
+  sudo vey update              upgrade to the latest release
+  sudo vey domain-set <fqdn>   change the domain
+  sudo vey ports set ...        move the HTTPS / HTTP / app ports
+  sudo vey doctor              diagnose the host
+
+`vpn-platformctl <command>` is the same binary if you prefer the long name.
 
 EOF
 
+	control_menu
+
 	if [ "$INCOMPLETE" -eq 1 ]; then
 		cat <<EOF
-INSTALL INCOMPLETE — the service is running on http://127.0.0.1:8080 but HTTPS is
-NOT active. Fix the cause above, then run: vpn-platformctl repair
+INSTALL INCOMPLETE - the service is running on http://127.0.0.1:$APP_PORT but
+HTTPS is NOT active. Fix the cause above, then run: vpn-platformctl repair
 
 EOF
 		return 2
@@ -859,6 +1229,16 @@ main() {
 
 	[ -n "$DOMAIN" ] || { usage >&2; die "--domain is required" 2; }
 	validate_domain "$DOMAIN" || die "'$DOMAIN' is not a valid public hostname. Certificates need an FQDN such as vpn.example.com" 2
+
+	# Ask about ports when the operator is at a terminal and did not pass flags.
+	# It runs BEFORE validation so the answer is what gets validated, and before
+	# anything is written, downloaded or created.
+	choose_ports
+
+	# Ports are validated BEFORE anything is written, and before any download.
+	# A bad port discovered at the Caddy phase would leave a host with an
+	# installed service and no working HTTPS, which is the worst of both.
+	validate_ports_for_install || exit 2
 
 	# Refuse a bogus repo slug BEFORE downloading anything: a 404 from a
 	# placeholder is otherwise reported as a network failure and sends an

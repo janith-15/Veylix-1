@@ -10,8 +10,26 @@
 # Caddy obtains and renews the certificate itself, so nothing else is needed for
 # HTTPS. The UI and the API share ONE origin here, which is what makes the
 # backend's CSRF origin check pass with no CORS configuration at all (D-043).
+#
+# PORT PLACEHOLDERS (D-123). install.sh substitutes these three; the defaults
+# below are the conventional ports, so a bare host is unchanged.
+#
+#   __HTTPS_PORT__  the port customers type. 443 normally; 8443 when another
+#                   service already holds 443.
+#   __HTTP_PORT__   the plain-HTTP listener: the ACME challenge and the redirect.
+#   __APP_PORT__    the loopback port veylixd binds. Never public.
+#
+# The `https://` scheme prefix on the site address is MANDATORY, not decoration:
+# a bare `vpn.example.com:8443` is parsed as an HTTP site on 8443, so Caddy would
+# serve plaintext and never obtain a certificate. With the explicit scheme Caddy
+# knows it terminates TLS there.
 
-vpn.example.com {
+{
+	http_port __HTTP_PORT__
+	https_port __HTTPS_PORT__
+}
+
+https://vpn.example.com:__HTTPS_PORT__ {
 	encode zstd gzip
 
 	# The VPN platform holds customer credentials. These headers are the floor,
@@ -28,7 +46,7 @@ vpn.example.com {
 
 	# The binary already serves the SPA and the API on one port, so a single
 	# upstream is all that is required. No path routing, no separate asset host.
-	reverse_proxy 127.0.0.1:8080 {
+	reverse_proxy 127.0.0.1:__APP_PORT__ {
 		# Long-lived panel reads (sync, links) can take seconds; bound them so a
 		# hanging panel cannot hold a browser connection open forever.
 		transport http {

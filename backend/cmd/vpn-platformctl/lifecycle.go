@@ -4,8 +4,10 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 )
 
@@ -183,7 +185,7 @@ func cmdUninstall(p paths, args []string) error {
 	fs := newFlagSet("uninstall")
 	o := addCommonFlags(fs)
 	purge := fs.Bool("purge-data", false,
-		"ALSO delete the data directory and config directory (irreversible)")
+		"ALSO delete the data, config, backups and the Caddy block (irreversible)")
 	rest, err := parseArgs(fs, args)
 	if err != nil {
 		return err
@@ -191,9 +193,9 @@ func cmdUninstall(p paths, args []string) error {
 	_ = rest
 
 	r := runner{dryRun: o.dryRun}
+	domain := configuredDomain(p.envFile())
 
 	if *purge {
-		domain := configuredDomain(p.envFile())
 		if domain == "" {
 			return errors.New("cannot purge: no VEYLIX_PUBLIC_BASE_URL in " + p.envFile() +
 				"; set it, or uninstall without --purge-data")
@@ -202,21 +204,19 @@ func cmdUninstall(p paths, args []string) error {
 		out("This will PERMANENTLY DELETE:")
 		out("  %s  (the database)", p.DataDir)
 		out("  %s  (both keys)", p.ConfigDir)
+		out("  %s  (every backup)", p.BackupDir)
+		out("  the %q block in %s", domain, p.Caddyfile)
+		out("  the veylix service account")
 		out("It will NOT delete any client from 3X-UI.")
 		out("")
 
-		// --dry-run must never block on stdin: it is the first execution in a
-		// session and it is also what CI runs. The confirmation is therefore
-		// shown, not solicited.
+		// --dry-run must never block on stdin: it is what CI runs and what an
+		// operator runs first. The confirmation is shown, not solicited.
 		if o.dryRun {
 			out("[dry-run] would ask you to type %q to confirm the purge", domain)
 		} else {
 			out("To confirm, type the configured domain (%s) and press enter:", domain)
-			typed, readErr := bufio.NewReader(os.Stdin).ReadString('\n')
-			if readErr != nil {
-				return fmt.Errorf("confirmation not read: %w", readErr)
-			}
-			if strings.TrimSpace(typed) != domain {
+			if !confirmTyped(domain) {
 				return errors.New("confirmation did not match; nothing was deleted")
 			}
 		}
@@ -249,35 +249,262 @@ func cmdUninstall(p paths, args []string) error {
 		}
 	}
 
-	if *purge {
-		step("purge data")
-		for _, d := range []string{p.DataDir, p.ConfigDir} {
-			if err := r.removeAll(d); err != nil {
-				return err
-			}
-			if !o.dryRun {
-				out("deleted %s", d)
-			}
-		}
+	if !*purge {
+		step("done")
+		out("Service removed. Preserved:")
+		out("  %s  (database + keys)", p.DataDir)
+		out("  %s", p.ConfigDir)
+		out("  %s  (backups)", p.BackupDir)
 		out("")
-		out("Data purged. Removing Veylix never deletes a 3X-UI client (D-027.3).")
+		out("Re-install with install.sh; it refuses while the database exists.")
+		out("To delete everything, including the data: vpn-platformctl uninstall --purge-data")
+		out("Removing Veylix never deletes a 3X-UI client (D-027.3).")
 		return nil
 	}
 
-	step("done")
-	out("Service removed. Preserved:")
-	out("  %s  (database + keys)", p.DataDir)
-	out("  %s", p.ConfigDir)
-	out("  %s  (backups)", p.BackupDir)
-	out("")
-	out("Re-install with install.sh; it refuses while the database exists.")
-	out("To delete the data as well: vpn-platformctl uninstall --purge-data")
-	out("Removing Veylix never deletes a 3X-UI client (D-027.3).")
+	// ---- purge: everything the install created -------------------------------
+
+	step("purge data")
+	for _, d := range []string{p.DataDir, p.ConfigDir} {
+		if !fileExists(d) {
+			continue
+		}
+		if err := r.removeAll(d); err != nil {
+			return err
+		}
+		if !o.dryRun {
+			out("deleted %s", d)
+		}
+	}
+
+	// Backups go too. A purge that leaves a copy of the database behind is
+	// not a purge, and an operator who asks for one is usually about to hand
+	// the host back or rebuild it.
+	step("purge backups")
+	if fileExists(p.BackupDir) {
+		if err := r.removeAll(p.BackupDir); err != nil {
+			return err
+		}
+		if !o.dryRun {
+			out("deleted %s", p.BackupDir)
+		}
+	} else {
+		skipf("purge backups", "no backup directory at "+p.BackupDir)
+	}
+
+	step("remove the caddy block")
+	if err := removeCaddyBlock(r, p.Caddyfile, domain, o.dryRun); err != nil {
+		warnf("%v", err)
+	}
+
+	step("remove the service account")
+	removeServiceAccount(r, o.dryRun)
+
+	step("remove the install lock")
+	if fileExists(p.LockPath) {
+		if err := r.remove(p.LockPath); err != nil {
+			warnf("%v", err)
+		}
+	}
+
+	reinstallBanner(domain, o.dryRun)
 	return nil
 }
 
-// configuredDomain reads the public origin host from the env file. Used only for
-// the purge confirmation, never for a network decision.
+// confirmTyped reads one line from stdin and reports whether it equals want.
+//
+// Separated from cmdUninstall so the purge gate can be read on its own: the
+// domain has to be TYPED, which is what makes the purge deliberate rather than
+// a flag someone copies from a runbook.
+func confirmTyped(want string) bool {
+	typed, err := bufio.NewReader(os.Stdin).ReadString(newlineByte)
+	if err != nil {
+		return false
+	}
+	return strings.TrimSpace(typed) == want
+}
+
+const newlineByte = 10
+
+// nlStr is the newline as a string, used where a literal would have to be
+// escaped inside another literal.
+const nlStr = "\n"
+
+// removeCaddyBlock takes Veylix out of a Caddyfile without harming another site.
+//
+// install.sh backs the operator file up as <path>.pre-veylix before replacing it,
+// so the honest restore is that backup: put it back, validate, reload. When there
+// is no backup the block is deleted by domain and the result is validated before
+// reload - a Caddyfile that fails validation takes down EVERY site on the host,
+// so the original is restored and the error is returned.
+func removeCaddyBlock(r runner, caddyfile, domain string, dryRun bool) error {
+	if !fileExists(caddyfile) {
+		skipf("remove the caddy block", "no Caddyfile at "+caddyfile)
+		return nil
+	}
+	backup := caddyfile + ".pre-veylix"
+	if dryRun {
+		if fileExists(backup) {
+			out("[dry-run] would restore %s from %s", caddyfile, backup)
+		} else {
+			out("[dry-run] would delete the %q block from %s", domain, caddyfile)
+		}
+		out("[dry-run] caddy validate + systemctl reload caddy")
+		return nil
+	}
+
+	original, err := os.ReadFile(caddyfile)
+	if err != nil {
+		return fmt.Errorf("cannot read %s: %w", caddyfile, err)
+	}
+
+	if fileExists(backup) {
+		prev, err := os.ReadFile(backup)
+		if err != nil {
+			return fmt.Errorf("cannot read %s: %w", backup, err)
+		}
+		if err := os.WriteFile(caddyfile, prev, 0o644); err != nil {
+			return fmt.Errorf("cannot restore %s: %w", caddyfile, err)
+		}
+		out("restored %s from %s", caddyfile, backup)
+	} else if trimmed := dropSiteBlock(string(original), domain); trimmed != string(original) {
+		if err := os.WriteFile(caddyfile, []byte(trimmed), 0o644); err != nil {
+			return fmt.Errorf("cannot rewrite %s: %w", caddyfile, err)
+		}
+		out("removed the %q block from %s", domain, caddyfile)
+	} else {
+		skipf("remove the caddy block", "no site block for "+domain)
+		return nil
+	}
+
+	// Validate before reloading. A broken Caddyfile is an outage for every site
+	// on the host, not just this one - the same rule install.sh follows.
+	if have("caddy") {
+		if _, err := r.run("caddy", "validate", "--config", caddyfile); err != nil {
+			if werr := os.WriteFile(caddyfile, original, 0o644); werr != nil {
+				return fmt.Errorf("caddy rejected the result AND the original could not be restored: %v (restore: %w)", err, werr)
+			}
+			return fmt.Errorf("caddy rejected the result; the original Caddyfile was restored: %w", err)
+		}
+		if have("systemctl") {
+			if _, err := r.run("systemctl", "reload", "caddy"); err != nil {
+				warnf("caddy reload failed: %v", err)
+			}
+		}
+	} else {
+		skipf("caddy reload", "caddy is not installed on this host")
+	}
+	return nil
+}
+
+// dropSiteBlock removes the top-level site block whose address list contains
+// domain, and NOTHING else: the rest of the Caddyfile is returned untouched, so
+// a second domain on the same host keeps working. It counts braces rather than
+// matching one line, because Caddy site blocks nest.
+func dropSiteBlock(src, domain string) string {
+	lines := strings.Split(src, nlStr)
+	kept := make([]string, 0, len(lines))
+	depth := 0
+	skip := false
+	for _, line := range lines {
+		t := strings.TrimSpace(line)
+		if !skip && depth == 0 && isSiteLineFor(t, domain) {
+			skip = true
+		}
+		if skip {
+			depth += strings.Count(line, "{") - strings.Count(line, "}")
+			if depth <= 0 {
+				skip = false
+				depth = 0
+			}
+			continue
+		}
+		kept = append(kept, line)
+	}
+	return strings.Join(kept, nlStr)
+}
+
+// isSiteLineFor reports whether a top-level line opens the site block for
+// domain. Caddy accepts several addresses per block (example.com, www.example.com);
+// a comment or a directive line is not a site address.
+func isSiteLineFor(line, domain string) bool {
+	if line == "" || strings.HasPrefix(line, "#") || !strings.HasSuffix(line, "{") {
+		return false
+	}
+	addrs := strings.TrimSpace(strings.TrimSuffix(line, "{"))
+	for _, a := range strings.Split(addrs, ",") {
+		if strings.TrimSpace(a) == domain {
+			return true
+		}
+	}
+	return false
+}
+
+// removeServiceAccount deletes the veylix system user and group.
+//
+// Only for a purge: a default uninstall leaves them, because a re-install reuses
+// them and a lingering account owns nothing once the data directory is gone.
+// userdel is best-effort - an operator may have run Veylix as their own user, and
+// a missing account is not a failure.
+func removeServiceAccount(r runner, dryRun bool) {
+	if !have("userdel") {
+		skipf("remove the service account", "userdel is not installed")
+		return
+	}
+	if dryRun {
+		out("[dry-run] userdel veylix ; groupdel veylix")
+		return
+	}
+	if _, err := r.run("userdel", "veylix"); err != nil {
+		skipf("remove the service account", "no veylix user (or it still owns files)")
+	} else {
+		out("deleted the veylix user")
+	}
+	if have("groupdel") {
+		if _, err := r.run("groupdel", "veylix"); err == nil {
+			out("deleted the veylix group")
+		}
+	}
+}
+
+// reinstallBanner is the last thing an operator reads after a purge, and the
+// only thing they need if they change their mind: the exact command, with the
+// domain already in it.
+func reinstallBanner(domain string, dryRun bool) {
+	const script = "https://raw.githubusercontent.com/janith-15/Veylix-1/main/install.sh"
+	// A dry run must not claim anything was done. It says what WOULD have
+	// happened, and the operator is told to drop --dry-run.
+	done, verb := "has been completely removed.", "   "
+	if dryRun {
+		done, verb = "WOULD have been completely removed (--dry-run).", "[dry-run] "
+	}
+	out("")
+	out("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
+	out(" VEYLIX %s", done)
+	out("")
+	out("%sservice    stopped, disabled, unit and binaries deleted", verb)
+	out("%sdatabase   deleted", verb)
+	out("%skeys       deleted", verb)
+	out("%sbackups    deleted", verb)
+	out("%scaddy      block removed (another site on this host is untouched)", verb)
+	out("")
+	out(" Your 3X-UI clients were NOT touched (D-027.3).")
+	out("")
+	out(" To install again:")
+	out("")
+	out("   bash <(curl -Ls %s) --domain %s", script, domain)
+	out("")
+	if dryRun {
+		out(" Nothing above has happened yet: drop --dry-run to execute it.")
+	} else {
+		out(" Re-run this command on the same host: the database is gone, so the")
+		out(" installer takes the fresh-install branch.")
+	}
+	out("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
+	out("")
+}
+
+// configuredDomain returns the public hostname recorded in veylix.env, or "".
 func configuredDomain(envFile string) string {
 	data, err := os.ReadFile(envFile)
 	if err != nil {
@@ -298,6 +525,49 @@ func configuredDomain(envFile string) string {
 		return v
 	}
 	return ""
+}
+
+// appPort returns the loopback port veylixd is configured to listen on, read
+// from VEYLIX_ADDR in veylix.env, and falls back to 8080 (D-123).
+//
+// It exists because `install.sh --app-port 9090` writes VEYLIX_ADDR=127.0.0.1:9090,
+// so a hardcoded probe to :8080 would report a running, healthy service as DOWN.
+// Reading the same file the daemon reads is the only way the two cannot drift.
+//
+// Only the port is returned: every probe in this tool is loopback by design, so
+// the host part of VEYLIX_ADDR is deliberately ignored rather than trusted.
+func appPort(envFile string) string {
+	const fallback = "8080"
+	data, err := os.ReadFile(envFile)
+	if err != nil {
+		return fallback
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimSpace(line)
+		if !strings.HasPrefix(line, "VEYLIX_ADDR=") {
+			continue
+		}
+		addr := strings.Trim(strings.TrimPrefix(line, "VEYLIX_ADDR="), `"' `)
+		// SplitHostPort handles "127.0.0.1:9090", "[::1]:9090" and ":9090"
+		// alike. A bare "127.0.0.1" has no port, so it is not a match.
+		_, port, splitErr := net.SplitHostPort(addr)
+		if splitErr != nil {
+			continue
+		}
+		// A non-numeric or out-of-range port is a broken env file, not a port
+		// to probe: fall back rather than build "http://127.0.0.1:abc".
+		if n, convErr := strconv.Atoi(port); convErr != nil || n < 1 || n > 65535 {
+			continue
+		}
+		return port
+	}
+	return fallback
+}
+
+// defaultBaseURL is the loopback origin every probe uses when the operator did
+// not pass --base explicitly.
+func defaultBaseURL(envFile string) string {
+	return "http://127.0.0.1:" + appPort(envFile)
 }
 
 // remove deletes one file through the runner so --dry-run covers it.

@@ -393,6 +393,73 @@ local_ip() {
 		awk '{for (i = 1; i <= NF; i++) if ($i == "src") { print $(i + 1); exit }}'
 }
 
+# has_tty -> 0 when a prompt can actually be answered.
+#
+# `[ -t 0 ]` is the obvious test and it is WRONG for the way this installer is
+# actually run:
+#
+#   bash <(curl -Ls .../install.sh)
+#
+# Under that form stdin is the process-substitution pipe carrying the SCRIPT
+# itself, so `[ -t 0 ]` is false on an operator's interactive terminal and any
+# `read` consumes script text instead of their answer. The same is true of
+# `curl ... | bash`.
+#
+# /dev/tty is the operator's controlling terminal regardless of what stdin is
+# wired to. If it can be opened for reading, a question can be asked and the
+# answer will be real.
+#
+# VEYLIX_NONINTERACTIVE=1 forces the answer to be "no". A controlling terminal
+# is inherited by child processes, so a script that pipes a subprocess still
+# hands it a working /dev/tty - without this escape hatch, an automated test (or
+# a cron job) would sit at a prompt nobody is watching. install.selftest.sh sets
+# it; so does any CI.
+has_tty() {
+	[ "${VEYLIX_NONINTERACTIVE:-0}" = "1" ] && return 1
+	[ -r /dev/tty ] && ( : </dev/tty ) 2>/dev/null
+}
+
+# read_tty VARNAME -> reads one line from the terminal into VARNAME.
+# Returns 1 when there is no terminal or the read failed, so the caller can fall
+# back to a default instead of hanging or taking the empty string as an answer.
+read_tty() {
+	local __var=$1
+	has_tty || return 1
+	local __line
+	if ! IFS= read -r __line </dev/tty; then
+		return 1
+	fi
+	printf -v "$__var" '%s' "$__line"
+	return 0
+}
+
+# read_tty_secret VARNAME -> the same, without echo, for a password.
+read_tty_secret() {
+	local __var=$1
+	has_tty || return 1
+	local __line
+	if ! IFS= read -rs __line </dev/tty; then
+		printf '\n' >/dev/tty 2>/dev/null
+		return 1
+	fi
+	printf '\n' >/dev/tty 2>/dev/null
+	printf -v "$__var" '%s' "$__line"
+	return 0
+}
+
+# validate_port PORT -> 0 when PORT is a usable TCP port, 1 otherwise.
+#
+# Accepts 1-65535 only: port 0 means "any free port" to the kernel, which would
+# leave Caddy listening somewhere nobody can find, and 65536+ is not a port.
+# Leading zeros are refused too - `08` looks like eight and is a shell octal trap.
+validate_port() {
+	local p=$1
+	[ -n "$p" ] || return 1
+	printf '%s' "$p" | grep -qE '^[1-9][0-9]{0,4}$' || return 1
+	[ "$p" -ge 1 ] && [ "$p" -le 65535 ] || return 1
+	return 0
+}
+
 # validate_domain DOMAIN -> 0 for a syntactically valid public FQDN.
 # Refuses IP literals, localhost and anything without a dot: those cannot get a
 # publicly trusted certificate and would produce a false "HTTPS active".

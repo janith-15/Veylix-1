@@ -1259,6 +1259,19 @@ export interface ApiUpdateCheck {
 
 // --- Super Admin settings (D-080) -----------------------------------------
 
+/**
+ * The origin this deployment is served at. Everything here is derived from the
+ * request the page was loaded with, so it reflects reality rather than a setting.
+ */
+export interface ApiPublicURL {
+  /** Full origin, e.g. https://vpn.example.com or https://vpn.example.com:8443. */
+  url: string
+  /** The Host header, without the scheme. */
+  host: string
+  /** The sign-in page, ready to hand to a user. */
+  login_url: string
+}
+
 /** The masked Google OAuth settings. The secret is never included in the body. */
 export interface ApiGoogleSettings {
   client_id: string
@@ -1333,6 +1346,13 @@ export const api = {
   // --- Super Admin settings (D-080) ---------------------------------------
   /** The masked Google OAuth client (never the secret). */
   googleSettings: () => request<ApiGoogleSettings>('/api/super/settings/google'),
+  /**
+   * The origin this deployment is actually served at (D-125).
+   *
+   * Derived server-side from the request, so it cannot disagree with the
+   * Caddyfile the way a stored copy would after a `domain-set`.
+   */
+  publicURL: () => request<ApiPublicURL>('/api/super/settings/public-url'),
   /** Save it; applied live in the running process. Empty secret keeps the old one. */
   saveGoogleSettings: (input: ApiGoogleSettingsInput) =>
     request<ApiGoogleSettings>('/api/super/settings/google', {

@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -636,6 +637,87 @@ func TestConfiguredDomain(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// appPort reads the port the daemon was actually installed with (D-123)
+// ---------------------------------------------------------------------------
+
+// The failure this prevents: `install.sh --app-port 9090` writes
+// VEYLIX_ADDR=127.0.0.1:9090, and a hardcoded :8080 probe then reports a
+// healthy service as DOWN. Every case below is a real env-file state.
+func TestAppPort(t *testing.T) {
+	dir := t.TempDir()
+	env := filepath.Join(dir, "veylix.env")
+
+	cases := []struct {
+		name    string
+		content string
+		want    string
+	}{
+		{"a non-default port is honoured", "VEYLIX_ADDR=127.0.0.1:9090\n", "9090"},
+		{"the default port is read, not assumed", "VEYLIX_ADDR=127.0.0.1:8080\n", "8080"},
+		{"other keys do not confuse it", "VEYLIX_ENV=production\nVEYLIX_ADDR=127.0.0.1:7001\nVEYLIX_LOG_LEVEL=info\n", "7001"},
+		{"a quoted value is unquoted", "VEYLIX_ADDR=\"127.0.0.1:7002\"\n", "7002"},
+		{"IPv6 loopback works", "VEYLIX_ADDR=[::1]:7003\n", "7003"},
+		{"a bare bind-all address is honoured", "VEYLIX_ADDR=:7004\n", "7004"},
+		{"surrounding whitespace is trimmed", "  VEYLIX_ADDR=127.0.0.1:7005  \n", "7005"},
+		// A broken value must not become the probe target. Falling back is
+		// honest; building "http://127.0.0.1:abc" would fail with a message
+		// about a URL instead of about the env file.
+		{"a non-numeric port falls back", "VEYLIX_ADDR=127.0.0.1:abc\n", "8080"},
+		{"an out-of-range port falls back", "VEYLIX_ADDR=127.0.0.1:99999\n", "8080"},
+		{"port zero falls back", "VEYLIX_ADDR=127.0.0.1:0\n", "8080"},
+		{"a host with no port falls back", "VEYLIX_ADDR=127.0.0.1\n", "8080"},
+		{"an empty file falls back", "", "8080"},
+		{"the key absent falls back", "VEYLIX_PUBLIC_BASE_URL=https://x.test\n", "8080"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			write(t, env, c.content)
+			if got := appPort(env); got != c.want {
+				t.Fatalf("appPort = %q, want %q (env file %q)", got, c.want, c.content)
+			}
+		})
+	}
+
+	t.Run("a missing env file falls back", func(t *testing.T) {
+		if got := appPort(filepath.Join(dir, "absent.env")); got != "8080" {
+			t.Fatalf("appPort = %q, want 8080 for a missing file", got)
+		}
+	})
+}
+
+// defaultBaseURL must produce a probe target that matches appPort, because that
+// is the value the flag default is built from.
+func TestDefaultBaseURLFollowsAppPort(t *testing.T) {
+	dir := t.TempDir()
+	env := filepath.Join(dir, "veylix.env")
+
+	write(t, env, "VEYLIX_ADDR=127.0.0.1:9091\n")
+	if got, want := defaultBaseURL(env), "http://127.0.0.1:9091"; got != want {
+		t.Fatalf("defaultBaseURL = %q, want %q", got, want)
+	}
+
+	write(t, env, "VEYLIX_ADDR=127.0.0.1:8080\n")
+	if got, want := defaultBaseURL(env), "http://127.0.0.1:8080"; got != want {
+		t.Fatalf("defaultBaseURL = %q, want %q", got, want)
+	}
+
+	if got, want := defaultBaseURL(filepath.Join(dir, "absent.env")), "http://127.0.0.1:8080"; got != want {
+		t.Fatalf("defaultBaseURL = %q, want %q for a missing file", got, want)
+	}
+}
+
+// The default must never be a public address: this tool probes loopback only,
+// and a stray host in VEYLIX_ADDR must not redirect it somewhere else.
+func TestDefaultBaseURLIsAlwaysLoopback(t *testing.T) {
+	dir := t.TempDir()
+	env := filepath.Join(dir, "veylix.env")
+	write(t, env, "VEYLIX_ADDR=0.0.0.0:9092\n")
+	if got, want := defaultBaseURL(env), "http://127.0.0.1:9092"; got != want {
+		t.Fatalf("defaultBaseURL = %q, want %q - a bind-all address must not become the probe host", got, want)
+	}
+}
+
+// ---------------------------------------------------------------------------
 // appendEnvIfMissing never rewrites an existing choice
 // ---------------------------------------------------------------------------
 
@@ -825,4 +907,140 @@ func TestVersionsReadsTheReleaseFeed(t *testing.T) {
 	if err := run([]string{"versions", "--json"}); err != nil {
 		t.Fatalf("versions returned %v, want nil", err)
 	}
+}
+
+// TestDryRunPurgeTouchesNothingOutsideTheTree is the guard that matters most:
+// a dry run must print what it WOULD delete and change nothing at all.
+func TestDryRunPurgeTouchesNothingOutsideTheTree(t *testing.T) {
+	p := newTree(t)
+	write(t, p.dbFile(), "database")
+	write(t, p.encKey(), "enc")
+	write(t, filepath.Join(p.BackupDir, "b.tar.gz"), "backup")
+	write(t, p.envFile(), "VEYLIX_PUBLIC_BASE_URL=https://vpn.example.com")
+	write(t, p.envFile(), "VEYLIX_PUBLIC_BASE_URL=https://vpn.example.com")
+	write(t, p.Caddyfile, "vpn.example.com {")
+	if err := cmdUninstall(p, []string{"--dry-run", "--purge-data"}); err != nil {
+		t.Fatalf("dry-run purge: %v", err)
+	}
+	for _, f := range []string{p.dbFile(), p.encKey(), p.envFile(), p.Caddyfile,
+		filepath.Join(p.BackupDir, "b.tar.gz")} {
+		if !fileExists(f) {
+			t.Errorf("%s was touched by a dry run", f)
+		}
+	}
+}
+
+// TestPurgeRemovesBackupsToo pins the difference between a default uninstall and
+// a purge: the backups directory is the last copy of the database, so leaving it
+// behind means the purge did not purge.
+func TestPurgeRemovesBackupsToo(t *testing.T) {
+	p := newTree(t)
+	write(t, p.dbFile(), "database")
+	write(t, filepath.Join(p.BackupDir, "b.tar.gz"), "backup")
+	write(t, p.envFile(), "VEYLIX_PUBLIC_BASE_URL=https://vpn.example.com")
+	if err := cmdUninstall(p, []string{"--dry-run", "--purge-data"}); err != nil {
+		t.Fatalf("dry-run purge: %v", err)
+	}
+	// The default uninstall keeps them.
+	out := captureStdout(func() {
+		_ = cmdUninstall(p, []string{"--base", "http://127.0.0.1:1"})
+	})
+	if !strings.Contains(out, p.BackupDir) {
+		t.Errorf("the default uninstall should SAY backups are preserved; got %q", out)
+	}
+}
+
+// TestReinstallBannerNamesTheExactCommand: after a purge the only useful thing
+// left to print is the command that brings the platform back, with the domain
+// already filled in.
+func TestReinstallBannerNamesTheExactCommand(t *testing.T) {
+	got := captureStdout(func() { reinstallBanner("vpn.example.com", false) })
+	for _, want := range []string{
+		"bash <(curl -Ls https://raw.githubusercontent.com/janith-15/Veylix-1/main/install.sh)",
+		"--domain vpn.example.com",
+		"3X-UI clients were NOT touched",
+		"has been completely removed.",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("the banner is missing %q; got:%s%s", want, nlStr, got)
+		}
+	}
+}
+
+// TestDryRunBannerClaimsNothingWasDone: a dry run printed "VEYLIX has been
+// completely removed." over a tree it had not touched. Claiming a destructive
+// action from a run that performed none is exactly the dishonesty the platform
+// rules forbid, so the banner takes the flag and changes its whole tense.
+func TestDryRunBannerClaimsNothingWasDone(t *testing.T) {
+	got := captureStdout(func() { reinstallBanner("vpn.example.com", true) })
+	if strings.Contains(got, "has been completely removed.") {
+		t.Fatalf("a dry run claimed the removal happened:%s%s", nlStr, got)
+	}
+	for _, want := range []string{"WOULD have been completely removed (--dry-run).",
+		"[dry-run] database", "Nothing above has happened yet"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("the dry-run banner is missing %q; got:%s%s", want, nlStr, got)
+		}
+	}
+}
+
+// TestDropSiteBlockKeepsAnotherSite is the whole reason this is a brace counter
+// and not a delete-the-file: a host that also serves a blog must still serve it.
+func TestDropSiteBlockKeepsAnotherSite(t *testing.T) {
+	src := strings.Join([]string{
+		"blog.example.com {",
+		"	root * /srv/blog",
+		"	file_server",
+		"}",
+		"",
+		"vpn.example.com {",
+		"	reverse_proxy 127.0.0.1:8080",
+		"	header {",
+		"		Strict-Transport-Security max-age=31536000",
+		"	}",
+		"}",
+	}, nlStr)
+
+	got := dropSiteBlock(src, "vpn.example.com")
+	if strings.Contains(got, "vpn.example.com") {
+		t.Errorf("the veylix block survived:%s%s", nlStr, got)
+	}
+	if strings.Contains(got, "8080") {
+		t.Errorf("a veylix directive survived:%s%s", nlStr, got)
+	}
+	if !strings.Contains(got, "blog.example.com") || !strings.Contains(got, "file_server") {
+		t.Errorf("the other site was damaged:%s%s", nlStr, got)
+	}
+}
+
+// TestDropSiteBlockLeavesAnUnknownDomainAlone: not finding the domain must be a
+// no-op, never a truncated Caddyfile.
+func TestDropSiteBlockLeavesAnUnknownDomainAlone(t *testing.T) {
+	src := "blog.example.com {\n	file_server\n\n}\n"
+	if got := dropSiteBlock(src, "vpn.example.com"); got != src {
+		t.Fatalf("an absent domain changed the file:%s%s", nlStr, got)
+	}
+}
+
+// captureStdout runs fn with os.Stdout redirected and returns what it printed.
+// The purge paths print their evidence, so the assertions have to read it rather
+// than trust that it was written.
+func captureStdout(fn func()) string {
+	old := os.Stdout
+	rd, wr, err := os.Pipe()
+	if err != nil {
+		return ""
+	}
+	os.Stdout = wr
+	done := make(chan string, 1)
+	go func() {
+		buf, _ := io.ReadAll(rd)
+		done <- string(buf)
+	}()
+	defer func() {
+		os.Stdout = old
+	}()
+	fn()
+	_ = wr.Close()
+	return <-done
 }

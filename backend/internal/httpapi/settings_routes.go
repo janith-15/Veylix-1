@@ -99,4 +99,28 @@ func SettingsRoutes(mux *http.ServeMux, svc SettingsService, authed func(http.Ha
 		}
 		WriteJSON(w, http.StatusOK, googleSettingsBodyFor(r, view))
 	}))
+
+	// GET /api/super/settings/public-url — the address this deployment is
+	// actually served at (D-125).
+	//
+	// Derived from the request, not from a stored value: schemeHost is the same
+	// origin the CSRF guard trusts, so the page shows the URL the running server
+	// answers at. A stored copy could drift from the Caddyfile after a
+	// `domain-set`, and a URL that disagrees with reality is worse than none.
+	mux.Handle("GET /api/super/settings/public-url", manage(func(w http.ResponseWriter, r *http.Request) {
+		WriteJSON(w, http.StatusOK, publicURLBody{
+			URL:  schemeHost(r),
+			Host: r.Host,
+			// The login page is what an operator hands to their users, so it is
+			// given assembled rather than left to string concatenation in the UI.
+			LoginURL: schemeHost(r) + "/login",
+		})
+	}))
+}
+
+// publicURLBody is what the Super Admin settings page shows as "this deployment".
+type publicURLBody struct {
+	URL      string `json:"url"`
+	Host     string `json:"host"`
+	LoginURL string `json:"login_url"`
 }

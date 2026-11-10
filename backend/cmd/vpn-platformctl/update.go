@@ -445,6 +445,8 @@ func cmdDomainSet(p paths, args []string) error {
 	fs := newFlagSet("domain-set")
 	o := addCommonFlags(fs)
 	skipDNS := fs.Bool("skip-dns", false, "skip the DNS check (recorded in the output)")
+	dnsProviderName := fs.String("dns-provider", "", "use DNS-01 through this provider (e.g. cloudflare) - no inbound port needed")
+	cfToken := fs.String("cf-token", "", "the Cloudflare API token (stored 0600 in the config dir; never printed)")
 	rest, err := parseArgs(fs, args)
 	if err != nil {
 		return err
@@ -462,9 +464,60 @@ func cmdDomainSet(p paths, args []string) error {
 
 	r := runner{dryRun: o.dryRun}
 
+	// DNS-01 (D-125). Resolve the provider BEFORE touching the Caddyfile: a
+	// named provider whose plugin is absent produces a Caddyfile that will not
+	// load, and writing it first would take a working site down to discover that.
+	var dns dnsProvider
+	var token string
+	if strings.TrimSpace(*dnsProviderName) != "" {
+		dns, err = dnsProviderFor(*dnsProviderName)
+		if err != nil {
+			return err
+		}
+		token = strings.TrimSpace(*cfToken)
+
+		// An empty token is allowed only when one is already stored, so a
+		// re-run without re-typing the credential still works.
+		if token == "" {
+			stored, readErr := os.ReadFile(tokenFile(p, dns.name))
+			if readErr == nil && strings.TrimSpace(string(stored)) != "" {
+				token = strings.TrimSpace(string(stored))
+				out("dns: reusing the stored %s token", dns.name)
+			}
+		}
+		if token == "" {
+			return usagef("--dns-provider %s needs --cf-token <token> the first time", dns.name)
+		}
+		if dns.name == "cloudflare" {
+			if err := validateCloudflareToken(token); err != nil {
+				return err
+			}
+		}
+
+		// The plugin gate. Refusing here is the whole reason this is a separate
+		// step instead of a flag that quietly does nothing.
+		if !o.dryRun {
+			has, hasErr := caddyBuildHasDNS(r, dns.module)
+			if hasErr != nil {
+				return hasErr
+			}
+			if !has {
+				return fmt.Errorf("%s", dnsPluginFixHint(dns.module))
+			}
+			out("caddy has the %s module", dns.module)
+		} else if has, hasErr := caddyBuildHasDNS(r, dns.module); hasErr == nil && !has {
+			warnf("this caddy does NOT have %s; the real run would stop here", dns.module)
+		}
+		// DNS-01 owes nothing to the A record beyond the domain existing, so the
+		// A-record check is not a prerequisite - Caddy proves control through
+		// the TXT record it writes.
+		*skipDNS = true
+		skipf("dns", fmt.Sprintf("DNS-01 issues through the %s API; the A record is not needed for the certificate", dns.name))
+	}
+
 	step("validate %s", domain)
 	if *skipDNS {
-		skipf("dns", "--skip-dns was passed; a wrong DNS record will fail at certificate issuance")
+		skipf("dns", "the A record check was skipped; a wrong record will fail at certificate issuance")
 	} else {
 		ip := resolveHost(domain)
 		if ip == "" {
@@ -480,6 +533,9 @@ func cmdDomainSet(p paths, args []string) error {
 		return fmt.Errorf("cannot read %s: %w", p.Caddyfile, err)
 	}
 	rendered := renderDomain(string(original), domain)
+	if dns.name != "" {
+		rendered = renderDNSChallenge(rendered, dns, token)
+	}
 	if rendered == string(original) {
 		warnf("the Caddyfile does not contain a placeholder domain; it may already be %s", domain)
 	}
@@ -535,8 +591,25 @@ func cmdDomainSet(p paths, args []string) error {
 	} else {
 		out("recorded VEYLIX_PUBLIC_BASE_URL=https://%s in %s", domain, p.envFile())
 	}
+
+	// The DNS-01 credential and the fact that it is in use. The token goes to
+	// its own 0600 file, not into veylix.env - that file is loaded into the
+	// daemon's environment and would expose the token to `systemctl show`.
+	if dns.name != "" && !o.dryRun {
+		tf := tokenFile(p, dns.name)
+		if _, _, err := writeTokenFile(tf, token); err != nil {
+			return fmt.Errorf("the certificate is live but the token could not be stored for future runs: %w", err)
+		}
+		out("stored the %s token in %s (0600, root only)", dns.name, tf)
+		if err := setEnvKey(p.envFile(), "VEYLIX_DNS_PROVIDER", dns.name); err != nil {
+			warnf("could not record VEYLIX_DNS_PROVIDER: %v", err)
+		} else {
+			out("recorded VEYLIX_DNS_PROVIDER=%s", dns.name)
+		}
+	}
+
 	out("")
-	out("Domain changed to %s. Restart the service so e-mail links use the new origin:")
+	out("Domain changed to %s. Restart the service so e-mail links use the new origin:", domain)
 	out("  systemctl restart veylixd")
 	return nil
 }

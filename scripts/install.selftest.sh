@@ -16,6 +16,11 @@
 
 set -uo pipefail
 
+# This script is automated. A controlling terminal is inherited by child
+# processes, so without this every prompt inside install.sh would still find a
+# working /dev/tty and block a test run that nobody is watching.
+export VEYLIX_NONINTERACTIVE=1
+
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 ROOT=$(cd "$HERE/.." && pwd)
 
@@ -419,6 +424,285 @@ expect_rc "T7 a missing checksum entry aborts" $? 1
 expect_rc "T8 --list-versions aborts when the feed is unreachable" $? 1
 expect_grep "T8 the failure says it could not read releases" \
 	"could not read any releases" "$WORK/versions.log"
+
+# ---------------------------------------------------------------------------
+# T11 - the control menu. Two things must be true and both are easy to get
+# wrong: the menu has to PRINT (so it lands in the install log), and it must not
+# PROMPT when there is no terminal (or `curl ... | bash` hangs forever).
+# stdin is /dev/null here, which is exactly the no-tty case.
+# ---------------------------------------------------------------------------
+control_menu >"$WORK/menu.log" 2>&1 </dev/null
+expect_rc "T11 control_menu returns immediately with no terminal" $? 0
+
+for want in 'VEYLIX CONTROL MENU' '1) Start' '4) Status' '16) Change ports' \
+	'18) Reset admin' '20) Uninstall + purge' '0) Exit'; do
+	expect_grep "T11 the menu shows '$want'" "$want" "$WORK/menu.log"
+done
+
+# The prompt must NOT appear without a terminal: printing it and then returning
+# would look like a prompt the operator was never able to answer.
+if grep -qF 'Open the control menu now?' "$WORK/menu.log" 2>/dev/null; then
+	bad "T11 control_menu asked a question with no terminal to answer it"
+else
+	ok "T11 control_menu does not prompt without a terminal"
+fi
+
+# Every option the shell menu offers must map to a real vpn-platformctl command.
+# The two lists are written by hand in two languages, so they can drift: the Go
+# test (menu_test.go) proves the GO menu's verbs are dispatched, and this proves
+# the SHELL menu offers the same NUMBER of options, 1..20 plus 0=Exit.
+#
+# The shell copy prints human labels ("Status"), not command names, so matching
+# on a verb would be matching on a string that is deliberately not there. The
+# count is the honest check: a new command that is not offered, or an offer that
+# no command backs, both change it.
+offered=$(grep -cE '^ *[0-9]+\) ' "$WORK/menu.log" 2>/dev/null || printf '0')
+if [ "$offered" -eq 21 ]; then
+	ok "T11 the menu offers 20 commands plus Exit"
+else
+	bad "T11 the menu offers $offered numbered options, expected 21 (20 commands + Exit)"
+fi
+
+# And the numbers must run 1..20 with no gap and no repeat - the same invariant
+# the Go side enforces, checked here in case someone edits only the heredoc.
+for n in $(seq 1 20); do
+	if grep -qE "^ *${n}\\) " "$WORK/menu.log" 2>/dev/null; then
+		:
+	else
+		bad "T11 the menu has no option numbered $n"
+	fi
+done
+ok "T11 options 1..20 are all present"
+
+# ---------------------------------------------------------------------------
+# T12 - port flags (D-123). The reason this exists: 3X-UI and Veylix both want
+# 80/443 on one VPS, so the installer must accept other ports AND must render
+# them into the Caddyfile correctly. A wrong render is silent - Caddy serves
+# plaintext on 8443 and never obtains a certificate - so it is checked here
+# rather than discovered in production.
+# ---------------------------------------------------------------------------
+
+# validate_port is the gate for all three flags: 1..65535, no leading zeros.
+for good in 1 80 443 8080 8443 65535; do
+	if validate_port "$good"; then :; else
+		bad "T12 validate_port refused the valid port $good"
+	fi
+done
+ok "T12 validate_port accepts valid ports"
+
+for badport in 0 65536 abc 08 -1 1.5 '' ' 80'; do
+	if validate_port "$badport" 2>/dev/null; then
+		bad "T12 validate_port accepted the invalid port '$badport'"
+	fi
+done
+ok "T12 validate_port refuses invalid ports"
+
+# Equal ports are a bind failure at runtime; the check must name the pair.
+HTTP_PORT=80 HTTPS_PORT=443 APP_PORT=8080
+if validate_ports_for_install >/dev/null 2>&1; then
+	ok "T12 the default port trio is accepted"
+else
+	bad "T12 the default port trio (80/443/8080) was rejected"
+fi
+
+HTTP_PORT=8443 HTTPS_PORT=8443 APP_PORT=8080
+if validate_ports_for_install >/dev/null 2>&1; then
+	bad "T12 http-port == https-port was accepted"
+else
+	ok "T12 http-port == https-port is refused"
+fi
+
+HTTP_PORT=80 HTTPS_PORT=443 APP_PORT=443
+if validate_ports_for_install >/dev/null 2>&1; then
+	bad "T12 app-port == https-port was accepted"
+else
+	ok "T12 app-port == https-port is refused"
+fi
+
+HTTP_PORT=80 HTTPS_PORT=443 APP_PORT=80
+if validate_ports_for_install >/dev/null 2>&1; then
+	bad "T12 app-port == http-port was accepted"
+else
+	ok "T12 app-port == http-port is refused"
+fi
+
+# The 3X-UI pairing is the whole point of the feature: it must be ACCEPTED.
+HTTP_PORT=8080 HTTPS_PORT=8443 APP_PORT=9090
+if validate_ports_for_install >/dev/null 2>&1; then
+	ok "T12 the documented 3X-UI pairing (8080/8443/9090) is accepted"
+else
+	bad "T12 the documented 3X-UI pairing was rejected"
+fi
+
+HTTP_PORT=80 HTTPS_PORT=443 APP_PORT=8080   # restore the defaults
+
+# The Caddyfile must render every placeholder. A leftover is a template/installer
+# drift that caddy validate would report far from its cause.
+CADDY_TEMPLATE="$ROOT/deploy/Caddyfile"
+if [ -f "$CADDY_TEMPLATE" ]; then
+	sed -e "s|__HTTPS_PORT__|8443|g" -e "s|__HTTP_PORT__|8080|g" \
+		-e "s|__APP_PORT__|9090|g" -e "s|vpn\.example\.com|vpn.t12.test|g" \
+		"$CADDY_TEMPLATE" >"$WORK/caddy.custom"
+	if grep -q '__[A-Z_]*PORT__' "$WORK/caddy.custom"; then
+		bad "T12 a placeholder survived rendering the Caddyfile"
+	else
+		ok "T12 the Caddyfile renders with no leftover placeholder"
+	fi
+
+	expect_grep "T12 the site address carries https:// and the custom port" \
+		'https://vpn.t12.test:8443 {' "$WORK/caddy.custom"
+	expect_grep "T12 the global block sets http_port" 'http_port 8080' "$WORK/caddy.custom"
+	expect_grep "T12 the global block sets https_port" 'https_port 8443' "$WORK/caddy.custom"
+	expect_grep "T12 the upstream uses the app port" 'reverse_proxy 127.0.0.1:9090 {' "$WORK/caddy.custom"
+
+	# Default ports must still produce a conventional address.
+	sed -e "s|__HTTPS_PORT__|443|g" -e "s|__HTTP_PORT__|80|g" \
+		-e "s|__APP_PORT__|8080|g" -e "s|vpn\.example\.com|vpn.t12.test|g" \
+		"$CADDY_TEMPLATE" >"$WORK/caddy.default"
+	expect_grep "T12 the default render still uses the conventional upstream" \
+		'reverse_proxy 127.0.0.1:8080 {' "$WORK/caddy.default"
+
+	# The scheme prefix is mandatory: without it Caddy treats :8443 as plain
+	# HTTP and silently never issues a certificate.
+	if grep -qE '^vpn\.example\.com:' "$CADDY_TEMPLATE"; then
+		bad "T12 the Caddyfile has a site address with no https:// scheme"
+	else
+		ok "T12 the Caddyfile site address uses an explicit https:// scheme"
+	fi
+else
+	bad "T12 deploy/Caddyfile is missing"
+fi
+
+# app-port must reach the daemon's own environment, or it would still bind 8080
+# while Caddy proxies to 9090.
+expect_grep "T12 install.sh writes VEYLIX_ADDR from APP_PORT" \
+	'VEYLIX_ADDR=127.0.0.1:$APP_PORT' "$ROOT/install.sh"
+
+# The port conflict message must name the 3X-UI remedy, not only "stop it":
+# telling an operator to stop the service that serves their VPN clients is an
+# outage, not a fix.
+expect_grep "T12 the port conflict message offers the 3X-UI port remedy" \
+	'--https-port 8443' "$ROOT/install.sh"
+
+# public_url must drop :443 and keep any other port, or the printed link is wrong.
+DOMAIN=app.t12.test
+HTTPS_PORT=443
+if [ "$(public_url)" = "https://app.t12.test" ]; then
+	ok "T12 public_url omits :443"
+else
+	bad "T12 public_url produced '$(public_url)' for port 443"
+fi
+HTTPS_PORT=8443
+if [ "$(public_url)" = "https://app.t12.test:8443" ]; then
+	ok "T12 public_url keeps a non-default port"
+else
+	bad "T12 public_url produced '$(public_url)' for port 8443"
+fi
+HTTPS_PORT=443
+
+# ---------------------------------------------------------------------------
+# T13 - the interactive port step, and the TTY guard it depends on.
+#
+# The bug this locks: `[ -t 0 ]` is FALSE under `bash <(curl ... install.sh)`
+# because stdin is the script's own pipe. Every prompt guarded by it silently
+# never appeared, and every unguarded `read` ate a line of the script.
+# ---------------------------------------------------------------------------
+
+# has_tty must exist and must not depend on stdin.
+expect_grep "T13 has_tty is defined in common.sh" 'has_tty()' "$ROOT/scripts/lib/common.sh"
+expect_grep "T13 has_tty tests /dev/tty, not stdin" '/dev/tty' "$ROOT/scripts/lib/common.sh"
+expect_grep "T13 read_tty reads from /dev/tty" 'read -r __line </dev/tty' "$ROOT/scripts/lib/common.sh"
+expect_grep "T13 read_tty_secret does not echo" 'read -rs __line </dev/tty' "$ROOT/scripts/lib/common.sh"
+
+# No `read` may remain on plain stdin in install.sh: every one of them is a
+# hang under the documented invocation. `read_tty` reads elsewhere and is fine.
+leftover_reads=$(grep -nE '^[[:space:]]*read (-r|-rs|read)' "$ROOT/install.sh" 2>/dev/null | grep -v 'read_tty' | wc -l | tr -d ' ')
+if [ "${leftover_reads:-0}" -eq 0 ]; then
+	ok "T13 no prompt reads from stdin (only from /dev/tty)"
+else
+	bad "T13 $leftover_reads prompt(s) still read from stdin and would hang under bash <(curl ...)"
+fi
+
+# choose_ports must be reachable and must not prompt when it cannot.
+expect_grep "T13 choose_ports is defined" 'choose_ports()' "$ROOT/install.sh"
+# expect_grep is `grep -F` (literal), so this is a plain substring, not a regex.
+if grep -qE '^[[:space:]]*choose_ports[[:space:]]*$' "$ROOT/install.sh" 2>/dev/null; then
+	ok "T13 choose_ports is called from main"
+else
+	bad "T13 choose_ports is defined but never called"
+fi
+
+# With stdin at /dev/null (the no-terminal case) it must return 0 and keep the
+# defaults, never block and never fail the install.
+(
+	DRY_RUN=0
+	HTTP_PORT=80
+	HTTPS_PORT=443
+	APP_PORT=8080
+	PORTS_FROM_FLAGS=0
+	choose_ports >/dev/null 2>&1 </dev/null
+) 
+if [ $? -eq 0 ]; then
+	ok "T13 choose_ports returns without a terminal instead of hanging"
+else
+	bad "T13 choose_ports failed or blocked without a terminal"
+fi
+
+# A port flag answers the question, so the prompt must not run at all.
+expect_grep "T13 parse_args records that a port flag was given" 'PORTS_FROM_FLAGS=1' "$ROOT/install.sh"
+
+# Enter at the prompt must mean "the standard ports": that is the whole point of
+# a picker with a default.
+expect_grep "T13 the port picker defaults to choice 1" 'Choose [1]: ' "$ROOT/install.sh"
+expect_grep "T13 the picker offers the 3X-UI pairing" 'https://<domain>:8443' "$ROOT/install.sh"
+
+
+
+
+# ---------------------------------------------------------------------------
+# T14 - the `vey` launcher (D-126).
+#
+# The bug this locks: after a fresh install the operator was told to type
+# `vpn-platformctl`, a 16-character name. 3X-UI installs `x-ui`; Veylix must
+# install `vey`. A short name that is absent is a support ticket on the first
+# command anyone types.
+# ---------------------------------------------------------------------------
+
+expect_grep "T14 install.sh writes a launcher" 'install_launcher()' "$ROOT/install.sh"
+expect_grep "T14 the launcher is called during the install" 'install_launcher' "$ROOT/install.sh"
+expect_grep "T14 the launcher is named vey" 'target="$BIN_DIR/vey"' "$ROOT/install.sh"
+
+# The launcher must be extracted and syntax-checked, not merely grepped for: it
+# is shell run as root, and a heredoc typo is invisible to a pattern match.
+awk "/<<'LAUNCHER'/{f=1;next} /^LAUNCHER\$/{f=0} f" "$ROOT/install.sh" >"$WORK/vey-launcher" 2>/dev/null
+if [ -s "$WORK/vey-launcher" ]; then
+	ok "T14 the launcher body is written by install.sh"
+	if bash -n "$WORK/vey-launcher" 2>/dev/null; then
+		ok "T14 the launcher is syntactically valid shell"
+	else
+		bad "T14 the launcher has a shell syntax error"
+	fi
+	expect_grep "T14 the launcher execs the control binary" 'exec "$CTL" "$@"' "$WORK/vey-launcher"
+	expect_grep "T14 the launcher explains a missing binary" 'is missing' "$WORK/vey-launcher"
+	# A launcher that sources or evals anything would be an injection path: it
+	# runs as root, from a fixed path.
+	if grep -qE '(source|\.)[[:space:]]+/|eval ' "$WORK/vey-launcher" 2>/dev/null; then
+		bad "T14 the launcher sources or evals - it runs as root from a fixed path"
+	else
+		ok "T14 the launcher neither sources nor evals anything"
+	fi
+else
+	bad "T14 install.sh writes no launcher body"
+fi
+
+# The report must teach the short command, and the menu offer must use it.
+expect_grep "T14 the report tells the operator to run sudo vey" 'sudo vey' "$ROOT/install.sh"
+expect_grep "T14 the menu offer names sudo vey" 'Run "sudo vey"' "$ROOT/install.sh"
+
+# `menu` must be a dispatched verb: the launcher relies on it existing, and the
+# Go side registers it in init() to avoid an initialization cycle.
+expect_grep "T14 the menu verb is registered" 'dispatchTable["menu"] = cmdMenu' "$ROOT/backend/cmd/vpn-platformctl/main.go"
+
 
 printf '\n'
 if [ "$fail" -eq 0 ]; then

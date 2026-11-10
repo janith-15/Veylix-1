@@ -153,3 +153,91 @@ func TestSettingsAbsentWhenServiceIsNil(t *testing.T) {
 		t.Fatalf("GET with no service = %d, want 404", rec.Code)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// GET /api/super/settings/public-url — the address this deployment serves (D-125)
+// ---------------------------------------------------------------------------
+
+func doPublicURL(mux http.Handler, host string, secure bool) *httptest.ResponseRecorder {
+	req := httptest.NewRequest(http.MethodGet, "/api/super/settings/public-url", nil)
+	req.Host = host
+	if secure {
+		req.Header.Set("X-Forwarded-Proto", "https")
+		// The forwarded-proto honouring only trusts a loopback peer.
+		req.RemoteAddr = "127.0.0.1:4444"
+	}
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	return rec
+}
+
+func TestPublicURLReportsTheServedOrigin(t *testing.T) {
+	stub := &stubSettings{}
+	mux := settingsMux(stub, auth.RoleSuperAdmin)
+
+	rec := doPublicURL(mux, "vpn.example.com", true)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET = %d, want 200 (%s)", rec.Code, rec.Body.String())
+	}
+	var out publicURLBody
+	if err := json.Unmarshal(rec.Body.Bytes(), &out); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+
+	// The URL must be the origin this request arrived on, not a hardcoded one -
+	// that is what makes it impossible for the page to show a stale domain.
+	if out.URL != "https://vpn.example.com" {
+		t.Fatalf("url = %q, want https://vpn.example.com", out.URL)
+	}
+	if out.Host != "vpn.example.com" {
+		t.Fatalf("host = %q", out.Host)
+	}
+	if out.LoginURL != "https://vpn.example.com/login" {
+		t.Fatalf("login_url = %q", out.LoginURL)
+	}
+}
+
+// A non-default HTTPS port must survive into both URLs, or the operator copies a
+// link that does not connect (D-123).
+func TestPublicURLKeepsANonDefaultPort(t *testing.T) {
+	mux := settingsMux(&stubSettings{}, auth.RoleSuperAdmin)
+
+	rec := doPublicURL(mux, "vpn.example.com:8443", true)
+	var out publicURLBody
+	if err := json.Unmarshal(rec.Body.Bytes(), &out); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if out.URL != "https://vpn.example.com:8443" {
+		t.Fatalf("url = %q, want the port kept", out.URL)
+	}
+	if out.LoginURL != "https://vpn.example.com:8443/login" {
+		t.Fatalf("login_url = %q", out.LoginURL)
+	}
+}
+
+// Loopback access (no forwarded proto, no TLS) must report http, not a flattering
+// https that is not actually served there.
+func TestPublicURLIsHonestOnPlainHTTP(t *testing.T) {
+	mux := settingsMux(&stubSettings{}, auth.RoleSuperAdmin)
+
+	rec := doPublicURL(mux, "127.0.0.1:8080", false)
+	var out publicURLBody
+	if err := json.Unmarshal(rec.Body.Bytes(), &out); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if out.URL != "http://127.0.0.1:8080" {
+		t.Fatalf("url = %q, want http on a plain loopback request", out.URL)
+	}
+}
+
+// The endpoint is Super-Admin-only: it names the operator's deployment and must
+// not be readable by a reseller or a client.
+func TestPublicURLRequiresSuperAdmin(t *testing.T) {
+	for _, role := range []auth.Role{auth.RoleAdmin, auth.RoleClient} {
+		mux := settingsMux(&stubSettings{}, role)
+		rec := doPublicURL(mux, "vpn.example.com", true)
+		if rec.Code == http.StatusOK {
+			t.Fatalf("role %v read the public URL (got 200)", role)
+		}
+	}
+}
