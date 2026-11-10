@@ -4420,6 +4420,6 @@ the blob stream, not a PowerShell text pipeline.
   Bash on Windows. That proves the guards, not the server run; the first real
   install is the owner's.
 
-`install.sh`'s `PLACEHOLDER_REPO` is now `janith-15/veylix`; the value is still
+`install.sh`'s `PLACEHOLDER_REPO` is now `janith-15/Veylix-1`; the value is still
 refused as input so a fork must pass its own `--repo`.
 

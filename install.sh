@@ -39,7 +39,7 @@ VEYLIX_TOOL=install.sh
 # The repo slug the shipped default points at. It is NOT a real repository: a
 # stock `./install.sh` would fetch a 404 and report it as a network failure.
 # validate_repo() refuses it explicitly so the correction is one line long.
-PLACEHOLDER_REPO=janith-15/veylix
+PLACEHOLDER_REPO=janith-15/Veylix-1
 
 # --- configuration (overridable, documented in docs/INSTALL.md §F) ----------
 REPO=${VEYLIX_REPO:-$PLACEHOLDER_REPO}

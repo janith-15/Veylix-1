@@ -3837,7 +3837,7 @@ is exactly the "a probe must not invent a defect" rule, pointed at my own toolin
 
 **Verified with Git Bash (bash is NOT on PATH in PowerShell):**
 `bash -n install.sh` OK · `scripts/install.selftest.sh` **59 PASS / 0 FAIL**.
-`PLACEHOLDER_REPO` → `janith-15/veylix` (still refused as input, so a fork must
+`PLACEHOLDER_REPO` → `janith-15/Veylix-1` (still refused as input, so a fork must
 pass `--repo`).
 
 **Shipped:** commit `2dbbeee`, tag `v1.0.0` (annotated), 216 files staged.

@@ -35,7 +35,7 @@ bytes with **0 CR bytes**.
 `git show :install.sh | Out-String` and `cat-file | Out-File` reported CRLF;
 both re-add CRLF themselves. Only reading the raw blob stream is valid.
 
-**`PLACEHOLDER_REPO` → `janith-15/veylix`**, still refused as input so a fork
+**`PLACEHOLDER_REPO` → `janith-15/Veylix-1`**, still refused as input so a fork
 must pass its own `--repo`.
 
 **Gates:** `gofmt` clean · `go build`/`go vet` clean · `go test ./...` no FAIL ·
