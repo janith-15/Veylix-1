@@ -1081,6 +1081,98 @@ EOF
 # is never reported as success.
 # ---------------------------------------------------------------------------
 
+# caddy_install_notes - the manual path, printed ONLY when the automatic one
+# failed. A host behind an egress firewall must not be left guessing what to do.
+caddy_install_notes() {
+	warn "install it by hand, then re-run this installer:"
+	warn "  Debian/Ubuntu:"
+	warn "    sudo apt install -y debian-keyring debian-archive-keyring apt-transport-https curl"
+	warn "    curl -1sLf https://dl.cloudsmith.io/public/caddy/stable/gpg.key \\"
+	warn "      | sudo gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg"
+	warn "    curl -1sLf https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt \\"
+	warn "      | sudo tee /etc/apt/sources.list.d/caddy-stable.list"
+	warn "    sudo apt update && sudo apt install -y caddy"
+	warn "  Or download the static binary from https://caddyserver.com/download"
+}
+
+# install_caddy_package -> 0 when `caddy` is on PATH afterwards.
+#
+# Two sources, tried in order, because a VPS can reach one and not the other:
+#   1. the distribution's own package   (Debian 12+, Ubuntu 24.04+, Fedora)
+#   2. Caddy's official apt/dnf repo    (older Ubuntu/Debian, where the distro
+#                                        package is too old for `handle`/placeholders)
+#
+# Every step is bounded. `apt-get update` against an unreachable mirror waits
+# for a socket timeout that can run to minutes; the point of this installer is
+# that it either finishes or says why, never that it appears frozen.
+install_caddy_package() {
+	local os
+	os=$(detect_os 2>/dev/null || printf unknown)
+
+	# 1. Distribution package. Cheap, and needs no new trust anchor.
+	if have apt-get; then
+		say "caddy: trying the distribution package"
+		if DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
+			-o Acquire::http::Timeout=15 -o Acquire::https::Timeout=15 \
+			-o DPkg::Lock::Timeout=60 caddy >/dev/null 2>&1; then
+			have caddy && return 0
+		fi
+	elif have dnf || have yum; then
+		local pm=dnf
+		have dnf || pm=yum
+		say "caddy: trying the distribution package"
+		if $pm install -y -q caddy >/dev/null 2>&1; then
+			have caddy && return 0
+		fi
+	fi
+
+	# 2. The official repository. Only for the Debian family - the repo layout
+	#    is apt-only, and inventing an rpm equivalent here would be a second
+	#    untested path.
+	case "$os" in
+	debian | ubuntu | raspbian)
+		have apt-get || return 1
+		say "caddy: adding the official apt repository"
+		export DEBIAN_FRONTEND=noninteractive
+
+		local keyring=/usr/share/keyrings/caddy-stable-archive-keyring.gpg
+		local listfile=/etc/apt/sources.list.d/caddy-stable.list
+		local tmpkey
+		tmpkey=$(mktemp) || return 1
+
+		# The key first. gpg --dearmor converts the ASCII-armored key that
+		# cloudsmith serves into the binary form apt expects; downloading to a
+		# file and converting keeps the pipeline out of the failure modes.
+		if ! fetch "https://dl.cloudsmith.io/public/caddy/stable/gpg.key" "$tmpkey" 2>/dev/null; then
+			rm -f "$tmpkey"
+			return 1
+		fi
+		if ! gpg --dearmor --yes -o "$keyring" "$tmpkey" 2>/dev/null; then
+			rm -f "$tmpkey"
+			return 1
+		fi
+		rm -f "$tmpkey"
+		chmod 0644 "$keyring" 2>/dev/null || true
+
+		if ! fetch "https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt" "$listfile" 2>/dev/null; then
+			return 1
+		fi
+		chmod 0644 "$listfile" 2>/dev/null || true
+
+		say "caddy: apt-get update (bounded)"
+		apt-get update -qq -o Acquire::http::Timeout=15 -o Acquire::https::Timeout=15 >/dev/null 2>&1 || true
+
+		if apt-get install -y -qq \
+			-o Acquire::http::Timeout=15 -o Acquire::https::Timeout=15 \
+			-o DPkg::Lock::Timeout=60 caddy >/dev/null 2>&1; then
+			have caddy && return 0
+		fi
+		;;
+	esac
+
+	return 1
+}
+
 install_caddy() {
 	phase "https"
 
@@ -1091,11 +1183,42 @@ install_caddy() {
 		return 0
 	fi
 
+	# Install Caddy instead of telling the operator to. The previous version
+	# printed "caddy is not installed. Install it from ...docs/install" and set
+	# INCOMPLETE, which meant a clean host finished with veylixd bound to
+	# 127.0.0.1:8080 and NOTHING on port 80. The installer then reported
+	# "VEYLIX is installed" next to a URL that did not answer - the exact
+	# false-success this project forbids (rule 3/5).
+	#
+	# Reported from a live Ubuntu 24.04 box: `curl | sudo bash` completed, the
+	# service was active, /api/ready returned 200 on loopback, and
+	# http://<public-ip>/setup timed out because no listener existed there.
+	#
+	# 3X-UI installs what it needs; this is the same bar. Caddy is a single
+	# static binary from an official apt repository, so it is installed rather
+	# than demanded. The failure path still names the manual command, because a
+	# host with no outbound apt access must not be left guessing.
 	if ! have caddy; then
-		warn "caddy is not installed. Install it from https://caddyserver.com/docs/install"
-		warn "then run: vpn-platformctl repair"
-		INCOMPLETE=1
-		return 0
+		if is_dry_run; then
+			out "[dry-run] install caddy from the official apt repository"
+			caddy_install_notes
+			return 0
+		fi
+		say "caddy is not installed - installing it now"
+		if ! install_caddy_package; then
+			warn "could not install caddy automatically."
+			caddy_install_notes
+			warn "the service is reachable on http://127.0.0.1:$APP_PORT only"
+			INCOMPLETE=1
+			return 0
+		fi
+		if ! have caddy; then
+			warn "the caddy package reported success but no caddy binary is on PATH."
+			caddy_install_notes
+			INCOMPLETE=1
+			return 0
+		fi
+		say "caddy installed: $(caddy version 2>/dev/null | head -n 1)"
 	fi
 
 	CADDY_SRC=$(deploy_file Caddyfile) || true
@@ -1487,7 +1610,7 @@ $(step_one)
   4. sudo vey status           verify the install
   5. sudo vey backup           take the first backup
 
-The control menu is `sudo vey`. Every future change is in it - this installer is
+The control menu is "sudo vey". Every future change is in it - this installer is
 not run again:
 
   sudo vey                     the menu (start/stop, logs, backup, domain, ports)
@@ -1497,7 +1620,8 @@ not run again:
   sudo vey ports set ...        move the HTTPS / HTTP / app ports
   sudo vey doctor              diagnose the host
 
-`vpn-platformctl <command>` is the same binary if you prefer the long name.
+Note: vpn-platformctl is the same binary if you prefer the long name -
+      every "sudo vey ..." above works with it verbatim.
 
 EOF
 

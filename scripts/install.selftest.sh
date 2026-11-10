@@ -1183,6 +1183,39 @@ else
 		"the die message still interpolates \$DOMAIN unconditionally, so a --http run prints an empty --domain"
 fi
 
+# (e) The installer must INSTALL Caddy, not instruct the operator to.
+#     A live run reported "VEYLIX is installed" while nothing listened on port
+#     80, because the old code did `warn "caddy is not installed"` and moved on.
+#     A warning beside a success banner is a false success.
+expect_grep "T21 caddy is installed automatically" \
+	'install_caddy_package' "$ROOT/install.sh"
+expect_grep "T21 the caddy install has a manual fallback" \
+	'caddy_install_notes' "$ROOT/install.sh"
+if grep -qF 'caddy is not installed. Install it from https://caddyserver.com/docs/install' "$ROOT/install.sh"; then
+	bad "T21 caddy is not merely reported missing" \
+		"the old warn-and-continue message is still present"
+else
+	ok "T21 caddy is not merely reported missing"
+fi
+
+# A heredoc that is not quoted still performs command substitution, so a
+# backtick or $( in the body EXECUTES. `vpn-platformctl <command>` inside one ran
+# as a command, dumped the CLI usage and printed a syntax error mid-install,
+# beside a success banner. Unquoted heredocs are legitimate - they interpolate
+# $vars - so the rule is not "quote them all", it is "no backtick inside one".
+#
+# Written with sed for the range and a real backtick variable for the match.
+# `grep '\x60'` was the first attempt and it NEVER matches without -P: the gate
+# was silently green on every run, and only a negative control caught it. A gate
+# that cannot fail is worse than no gate, because it is reported as proof.
+T21_tick=$(sed -n '/^[[:space:]]*cat <<EOF/,/^EOF$/p' "$ROOT/install.sh" 2>/dev/null \
+	| grep -n "$(printf '\140')" || true)
+if [ -n "$T21_tick" ]; then
+	bad "T21 no backtick inside an unquoted heredoc" "$T21_tick"
+else
+	ok "T21 no backtick inside an unquoted heredoc"
+fi
+
 
 printf '\n'
 if [ "$fail" -eq 0 ]; then
