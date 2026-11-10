@@ -13,7 +13,7 @@ import {
   useToast,
   type Column,
 } from '../components/ui'
-import { Package, Pencil, Plus } from 'lucide-react'
+import { Archive, Package, Pencil, Plus, Trash2 } from 'lucide-react'
 import { useOffersStore, type VpnOffer } from '../stores/offersStore'
 import { useServersStore } from '../stores/serversStore'
 import { api, type ApiInbound } from '../lib/api'
@@ -61,6 +61,8 @@ export function OffersPage() {
   const addOffer = useOffersStore((s) => s.addOffer)
   const updateOffer = useOffersStore((s) => s.updateOffer)
   const toggleActive = useOffersStore((s) => s.toggleActive)
+  const archiveOfferAction = useOffersStore((s) => s.archiveOffer)
+  const deleteOfferAction = useOffersStore((s) => s.deleteOffer)
 
   const servers = useServersStore((s) => s.servers)
   const loadServers = useServersStore((s) => s.load)
@@ -73,6 +75,47 @@ export function OffersPage() {
   const [formError, setFormError] = useState('')
   const [saving, setSaving] = useState(false)
   const [inbounds, setInbounds] = useState<ApiInbound[]>([])
+  /** Offer awaiting delete confirmation. Type-to-confirm is overkill here (an
+   * offer is not a customer's property), but a one-click destroy is not acceptable
+   * either: the dialog names the offer and what will happen to it. */
+  const [deleteTarget, setDeleteTarget] = useState<VpnOffer | null>(null)
+
+  /**
+   * Archive an offer (P-4). Says what actually happened, including the one case
+   * that matters: the row is KEPT, so anything that already references it still
+   * works.
+   */
+  const archiveOffer = async (o: VpnOffer) => {
+    try {
+      await archiveOfferAction(o.apiId)
+      toast('success', 'Offer archived', `${o.name} is out of the catalogue. Nothing was deleted.`)
+    } catch {
+      toast('error', 'Could not archive the offer', 'Nothing was changed')
+    }
+  }
+
+  /**
+   * Delete an offer nothing depends on (P-4).
+   *
+   * A 409 `offer_in_use` is the interesting outcome, not an error to hide: the
+   * offer has been sold or used by a VPN, so it must stay. The message names the
+   * remedy (archive it) instead of leaving the operator with a red toast.
+   */
+  const deleteOffer = async (o: VpnOffer) => {
+    try {
+      await deleteOfferAction(o.apiId)
+      toast('success', 'Offer deleted', `${o.name} was removed.`)
+    } catch (err) {
+      const inUse = err instanceof Error && /in use|cannot be deleted/i.test(err.message)
+      if (inUse) {
+        toast('warning', 'This offer has been used', `Archive ${o.name} instead — a sold offer must keep its record.`)
+      } else {
+        toast('error', 'Could not delete the offer', 'Nothing was changed')
+      }
+    } finally {
+      setDeleteTarget(null)
+    }
+  }
 
   useEffect(() => {
     void load()
@@ -105,10 +148,23 @@ export function OffersPage() {
     setFormOpen(true)
   }
 
-  // Load the selected server's inbounds so the operator picks a real one.
-  // Only the async path calls setState; the "nothing to load" case is derived
-  // during render below, which avoids a synchronous setState inside an effect.
+  /*
+   * Load the selected server's inbounds so the operator picks a real one.
+   *
+   * The failure reason is kept, not swallowed: "the panel is not connected",
+   * "the panel needs re-authenticating" and "this panel genuinely has no inbound"
+   * look identical in an empty dropdown, and the operator cannot fix a problem
+   * nobody named (D-075). A swallowed error here is what made offer creation look
+   * broken with no explanation.
+   *
+   * Only the async callbacks set state. "Still loading" is DERIVED during render
+   * from the server whose answer has arrived, which is why no setState runs
+   * synchronously in this effect.
+   */
+  const [inboundsFor, setInboundsFor] = useState<string>('')
+  const [inboundError, setInboundError] = useState<string | null>(null)
   const inboundServerId = formOpen ? form.serverId : ''
+  const inboundLoading = Boolean(inboundServerId) && inboundsFor !== inboundServerId
 
   useEffect(() => {
     if (!inboundServerId) return
@@ -116,10 +172,18 @@ export function OffersPage() {
     api
       .serverInbounds(Number(inboundServerId))
       .then((rows) => {
-        if (!cancelled) setInbounds(rows)
+        if (cancelled) return
+        setInbounds(rows)
+        setInboundError(null)
+        setInboundsFor(inboundServerId)
       })
-      .catch(() => {
-        if (!cancelled) setInbounds([])
+      .catch((err: unknown) => {
+        if (cancelled) return
+        setInbounds([])
+        setInboundError(
+          err instanceof Error && err.message ? err.message : 'the panel could not be read',
+        )
+        setInboundsFor(inboundServerId)
       })
     return () => {
       cancelled = true
@@ -138,6 +202,15 @@ export function OffersPage() {
     }
     if (!form.serverId) {
       setFormError('Pick a server — an offer without one cannot be provisioned.')
+      return
+    }
+    // The inbound is what the panel client is created inside, so an offer
+    // without one can never build a VPN. The backend already refuses it with a
+    // 422 `offer_incomplete`; refusing here too means the operator is told at
+    // the field, in the product's own words, instead of reading a backend error
+    // about `inbound_id` after the fact (D-075, D-059).
+    if (!editTarget && !(Number(form.inboundId) > 0)) {
+      setFormError('Choose the inbound this offer creates its clients in.')
       return
     }
     setSaving(true)
@@ -225,15 +298,47 @@ export function OffersPage() {
       key: 'actions',
       header: '',
       render: (o) => (
-        <Button
-          size="sm"
-          variant="ghost"
-          disabled={busy === o.apiId}
-          aria-label={`Edit ${o.name}`}
-          onClick={() => openEdit(o)}
-        >
-          <Pencil size={14} />
-        </Button>
+        <span className="ui-row of-row-actions">
+          <Button
+            size="sm"
+            variant="ghost"
+            disabled={busy === o.apiId}
+            aria-label={`Edit ${o.name}`}
+            onClick={() => openEdit(o)}
+          >
+            <Pencil size={14} />
+          </Button>
+          {/*
+            P-4: retiring an offer used to mean flipping the Active switch, which
+            hid it but recorded no reason and left it in this list forever labelled
+            "inactive". Archive records when it left the catalogue.
+          */}
+          <Button
+            size="sm"
+            variant="ghost"
+            disabled={busy === o.apiId || o.archived}
+            aria-label={`Archive ${o.name}`}
+            title="Take this offer out of the catalogue. The row is kept."
+            onClick={() => void archiveOffer(o)}
+          >
+            <Archive size={14} />
+          </Button>
+          {/*
+            Delete is offered only as a real option: the API refuses it (409
+            offer_in_use) for anything a VPN or a payment names, and the toast says
+            so with the remedy. A hidden button would leave the operator guessing.
+          */}
+          <Button
+            size="sm"
+            variant="ghost"
+            disabled={busy === o.apiId}
+            aria-label={`Delete ${o.name}`}
+            title="Delete an offer nothing has used yet"
+            onClick={() => setDeleteTarget(o)}
+          >
+            <Trash2 size={14} />
+          </Button>
+        </span>
       ),
     },
   ]
@@ -333,8 +438,23 @@ export function OffersPage() {
               disabled={!!editTarget || visibleInbounds.length === 0}
               onChange={(e) => setForm((f) => ({ ...f, inboundId: e.target.value }))}
             >
+              {/*
+                There is deliberately no "let the panel decide" option. Veylix
+                cannot choose an inbound: the outbound client is created *in* a
+                named inbound, so an offer with none can never build a VPN and
+                the backend refuses it (D-075, 422 offer_incomplete). Offering
+                that label promised a choice the system does not implement — the
+                operator picked the default, and the only feedback was a backend
+                error naming a field they never saw. Now the empty value is a
+                prompt to choose, and `saveForm` refuses locally with the same
+                sentence the rule carries.
+              */}
               <option value="">
-                {visibleInbounds.length === 0 ? 'No inbounds cached for this server' : 'Let the panel decide…'}
+                {inboundLoading
+                  ? 'Reading the panel…'
+                  : visibleInbounds.length === 0
+                    ? 'No inbound available — see the note below'
+                    : 'Choose an inbound…'}
               </option>
               {visibleInbounds.map((ib) => (
                 <option key={ib.id} value={ib.id}>
@@ -343,6 +463,28 @@ export function OffersPage() {
               ))}
             </select>
           </label>
+          {/*
+            An empty inbound list is the single most common reason an offer cannot
+            be saved, and the form used to say nothing about it. Each state gets a
+            sentence that names the cause and the next step (D-059: explained, not
+            just coloured).
+          */}
+          {inboundServerId && !inboundLoading && inboundError && (
+            <p className="of-note of-note--warn" role="alert">
+              This server's panel could not be read: {inboundError}. Reconnect it
+              under Servers, then reopen this form.
+            </p>
+          )}
+          {inboundServerId &&
+            !inboundLoading &&
+            !inboundError &&
+            visibleInbounds.length === 0 && (
+              <p className="of-note of-note--warn" role="alert">
+                This panel has no inbound yet, and Veylix never creates one (D-024). Open
+                3X-UI, add an inbound on this server, sync it, then reopen this form — an
+                offer without an inbound cannot build a VPN and will be refused.
+              </p>
+            )}
           <Input
             label="Traffic limit (GB, 0 = unlimited)"
             type="number"
@@ -375,6 +517,39 @@ export function OffersPage() {
             </p>
           )}
         </form>
+      </Dialog>
+
+      {/*
+        Delete confirmation (P-4). Names the offer and states the consequence in
+        the customer's terms — "permanently", and why it might be refused — rather
+        than "Are you sure?". NN/g: a confirmation must be specific about what will
+        happen, and must not be shown for everything.
+      */}
+      <Dialog
+        open={deleteTarget !== null}
+        title={deleteTarget ? `Delete “${deleteTarget.name}”?` : 'Delete offer'}
+        onClose={() => setDeleteTarget(null)}
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setDeleteTarget(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              disabled={busy !== null}
+              onClick={() => deleteTarget && void deleteOffer(deleteTarget)}
+            >
+              Delete this offer
+            </Button>
+          </>
+        }
+      >
+        <p className="ui-muted">
+          This permanently removes the offer. It will be <strong>refused</strong> if a VPN or a
+          payment already names it — an offer that has been sold must keep its record, so use{' '}
+          <strong>Archive</strong> for those: archiving takes it out of the catalogue and keeps the
+          row.
+        </p>
       </Dialog>
     </div>
   )

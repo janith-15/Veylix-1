@@ -150,3 +150,92 @@ func (s *Store) ReleaseFreeClaim(ctx context.Context, clientUserID, serverID int
 	}
 	return nil
 }
+
+// ReplaceFreeClaim books a FREE claim that REPLACES an existing one (D-112).
+//
+// Why this cannot simply be `RecordFreeClaim`: that method refuses once the
+// client holds `FreeConcurrentCap` live VPNs, and a replace builds the new VPN
+// *before* releasing the old one (D-112's ordering — never leave a customer with
+// zero VPNs). At the cap, the create would therefore always fail, and a customer
+// holding three FREE VPNs could never replace any of them — the commonest case
+// of the feature.
+//
+// A replace does not increase the number of live VPNs: one is released and one
+// is created, so the CONCURRENT cap is not the right measure of it. What must
+// still hold is its PURPOSE — a client may not use replacement to run more than
+// `FreeConcurrentCap` live VPNs at once — so this takes the old claim's slot
+// rather than a new one:
+//
+//  1. The MONTHLY window is still enforced, because Bible §17.18 says releasing
+//     does not refund a claim, so a replace spends one. That is checked in
+//     `provisioning.Replace` before the panel is touched, and again here.
+//  2. The replaced claim's row is closed in the SAME transaction that opens the
+//     new one, so the concurrent count never dips below, or rises above, what it
+//     was. Two replaces racing each other cannot both take the last slot.
+//
+// `replacedEmail` names the claim being given up. If it holds no live claim the
+// call behaves like an ordinary `RecordFreeClaim`, so a replace of a VPN that
+// was never booked (an operator-created one) cannot mint a free slot.
+func (s *Store) ReplaceFreeClaim(ctx context.Context, tx *sql.Tx, clientUserID, serverID int64, replacedEmail, newEmail string, monthlyLimit int) (int64, error) {
+	if monthlyLimit <= 0 {
+		monthlyLimit = FreeMonthlyDefault
+	}
+
+	// The caller's transaction is used, not a new one. `Create` already holds a
+	// transaction when it books the claim, and opening a second one on the same
+	// database deadlocks SQLite (SQLITE_BUSY) — this is the same reason
+	// `RecordFreeClaim` takes a `tx` rather than opening its own.
+	exec := s.execer(tx)
+	now := time.Now().Unix()
+	since := now - int64(FreeClaimWindow.Seconds())
+
+	var window int
+	if err := exec.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM free_claims
+		  WHERE client_user_id = ? AND server_id = ? AND claimed_at > ?`,
+		clientUserID, serverID, since).Scan(&window); err != nil {
+		return 0, fmt.Errorf("store: replace claim: window: %w", err)
+	}
+	// The monthly cap counts claims, so a replace spends one even though it
+	// gives one back — otherwise replacing would be a free way to reset a
+	// spent allowance (Bible §17.18).
+	if window >= monthlyLimit {
+		return 0, ErrFreeMonthlyLimit
+	}
+
+	// Close the replaced claim FIRST, in the caller's transaction. Doing it here
+	// rather than earlier is what keeps the concurrent count honest: the swap is
+	// atomic, so another request cannot observe a freed slot and take it.
+	res, err := exec.ExecContext(ctx,
+		`UPDATE free_claims SET released_at = ?
+		  WHERE client_user_id = ? AND server_id = ? AND panel_email = ? AND released_at IS NULL`,
+		now, clientUserID, serverID, replacedEmail)
+	if err != nil {
+		return 0, fmt.Errorf("store: replace claim: close old: %w", err)
+	}
+	closed, _ := res.RowsAffected()
+
+	// If the old claim could not be closed, this is not a swap — it is a new
+	// claim, and it must obey the concurrent cap like any other.
+	if closed == 0 {
+		var live int
+		if err := exec.QueryRowContext(ctx,
+			`SELECT COUNT(*) FROM free_claims
+			  WHERE client_user_id = ? AND server_id = ? AND released_at IS NULL`,
+			clientUserID, serverID).Scan(&live); err != nil {
+			return 0, fmt.Errorf("store: replace claim: concurrent: %w", err)
+		}
+		if live >= FreeConcurrentCap {
+			return 0, ErrFreeConcurrentLimit
+		}
+	}
+
+	ins, err := exec.ExecContext(ctx,
+		`INSERT INTO free_claims (client_user_id, server_id, panel_email, claimed_at)
+		 VALUES (?, ?, ?, ?)`, clientUserID, serverID, newEmail, now)
+	if err != nil {
+		return 0, fmt.Errorf("store: replace claim: open new: %w", err)
+	}
+	id, _ := ins.LastInsertId()
+	return id, nil
+}

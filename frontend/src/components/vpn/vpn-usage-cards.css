@@ -1,0 +1,95 @@
+/* Download / Upload / Total usage cards.
+ *
+ * Owner-facing rule (D-092): the three numbers are the reason a customer opens
+ * the page, so they get equal weight, a real unit and a plain-language note.
+ * Everything is a token — no fixed colour, so a theme change cannot leave these
+ * cards unreadable. */
+
+.vuc-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-3, 10px);
+}
+
+.vuc-card {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--space-3, 12px);
+  border: 1px solid var(--border, rgba(127, 127, 160, 0.22));
+  border-radius: var(--radius-card, 12px);
+  background: var(--surface-2, rgba(127, 127, 160, 0.06));
+  min-width: 0;
+}
+
+.vuc-card__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-sm, 8px);
+  background: var(--surface-3, rgba(127, 127, 160, 0.12));
+  color: var(--text-muted);
+  margin-bottom: 2px;
+}
+
+.vuc-card__label {
+  font-size: var(--t-sm2, 12px);
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--text-muted);
+  text-transform: none;
+}
+
+.vuc-card__value {
+  /* Tabular figures so a counting number does not jitter its own width, which
+     would make the whole row twitch while it animates. */
+  font-variant-numeric: tabular-nums;
+  font-size: var(--t-lg, 19px);
+  line-height: 1.15;
+  color: var(--text-strong);
+  overflow-wrap: anywhere;
+}
+
+.vuc-card__note {
+  font-size: var(--t-xs, 11px);
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+
+/* One column on a phone. The cards must never require a sideways swipe to read;
+   a wrapped stack is the honest alternative to a shrunken figure. */
+@media (max-width: 560px) {
+  .vuc-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .vuc-card {
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+  }
+
+  .vuc-card__icon {
+    margin-bottom: 0;
+  }
+
+  .vuc-card__label {
+    flex: 1 1 auto;
+  }
+
+  .vuc-card__note {
+    flex: 1 1 100%;
+    padding-left: 34px;
+  }
+}
+
+/* A reader who asked for less motion gets none of it — the values still land on
+   the server's numbers, they simply do not travel there. */
+@media (prefers-reduced-motion: reduce) {
+  .vuc-card {
+    transition: none;
+  }
+}

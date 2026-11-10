@@ -45,6 +45,22 @@
   background: color-mix(in srgb, var(--error) 12%, transparent);
 }
 /* The audit context viewer: the entry's stored JSON, read-only. */
+/* D-059: the audit screen's own layout rules, previously four style props. */
+.audit-filters-bar {
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+.audit-filters-bar__search {
+  max-width: 250px;
+}
+.audit-action-code {
+  display: block;
+}
+.audit-context-wrap {
+  gap: 8px;
+}
 .audit-context {
   margin: 0;
   padding: 10px 12px;
@@ -72,6 +88,14 @@
 .notif-page-list .notif-pop__item:last-child {
   border-bottom: none;
 }
+/* D-059: the page-level list item's own shape, previously two style props on
+ * every row (one for the radius, one for the unread bell's colour). */
+.notif-page-list__item {
+  border-radius: var(--radius-sm);
+}
+.notif-page-list__unread-icon {
+  color: var(--c-primary);
+}
 
 /* Profile page */
 .prof-row {
@@ -82,3 +106,23 @@
 .prof-row .app-user__avatar { width: 44px; height: 44px; font-size: 17px; }
 .prof-role { margin-left: auto; }
 .prof-roles { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* ---------- D-059: rules moved out of PaymentsPage -------------------------
+ * Each replaces a `style={{ … }}` prop. Values unchanged.
+ */
+.pay-row-actions {
+  gap: 6px;
+}
+.pay-flat {
+  margin: 0;
+}
+.pay-empty-note {
+  margin: 8px 0;
+}
+.pay-method {
+  gap: 2px;
+}
+.pay-head-actions {
+  gap: 8px;
+  align-items: center;
+}

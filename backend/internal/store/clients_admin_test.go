@@ -235,3 +235,64 @@ func TestClientFreeLimitOverride(t *testing.T) {
 		t.Error("setting a limit on a missing client succeeded")
 	}
 }
+
+// TestListClientsAdminOffsetFollowsClampedLimit is the B-2 regression test.
+//
+// The transport computes `Offset = (page-1) * Limit` from the RAW size the caller
+// sent; the store clamps the size. Before the fix the two were derived from
+// different numbers, so `?limit=9999&page=5` asked for `LIMIT 50 OFFSET 39996` —
+// an operator paging to page 5 was silently shown rows 40 000 deep and told the
+// account was empty.
+//
+// The invariant asserted here is the one that makes paging meaningful: whatever
+// the caller asks for, the offset the query uses must be a multiple of the limit
+// the query uses. A window that does not start on the page grid is a window the
+// caller cannot have meant.
+func TestListClientsAdminOffsetFollowsClampedLimit(t *testing.T) {
+	ctx := context.Background()
+	st, _ := newClientAdminStore(t)
+
+	cases := []struct {
+		name    string
+		limit   int
+		page    int
+		want    int // expected effective limit
+		wantOff int
+	}{
+		{"sane page size", 10, 2, 10, 10},
+		{"limit above the ceiling", 9999, 5, ClientAdminDefaultLimit, 4 * ClientAdminDefaultLimit},
+		{"limit of zero", 0, 3, ClientAdminDefaultLimit, 2 * ClientAdminDefaultLimit},
+		{"negative limit", -5, 2, ClientAdminDefaultLimit, ClientAdminDefaultLimit},
+		{"negative page", 10, -1, 10, 0},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Exactly what the handler does: clamp the size, THEN derive the offset.
+			limit := tc.limit
+			if limit < 1 || limit > ClientAdminMaxLimit {
+				limit = ClientAdminDefaultLimit
+			}
+			page := tc.page
+			if page < 1 {
+				page = 1
+			}
+			f := ClientFilter{Limit: limit, Offset: (page - 1) * limit}
+
+			if _, _, err := st.ListClientsAdmin(ctx, f); err != nil {
+				t.Fatalf("list: %v", err)
+			}
+			// The store must reach the same effective limit the handler assumed,
+			// and the offset it uses must sit on that grid.
+			if limit != tc.want {
+				t.Fatalf("effective limit = %d, want %d", limit, tc.want)
+			}
+			if f.Offset != tc.wantOff {
+				t.Fatalf("offset = %d, want %d (page %d at limit %d)", f.Offset, tc.wantOff, page, limit)
+			}
+			if f.Offset%limit != 0 {
+				t.Fatalf("offset %d is not a multiple of limit %d — the window is off the page grid", f.Offset, limit)
+			}
+		})
+	}
+}

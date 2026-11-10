@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 )
 
@@ -108,6 +109,21 @@ type PaymentRow struct {
 	// ConfirmerUserID is who settles this order (D-036.1): 0 means the platform
 	// (the Super Admin); a reseller id means that reseller's own package.
 	ConfirmerUserID int64 `json:"confirmer_user_id"`
+
+	// PayerEmail is WHO PLACED THE ORDER (D-113). The row used to carry only
+	// `payer_user_id`, so an operator holding a queue of orders could not tell
+	// whose money it was without a second lookup — the one thing they need.
+	// Empty means the account no longer exists; the UI says so rather than
+	// showing a blank.
+	PayerEmail string `json:"payer_email"`
+	// TargetEmail is the account the order is FOR. It differs from PayerEmail
+	// when a reseller or the Super Admin bought on someone's behalf, which is
+	// exactly the case where naming only the payer would mislead.
+	TargetEmail string `json:"target_email"`
+	// OfferName / OfferKind name the package being bought. Empty for a manual
+	// record or when the plan was deleted — an absence the UI states plainly.
+	OfferName string `json:"offer_name"`
+	OfferKind string `json:"offer_kind"`
 }
 
 // IsCustomSpec reports whether the order carries a customer-authored spec.
@@ -121,25 +137,41 @@ const paymentColumns = `p.id, p.assignment_id, p.payer_user_id, p.method_id, p.a
 	p.proof_channel, p.proof_note,
 	p.spec_gb, p.spec_days, p.spec_devices, p.spec_ips,
 	p.release_server_id, p.release_inbound_id,
-	(SELECT a.seller_user_id FROM vpn_assignments a WHERE a.id = p.assignment_id)`
+	(SELECT a.seller_user_id FROM vpn_assignments a WHERE a.id = p.assignment_id),
+	(SELECT u.email FROM users u WHERE u.id = p.payer_user_id),
+	(SELECT u.email FROM users u WHERE u.id = p.target_user_id),
+	(SELECT o.name FROM vpn_offers o WHERE o.id = p.offer_id),
+	(SELECT o.kind FROM vpn_offers o WHERE o.id = p.offer_id)`
 
 func scanPayment(sc interface{ Scan(...any) error }) (*PaymentRow, error) {
 	var r PaymentRow
 	var assignment, method, confirmedBy, confirmedAt sql.NullInt64
 	var offer, target, vpn sql.NullInt64
 	var relServer, relInbound, confirmer sql.NullInt64
+	// The four identifying columns (D-113) are LEFT-join shaped: a manual record
+	// has no offer, and an order whose account was deleted has no email. They
+	// scan as NullString so a missing value becomes "" instead of failing the
+	// whole list.
+	var payerEmail, targetEmail, offerName, offerKind sql.NullString
 	if err := sc.Scan(&r.ID, &assignment, &r.PayerUserID, &method, &r.AmountCents,
 		&r.Currency, &r.Reference, &r.Status, &confirmedBy, &confirmedAt,
 		&r.CreatedAt, &r.UpdatedAt, &offer, &target, &vpn, &r.Quantity,
 		&r.ProofChannel, &r.ProofNote,
 		&r.SpecGB, &r.SpecDays, &r.SpecDevices, &r.SpecIPs,
-		&relServer, &relInbound, &confirmer); err != nil {
+		&relServer, &relInbound, &confirmer,
+		&payerEmail, &targetEmail, &offerName, &offerKind); err != nil {
 		return nil, err
 	}
 	if assignment.Valid {
 		v := assignment.Int64
 		r.AssignmentID = &v
 	}
+	// D-113: NullString.String is "" when NULL, which is exactly the "absent"
+	// value the UI is told to state plainly rather than render as a blank.
+	r.PayerEmail = payerEmail.String
+	r.TargetEmail = targetEmail.String
+	r.OfferName = offerName.String
+	r.OfferKind = offerKind.String
 	if method.Valid {
 		v := method.Int64
 		r.MethodID = &v
@@ -290,15 +322,20 @@ func (s *Store) SetPaymentMethodActive(ctx context.Context, id int64, active boo
 	return nil
 }
 
-// PaymentsVisible returns the payment records a caller may read.
+// PaymentListLimit caps how many order records one list call returns.
 //
-//   - super admin: every record;
-//   - admin:       records they paid plus records for assignments they sold;
-//   - client:      only their own payments.
+// It is a ceiling on work, not on truth: the caller is told the real total
+// alongside the capped page, so a screen can say "showing the newest 200 of
+// 2,400" instead of silently implying there are 200 orders (D-116).
+const PaymentListLimit = 200
+
+// paymentsScope builds the WHERE clause and args shared by the list and its
+// count, so the two can never disagree about WHICH rows a caller may see.
 //
-// `onlyPending` narrows the operator views to the confirmation queue.
-func (s *Store) PaymentsVisible(ctx context.Context, callerID int64, callerRole string, onlyPending bool) ([]PaymentRow, error) {
-	query := `SELECT ` + paymentColumns + ` FROM payment_records p`
+// Kept as one function on purpose: a count that filtered differently from the
+// list would produce the worst possible answer — "there are 3 more" pointing at
+// rows the caller cannot read, or a hidden set they never knew about.
+func paymentsScope(callerID int64, callerRole string, onlyPending bool) (string, []any) {
 	args := make([]any, 0, 2)
 	where := make([]string, 0, 3)
 
@@ -317,10 +354,41 @@ func (s *Store) PaymentsVisible(ctx context.Context, callerID int64, callerRole 
 	if onlyPending {
 		where = append(where, `p.status IN ('PENDING', 'AWAITING_CONFIRMATION')`)
 	}
-	if len(where) > 0 {
-		query += ` WHERE ` + strings.Join(where, " AND ")
+	if len(where) == 0 {
+		return "", args
 	}
-	query += ` ORDER BY p.id DESC LIMIT 200`
+	return ` WHERE ` + strings.Join(where, " AND "), args
+}
+
+// PaymentsVisibleCount counts every row the caller may see, ignoring the list
+// cap. Used together with PaymentsVisible so a screen can state how many orders
+// exist beyond the newest page (D-116).
+func (s *Store) PaymentsVisibleCount(ctx context.Context, callerID int64, callerRole string, onlyPending bool) (int, error) {
+	scope, args := paymentsScope(callerID, callerRole, onlyPending)
+	var n int
+	if err := s.db.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM payment_records p`+scope, args...).Scan(&n); err != nil {
+		return 0, fmt.Errorf("store: count payments: %w", err)
+	}
+	return n, nil
+}
+
+// PaymentsVisible returns the payment records a caller may read.
+//
+//   - super admin: every record;
+//   - admin:       records they paid plus records for assignments they sold;
+//   - client:      only their own payments.
+//
+// `onlyPending` narrows the operator views to the confirmation queue.
+//
+// The result is CAPPED at PaymentListLimit rows, newest first. A caller that
+// needs to know whether older orders exist asks PaymentsVisibleCount — the cap
+// used to be silent, so an order list could look complete while showing the
+// newest 200 of thousands (D-116).
+func (s *Store) PaymentsVisible(ctx context.Context, callerID int64, callerRole string, onlyPending bool) ([]PaymentRow, error) {
+	scope, args := paymentsScope(callerID, callerRole, onlyPending)
+	query := `SELECT ` + paymentColumns + ` FROM payment_records p` + scope +
+		` ORDER BY p.id DESC LIMIT ` + strconv.Itoa(PaymentListLimit)
 
 	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {

@@ -22,6 +22,13 @@ type OfferStore interface {
 	OfferByID(ctx context.Context, id int64) (*store.OfferRow, error)
 	CreateOffer(ctx context.Context, in store.CreateOfferInput) (*store.OfferRow, error)
 	UpdateOffer(ctx context.Context, id int64, in store.UpdateOfferInput) (*store.OfferRow, error)
+	// ArchiveOffer retires an offer from the catalogue while keeping the row (P-4).
+	ArchiveOffer(ctx context.Context, id int64) (*store.OfferRow, error)
+	// DeleteOffer removes an offer nothing depends on (P-4).
+	DeleteOffer(ctx context.Context, id int64) error
+	// InboundBelongsToServer guards the server/inbound pairing at creation: an
+	// offer naming an inbound from another panel can never build a client.
+	InboundBelongsToServer(ctx context.Context, serverID, inboundID int64) bool
 }
 
 // OfferRoutes registers the offer catalogue (P3).
@@ -127,6 +134,20 @@ func OfferRoutes(mux *http.ServeMux, st OfferStore, aud *audit.Logger, authed fu
 					"inbound_id is required — an offer with no inbound cannot create a client")
 				return
 			}
+			/*
+			 * The inbound must belong to the server the offer names. An offer that
+			 * pairs server A with an inbound on server B is unprovisionable: the
+			 * client would be created on one panel against an inbound that lives on
+			 * another, or the create would fail at release time with no clue why.
+			 * The payment release-target path already guards this; offer creation is
+			 * the other door into the same mistake.
+			 */
+			if !st.InboundBelongsToServer(r.Context(), in.ServerID, in.InboundID) {
+				WriteError(w, http.StatusUnprocessableEntity, "inbound_mismatch",
+					"that inbound does not belong to the selected server — pick an "+
+						"inbound from the same panel")
+				return
+			}
 			if in.TrafficGB < 0 || in.DurationDays < 0 || in.DeviceLimit < 0 {
 				WriteError(w, http.StatusUnprocessableEntity, "validation_failed", "limits cannot be negative")
 				return
@@ -225,5 +246,86 @@ func OfferRoutes(mux *http.ServeMux, st OfferStore, aud *audit.Logger, authed fu
 				Context: map[string]any{"active": offer.Active},
 			})
 			WriteJSON(w, http.StatusOK, offer)
+		}))))
+
+	/*
+	 * POST /api/offers/{id}/archive — retire an offer from the catalogue (P-4).
+	 *
+	 * `active = false` hid an offer but left no record of WHY, and the row stayed in
+	 * every listing as "inactive" forever. Archiving records the moment and takes it
+	 * out of the shop, while keeping the row for anything that references it — the
+	 * same shape as `ArchivePlan` (D-030.6).
+	 *
+	 * Idempotent: archiving twice keeps the FIRST timestamp, because the interesting
+	 * fact is when it was retired, not when someone last pressed the button.
+	 */
+	mux.Handle("POST /api/offers/{id}/archive", authed(RequirePermission(auth.PermOfferManage)(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			p, _ := PrincipalFrom(r.Context())
+			id, err := pathID(r)
+			if err != nil {
+				WriteError(w, http.StatusBadRequest, "validation_failed", "invalid offer id")
+				return
+			}
+			offer, err := st.ArchiveOffer(r.Context(), id)
+			if err != nil {
+				if errors.Is(err, store.ErrOfferNotFound) {
+					WriteError(w, http.StatusNotFound, "not_found", "offer not found")
+					return
+				}
+				WriteError(w, http.StatusInternalServerError, "internal_error", "could not archive the offer")
+				return
+			}
+			record(r.Context(), audit.Entry{
+				ActorID: p.UserID, Action: audit.ActionOfferArchive,
+				TargetType: "offer", TargetID: strconv.FormatInt(id, 10),
+				Context: map[string]any{"name": offer.Name, "active": false},
+			})
+			WriteJSON(w, http.StatusOK, offer)
+		}))))
+
+	/*
+	 * DELETE /api/offers/{id} — remove an offer NOTHING depends on (P-4).
+	 *
+	 * The comment above `PATCH` correctly says an offer with assignments must
+	 * survive, because "what was sold" is a customer's record. It said nothing about
+	 * a mis-created offer that was never sold — and those could not be removed at
+	 * all. The guard is explicit: any `vpn_instances` or `payment_records` row that
+	 * names this offer refuses the delete with 409, and the operator archives it
+	 * instead.
+	 */
+	mux.Handle("DELETE /api/offers/{id}", authed(RequirePermission(auth.PermOfferManage)(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			p, _ := PrincipalFrom(r.Context())
+			id, err := pathID(r)
+			if err != nil {
+				WriteError(w, http.StatusBadRequest, "validation_failed", "invalid offer id")
+				return
+			}
+			// Read first, so the trail can name what was deleted.
+			offer, readErr := st.OfferByID(r.Context(), id)
+			if err := st.DeleteOffer(r.Context(), id); err != nil {
+				switch {
+				case errors.Is(err, store.ErrOfferNotFound):
+					WriteError(w, http.StatusNotFound, "not_found", "offer not found")
+				case errors.Is(err, store.ErrOfferInUse):
+					WriteError(w, http.StatusConflict, "offer_in_use",
+						"this offer has been sold or used by a VPN, so it cannot be deleted — archive it instead")
+				default:
+					WriteError(w, http.StatusInternalServerError, "internal_error", "could not delete the offer")
+				}
+				return
+			}
+			ctxMap := map[string]any{}
+			if readErr == nil && offer != nil {
+				ctxMap["name"] = offer.Name
+				ctxMap["kind"] = offer.Kind
+			}
+			record(r.Context(), audit.Entry{
+				ActorID: p.UserID, Action: audit.ActionOfferDelete,
+				TargetType: "offer", TargetID: strconv.FormatInt(id, 10),
+				Context: ctxMap,
+			})
+			w.WriteHeader(http.StatusNoContent)
 		}))))
 }

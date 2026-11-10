@@ -63,6 +63,17 @@ type ClientAdminRow struct {
 
 // freeWindowSeconds mirrors the rolling window the FREE cap counts over.
 
+// Page-size bounds for the client console.
+//
+// These are exported so the transport can validate a caller's `?limit=` BEFORE
+// deriving an offset from it, instead of each layer guessing the other's ceiling
+// (B-2: the store clamped 200 while the handler derived its offset from the raw
+// value).
+const (
+	ClientAdminDefaultLimit = 50
+	ClientAdminMaxLimit     = 200
+)
+
 // ListClientsAdmin returns a page of client accounts plus the total that matched.
 func (s *Store) ListClientsAdmin(ctx context.Context, f ClientFilter) ([]ClientAdminRow, int, error) {
 	where := []string{"u.role = 'client'"}
@@ -159,13 +170,25 @@ func (s *Store) ListClientsAdmin(ctx context.Context, f ClientFilter) ([]ClientA
 		order = "premium_count DESC"
 	}
 
+	// B-2: the handler computes Offset as (page-1)*Limit using the RAW limit the
+	// client sent. Clamping `limit` here without recomputing the offset left the
+	// two derived from DIFFERENT numbers: `?limit=9999&page=5` produced
+	// `LIMIT 50 OFFSET 39996`, so an operator asking for "page 5" was shown rows
+	// 40 000 deep and told the account had no clients.
+	//
+	// The honest fix is to clamp the page size and then derive the offset from the
+	// clamped value, so offset and limit always describe the same window. A
+	// client-supplied limit is a request, not a reservation.
 	limit := f.Limit
-	if limit <= 0 || limit > 200 {
-		limit = 50
+	if limit <= 0 || limit > ClientAdminMaxLimit {
+		limit = ClientAdminDefaultLimit
 	}
 	if f.Offset < 0 {
 		f.Offset = 0
 	}
+	// Snap the offset onto the clamped page grid: whatever page number the caller
+	// computed it from, the resulting window must start at a multiple of `limit`.
+	f.Offset = (f.Offset / limit) * limit
 
 	listSQL := `SELECT u.id, u.email, u.email_verified, COALESCE(u.username,''), u.display_name,
 	                   u.status, u.avatar_url, u.phone, u.whatsapp, u.telegram, u.discord, u.age,

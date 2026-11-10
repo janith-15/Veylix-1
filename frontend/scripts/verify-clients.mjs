@@ -75,14 +75,43 @@ const probe = await send('Runtime.evaluate', {
     const links = [...document.querySelectorAll('a[href^="/clients/"]')].map(a => a.getAttribute('href'))
     const buttons = [...document.querySelectorAll('button')].map(b => b.textContent.trim()).filter(Boolean)
     const facts = [...document.querySelectorAll('.cl-facts dt')].map(e => e.textContent.trim())
+    // B-1 regression probe: the pagination buttons must be page NUMBERS bounded by
+    // ceil(total / PAGE_SIZE), never by ceil(total / currentPage).
+    const pager = [...document.querySelectorAll('.ui-pagination__btn')]
+      .map(b => b.textContent.trim())
+      .filter(t => /^[0-9]+$/.test(t))
+    const totalText = [...document.querySelectorAll('.ui-card__title, .ui-card h2, h2')]
+      .map(e => e.textContent.trim())
+      .find(t => /^Clients\\b/i.test(t)) ?? ''
+    const total = Number((totalText.match(/([0-9]+)/) ?? [0, rows])[1])
     return JSON.stringify({
       heading: document.querySelector('.ui-page-head__title')?.textContent?.trim() ?? null,
       subtitle: document.querySelector('.ui-page-head__subtitle')?.textContent?.trim() ?? null,
       labels, rows, clientLinks: [...new Set(links)].slice(0, 5), buttons, facts,
+      pager, total,
     })
   })()`,
 })
 const out = JSON.parse(probe.result.value)
+
+/* ---------------------------------------------------------------------------
+ * B-1 gate: the page count must be derived from the page SIZE, not the page
+ * NUMBER. Before the fix a 6-client account rendered pagination [1,2,3,4,5,6].
+ * ------------------------------------------------------------------------- */
+const PAGE_SIZE = 25
+const expectedPages = Math.max(1, Math.ceil((out.total || out.rows) / PAGE_SIZE))
+const highestPage = out.pager.length > 0 ? Math.max(...out.pager) : 0
+if (highestPage > expectedPages) {
+  console.log(
+    `FAIL  pagination does not exceed ceil(total/${PAGE_SIZE})  -> ` +
+      `rendered up to page ${highestPage}, expected at most ${expectedPages} ` +
+      `(total=${out.total}, rows=${out.rows}; pages were derived from the page NUMBER)`,
+  )
+  process.exitCode = 1
+} else {
+  console.log(`PASS  pagination does not exceed ceil(total/${PAGE_SIZE})  -> ${highestPage} of ${expectedPages}`)
+}
+
 console.log(JSON.stringify({ ...out, consoleErrors }, null, 2))
 ws.close()
 chrome.kill()

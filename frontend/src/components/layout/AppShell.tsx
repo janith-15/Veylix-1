@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Outlet } from 'react-router-dom'
 import { Sidebar, type AppNavGroup } from './Sidebar'
+import { BuildFooter } from './BuildFooter'
 import { Topbar } from './Topbar'
 import { useAuthStore } from '../../stores/authStore'
 import './layout.css'
@@ -84,11 +85,17 @@ export function AppShell({
         <div className="app-mobile-scrim app-mobile-scrim--visible" aria-hidden="true" onClick={() => setMenuOpen(false)} />
       )}
       {/* Account lives ONLY in the topbar — the sidebar has no user footer. */}
+      {/*
+        The build stamp lives here, at the very bottom, and is the ONLY thing in
+        the sidebar footer: account controls stay in the topbar (see above).
+        Passed as `footer` so `Sidebar` keeps knowing nothing about versions.
+      */}
       <Sidebar
         groups={visibleGroups}
         open={menuOpen}
         rail={rail}
         onToggleRail={() => setRail((r) => !r)}
+        footer={<BuildFooter rail={rail} />}
         /* On mobile the drawer is an overlay: following a link must dismiss it,
            or the destination renders underneath the menu. Desktop ignores this
            because the sidebar is not an overlay there. */

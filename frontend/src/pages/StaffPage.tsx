@@ -8,6 +8,7 @@ import {
   EmptyState,
   Input,
   PageHeader,
+  Pagination,
   Select,
   Skeleton,
   StatusBadge,
@@ -21,6 +22,10 @@ import { useListQuery } from '../hooks/useListQuery'
 import { useServersStore } from '../stores/serversStore'
 import { formatDateTime, relativeTime } from '../lib/time'
 import './clients.css'
+// D-106: the quota bar's classes live in admins.css. Without this import the bar
+// rendered as unstyled text — the numbers were right and the meter was invisible,
+// so a reseller at 19/20 slots looked identical to one at 1/20.
+import './admins.css'
 
 /**
  * Super Admin — Staff & Admin management (D-044).
@@ -57,9 +62,27 @@ export function StaffPage() {
       quota_min: '',
       server_id: '',
       sort: '',
+      page: '1',
     },
     debounced: ['q'],
   })
+
+  /**
+   * Rows per page. MUST match `store.StaffDefaultLimit` on the backend: the server
+   * returns `total` (the whole filtered set) while only this many rows come back,
+   * so a page count divided by anything else is arithmetic about nothing (B-1).
+   */
+  const PAGE_SIZE = 50
+  const pageNumber = Math.max(1, Number(q.values.page) || 1)
+  /**
+   * The page count is derived from the page SIZE, never from the page number.
+   *
+   * U-2: this console had no pager at all — the store clamped `limit` and the API
+   * returned `total`, but the screen offered no way to reach page 2, so a reseller
+   * list longer than one page was silently truncated. The arithmetic below is the
+   * same expression ClientsPage uses, deliberately, so the two cannot drift.
+   */
+  const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE))
 
   // Create dialog.
   const [createOpen, setCreateOpen] = useState(false)
@@ -113,8 +136,12 @@ export function StaffPage() {
       quota_min: q.values.quota_min ? Number(q.values.quota_min) : undefined,
       server_id: q.values.server_id ? Number(q.values.server_id) : undefined,
       sort: (q.values.sort || undefined) as ApiStaffQuery['sort'],
+      // U-2: the page travels with the filters, so paging survives a filter change
+      // and a reload (D-051: state lives in the URL).
+      page: pageNumber,
+      limit: PAGE_SIZE,
     }),
-    [q.values],
+    [q.values, pageNumber],
   )
 
   // One request per committed filter change (D-051), never on the draft.
@@ -314,7 +341,7 @@ export function StaffPage() {
                       ? ' is-high'
                       : ''
                 }`}
-                style={{ width: `${Math.min(100, Math.round((s.quota_used / s.quota_limit) * 100))}%` }}
+                style={{ ['--quota-pct' as string]: `${Math.min(100, Math.round((s.quota_used / s.quota_limit) * 100))}%` }}
               />
             </span>
           </span>
@@ -450,6 +477,16 @@ export function StaffPage() {
           }
         >
           <Table columns={columns} data={rows} rowKey={(s) => String(s.id)} />
+          {/* U-2: only rendered when there IS a second page — a pager for one page
+              is clutter that teaches nothing (NN/g: do not show controls that cannot
+              do anything). */}
+          {pageCount > 1 && (
+            <Pagination
+              page={pageNumber}
+              pageCount={pageCount}
+              onChange={(next) => q.set({ page: String(next) })}
+            />
+          )}
         </AsyncState>
       </Card>
 
@@ -535,7 +572,7 @@ export function StaffPage() {
             </span>
           }
         >
-          <p className="ui-muted t-sm2" style={{ marginTop: 0 }}>
+          <p className="ui-muted t-sm2 st-dialog-note">
             This account can only sell on the panels selected here. A panel left unchecked is
             invisible to them — they cannot list it, sell on it, or see its clients.
           </p>
@@ -544,11 +581,11 @@ export function StaffPage() {
               No 3X-UI server is integrated yet, so there is nothing to scope.
             </p>
           ) : (
-            <div className="ui-col" style={{ gap: 6 }}>
+            <div className="ui-col st-scope-list">
               {servers.map((srv) => {
                 const on = scopeDraft.includes(srv.apiId)
                 return (
-                  <label key={srv.id} className="ui-row" style={{ gap: 8, alignItems: 'center' }}>
+                  <label key={srv.id} className="ui-row st-scope-row">
                     <input
                       type="checkbox"
                       checked={on}
@@ -568,7 +605,7 @@ export function StaffPage() {
             </div>
           )}
           {scopeDraft.length === 0 && (
-            <p className="vpn-warn t-sm2" style={{ marginBottom: 0 }}>
+            <p className="vpn-warn t-sm2 st-dialog-warn">
               With nothing selected this account cannot sell anything. That is a legal state — it
               is how you park a reseller without deleting their history.
             </p>

@@ -32,6 +32,14 @@ export interface VpnOffer {
   priceCents: number
   currency: string
   active: boolean
+  /**
+   * Set once the offer was retired from the catalogue (P-4).
+   *
+   * Distinguished from `active:false`, which was the ONLY way to hide an offer
+   * before: that said nothing about WHY, so a deliberately paused offer and a
+   * retired one looked identical in every list.
+   */
+  archived: boolean
   createdAt: number
 }
 
@@ -60,6 +68,10 @@ interface OffersState {
     patch: { name?: string; trafficLimitGB?: number; expiryDays?: number; deviceLimit?: number },
   ) => Promise<void>
   toggleActive: (apiId: number) => Promise<void>
+  /** Retires an offer from the catalogue, keeping the row (P-4). */
+  archiveOffer: (apiId: number) => Promise<void>
+  /** Removes an offer nothing depends on (P-4). */
+  deleteOffer: (apiId: number) => Promise<void>
 }
 
 function toRow(o: ApiOffer): VpnOffer {
@@ -77,6 +89,7 @@ function toRow(o: ApiOffer): VpnOffer {
     priceCents: o.price_cents ?? 0,
     currency: o.currency ?? '',
     active: o.active,
+    archived: (o.archived_at ?? 0) > 0,
     createdAt: o.created_at,
   }
 }
@@ -166,6 +179,44 @@ export const useOffersStore = create<OffersState>()((set, get) => ({
         busy: null,
         offers: s.offers.map((o) => (o.apiId === apiId ? row : o)),
       }))
+    } catch (err) {
+      set({ busy: null, error: message(err) })
+      throw err
+    }
+  },
+
+  /**
+   * Retires an offer from the catalogue (P-4). The row stays, so anything that
+   * references it keeps working — only its presence in the shop changes.
+   */
+  archiveOffer: async (apiId) => {
+    set({ busy: apiId })
+    try {
+      const updated = await api.archiveOffer(apiId)
+      const row = toRow(updated)
+      set((s) => ({
+        busy: null,
+        offers: s.offers.map((o) => (o.apiId === apiId ? row : o)),
+      }))
+    } catch (err) {
+      set({ busy: null, error: message(err) })
+      throw err
+    }
+  },
+
+  /**
+   * Removes an offer nothing depends on (P-4).
+   *
+   * The row is dropped from the local list only AFTER the API confirms it; a 409
+   * `offer_in_use` leaves the list untouched and rethrows, so the caller can tell
+   * the operator to archive instead. Removing it optimistically would make the
+   * screen disagree with the database.
+   */
+  deleteOffer: async (apiId) => {
+    set({ busy: apiId })
+    try {
+      await api.deleteOffer(apiId)
+      set((s) => ({ busy: null, offers: s.offers.filter((o) => o.apiId !== apiId) }))
     } catch (err) {
       set({ busy: null, error: message(err) })
       throw err

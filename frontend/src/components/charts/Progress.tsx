@@ -21,8 +21,15 @@ export function Progress({
           <span>{Math.round(pct)}%</span>
         </div>
       )}
-      <div className="ui-progress__track" style={{ height }}>
-        <div className="ui-progress__fill" style={{ width: pct + '%' }} />
+      <div
+        className="ui-progress__track"
+        /* D-059: `height` and the fill percentage are genuine per-call values,
+         * so they travel as custom properties and the stylesheet consumes
+         * them. A plain `style={{ height }}` put two inline declarations on
+         * every meter in the application. */
+        style={{ ['--ui-progress-h' as string]: `${height}px`, ['--ui-progress-pct' as string]: `${pct}%` }}
+      >
+        <div className="ui-progress__fill" />
       </div>
     </div>
   )

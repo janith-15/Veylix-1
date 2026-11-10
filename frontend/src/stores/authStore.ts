@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { api, ApiError, type ApiPortal, type ApiRole } from '../lib/api'
+import { setActiveTimezone } from '../lib/time'
 
 /** The three UI roles (the API spells the first one `super_admin`). */
 export type UserRole = 'super-admin' | 'admin' | 'client'
@@ -161,6 +162,12 @@ export const useAuthStore = create<AuthState>()((set) => ({
   hydrate: async () => {
     try {
       const me = await api.me()
+      // D-099: adopt the server's display zone before any screen renders a
+      // stored instant. Set here rather than in a component because a card can
+      // render its loading skeleton first — and a timestamp drawn in the
+      // device's zone, then silently redrawn in the server's, is a visible jump
+      // the customer has no way to explain.
+      setActiveTimezone(me.display_timezone)
       set({ user: toUser(me), status: 'authed', error: null, bootstrapRequired: false })
     } catch (err) {
       if (err instanceof ApiError && err.isAuthError) {

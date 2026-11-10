@@ -22,6 +22,36 @@ import (
 
 // seedAudit writes rows through the real audit logger, the same writer the
 // handlers use, so the read tests exercise genuinely stored shapes.
+// seedAuditBackdated appends one entry that claims it happened at `at`.
+//
+// B-5: this used to `UPDATE audit_logs SET created_at = …` after seeding, because
+// `audit.Record` always stamps "now". That worked only because nothing enforced
+// append-only-ness. Now that `0027_audit_append_only.sql` does, the only legal way
+// to obtain an old row is to INSERT it with an old timestamp — which is also the
+// honest one: the row claims that time from the moment it exists, instead of
+// changing its story afterwards.
+func seedAuditBackdated(t *testing.T, env *billingEnv, e audit.Entry, at time.Time) {
+	t.Helper()
+	// The columns are exactly those audit.Record writes; keeping them in sync is
+	// the cost of writing history directly, and the mismatch is caught by the
+	// window test below if it ever drifts.
+	// actor_id is nullable for a SYSTEM entry; a literal 0 is not a user and would
+	// fail the foreign key.
+	var actor any
+	if e.ActorID != 0 {
+		actor = e.ActorID
+	}
+	_, err := env.st.DB().Exec(
+		`INSERT INTO audit_logs (actor_id, action, target_type, target_id, result, context, created_at)
+		 VALUES (?, ?, ?, ?, ?, '{}', ?)`,
+		actor, e.Action, e.TargetType, e.TargetID, e.Result, at.Unix(),
+	)
+	if err != nil {
+		t.Fatalf("backdated insert %s: %v", e.Action, err)
+	}
+}
+
+// seedAudit appends entries stamped with the current time.
 func seedAudit(t *testing.T, env *billingEnv, entries ...audit.Entry) {
 	t.Helper()
 	al := audit.New(env.st.DB())
@@ -144,17 +174,12 @@ func TestAuditTimeWindowBounds(t *testing.T) {
 	env := newBillingEnv(t)
 	root := env.root(t)
 
-	seedAudit(t, env,
-		audit.Entry{Action: audit.ActionProvision, TargetType: "vpn", TargetID: "1"},
-		audit.Entry{Action: audit.ActionRevoke, TargetType: "vpn", TargetID: "1"},
-	)
-
-	yesterday := time.Now().Add(-24 * time.Hour).Unix()
-	if _, err := env.st.DB().Exec(
-		`UPDATE audit_logs SET created_at = ? WHERE action = ?`, yesterday, audit.ActionProvision,
-	); err != nil {
-		t.Fatalf("backdate: %v", err)
-	}
+	// The PROVISION row is written in the past, so the window bounds are proven
+	// against real timestamps rather than assumed. See seedAuditBackdated (B-5).
+	yesterday := time.Now().Add(-24 * time.Hour)
+	seedAuditBackdated(t, env,
+		audit.Entry{Action: audit.ActionProvision, TargetType: "vpn", TargetID: "1"}, yesterday)
+	seedAudit(t, env, audit.Entry{Action: audit.ActionRevoke, TargetType: "vpn", TargetID: "1"})
 
 	// from = 12h ago: only the fresh revoke survives the window.
 	from := time.Now().Add(-12 * time.Hour).Unix()

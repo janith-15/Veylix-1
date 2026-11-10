@@ -1,0 +1,41 @@
+/*
+ * Support & Chat (`pages/client/ClientSupportPage.tsx`).
+ *
+ * Scoped under `.sup`; imported only by that page, so it ships in that page's
+ * route chunk. These four classes replace six inline `style={{ … }}` attributes
+ * (D-059). Tokens only — no colour literals.
+ */
+
+.sup__stack {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sup__row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.sup__actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* A paragraph inside a stack carries no margin; the stack spaces it. */
+.sup__note {
+  margin: 0;
+}
+
+.sup__icon {
+  flex: none;
+  color: var(--text-muted);
+}
+
+@media (pointer: coarse) {
+  .sup__actions .ui-btn {
+    min-height: 44px;
+  }
+}

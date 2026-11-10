@@ -57,8 +57,14 @@ func run() error {
 	// Authentication is always a real session (D-039). This line exists because
 	// its absence used to be the confusing case: a local API that answers 401 to
 	// everything is a working login, not a broken build.
+	//
+	// It must NOT mention the seed binaries. `veylixd` ships with an EMPTY
+	// database by design — `cmd/seeddemo` / `cmd/seedacct` are developer tools
+	// and are not imported here — so pointing an operator at seeded accounts on
+	// a production host is advice that cannot work. A fresh install creates its
+	// first account through /api/setup/bootstrap instead.
 	slog.Info("authentication enforced: every authenticated route needs a session cookie; " +
-		"sign in at /login (seeded accounts: cmd/seeddemo)")
+		"sign in at /login (first run: create the Super Admin via /api/setup/bootstrap)")
 
 	if err := cfg.EnsureDataDir(); err != nil {
 		return err
@@ -226,6 +232,26 @@ func run() error {
 				slog.Info("released VPN records removed", "count", n,
 					"note", "panel clients left intact (D-027.3)")
 			}
+			// The D-098 sweep: move long-inactive VPNs into the SAME release
+			// path rather than inventing a second deletion.
+			//
+			// `off` and `report` both change nothing. `report` exists so an
+			// operator can run the rule on a live box for a few days and read the
+			// audit trail BEFORE anything is set aside — the difference between
+			// "here is what this would do" and "here is what it did" is the whole
+			// safety margin of a lifecycle rule.
+			switch cfg.LifecycleMode {
+			case config.LifecycleReport, config.LifecycleEnforce:
+				dryRun := cfg.LifecycleMode == config.LifecycleReport
+				moved, err := releaseSvc.ExpireStale(ctx, dryRun)
+				if err != nil {
+					slog.Error("lifecycle sweep failed", "err", err)
+				} else if len(moved) > 0 {
+					slog.Warn("lifecycle sweep: long-inactive VPNs found",
+						"count", len(moved), "mode", cfg.LifecycleMode,
+						"note", "REPORT MODE — nothing was changed", "dry_run", dryRun)
+				}
+			}
 			// Expired session rows are dead weight that also grow the table an
 			// attacker could try to fill: drop them on the same hourly wake-up.
 			if n, err := sessions.PurgeExpired(ctx); err != nil {
@@ -342,16 +368,24 @@ func run() error {
 			// FREE claim caps (D-025.4/.5): read by the UI before a claim.
 			FreeClaims: st,
 			Usage:      httpapi.NewSQLUsageStore(st.DB()),
+			// Latency history (D-092). The same store serves the read and the
+			// probe write, so ownership is decided by one predicate.
+			PingSamples: httpapi.NewSQLUsageStore(st.DB()),
 			// The on-demand trigger runs the SAME pass the scheduler runs, so the
 			// console's "Sync now" cannot diverge from the background behaviour.
 			SyncRunner:     syncSvc,
 			Offers:         st,
 			OfferAudit:     auditLog,
 			SyncStaleAfter: staleAfter(cfg.SyncInterval),
-			UserAdmin:      authSvc,
-			AdminAudit:     auditLog,
-			Clients:        st,
-			SetupState:     authSvc,
+			// D-099: the zone every screen renders an absolute instant in.
+			// Config has already resolved it to a real location at startup, so a
+			// bad VEYLIX_DISPLAY_TIMEZONE was logged then rather than failing a
+			// request later.
+			DisplayTimezone: cfg.DisplayTimezone,
+			UserAdmin:       authSvc,
+			AdminAudit:      auditLog,
+			Clients:         st,
+			SetupState:      authSvc,
 			// D1/D2: GET /api/me answers the display name and creation date
 			// from the account row, not from the session's e-mail.
 			Accounts: st,

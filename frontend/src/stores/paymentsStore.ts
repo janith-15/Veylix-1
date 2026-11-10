@@ -33,6 +33,18 @@ export interface Payment {
   updatedAt: number
   confirmedAt: number | null
   confirmedBy: number | null
+  /**
+   * Identities carried on the row itself (D-113).
+   *
+   * These exist because `payerUserId` alone could not answer "whose order is
+   * this?" — the one question an operator opens the list to answer. `''` means
+   * the value is genuinely absent (account gone, manual record, deleted plan),
+   * and every renderer must SAY that rather than show a blank.
+   */
+  payerEmail: string
+  targetEmail: string
+  offerName: string
+  offerKind: string
 }
 
 /** A destination the payer transfers money to. `global` = platform-wide. */
@@ -52,6 +64,16 @@ interface PaymentsState {
   loading: boolean
   busy: number | null
   error: string | null
+  /**
+   * How many orders exist in total, beyond the capped page (D-116).
+   *
+   * `-1` means the count could not be taken — rendered as "the total could not
+   * be read", never as zero. A screen that shows 200 of an unknown number is
+   * honest; one that shows 200 of 0 is not.
+   */
+  totalOrders: number
+  /** True when older orders exist beyond what `payments` holds. */
+  truncated: boolean
 
   load: (pendingOnly?: boolean) => Promise<void>
   loadMethods: () => Promise<void>
@@ -67,6 +89,10 @@ interface PaymentsState {
     methodId?: number
     assignmentId?: number
     reference?: string
+    /** The plan being bought. Required for a real order: without it the payment
+     *  is a deposit and confirmation builds no VPN (D-031.1). */
+    offerId?: number
+    quantity?: number
   }) => Promise<Payment>
   attachReference: (apiId: number, reference: string) => Promise<void>
   /** Operator actions. The server refuses an illegal transition with 409. */
@@ -93,6 +119,13 @@ function toRow(p: ApiPayment): Payment {
     updatedAt: p.updated_at,
     confirmedAt: p.confirmed_at,
     confirmedBy: p.confirmed_by,
+    // `?? ''` rather than omitting: `Payment` declares these non-optional so a
+    // renderer must handle absence explicitly instead of silently printing
+    // `undefined` into the page.
+    payerEmail: p.payer_email ?? '',
+    targetEmail: p.target_email ?? '',
+    offerName: p.offer_name ?? '',
+    offerKind: p.offer_kind ?? '',
   }
 }
 
@@ -141,12 +174,22 @@ export const usePaymentsStore = create<PaymentsState>()((set, get) => ({
   loading: false,
   busy: null,
   error: null,
+  totalOrders: 0,
+  truncated: false,
 
   load: async (pendingOnly = false) => {
     set({ loading: true, error: null })
     try {
-      const rows = await api.listPayments(pendingOnly)
-      set({ payments: rows.map(toRow), loading: false })
+      // The envelope carries the uncapped total, so the screen can say how many
+      // orders exist beyond the newest page instead of implying there are only
+      // the ones it can show (D-116).
+      const page = await api.listPaymentsPaged(pendingOnly)
+      set({
+        payments: page.payments.map(toRow),
+        totalOrders: page.total,
+        truncated: page.truncated,
+        loading: false,
+      })
     } catch (err) {
       set({ loading: false, error: message(err) })
     }

@@ -282,6 +282,70 @@ export interface ApiAdminVPNSummary {
   unread: number
 }
 
+/**
+ * The Super Admin overview (D-107).
+ *
+ * Three rules are encoded in these types, and each one came from a decision:
+ *
+ *  1. **Money is NET** — confirmed minus refunded. `refund_cents` is reported
+ *     separately so the screen can say what came back out rather than hiding it.
+ *  2. **Currencies are never summed.** When `mixed_currency` is true the server
+ *     deliberately answers `0` for every summed amount. Rendering that `0` would be
+ *     a lie, so the UI must branch on the flag and show counts + the currency list.
+ *  3. **A missing section is not a zero.** `errors` names the sections that failed
+ *     to load; a section that is absent must not render as "0".
+ */
+export interface ApiSuperOverview {
+  money: ApiPaymentTotals
+  resellers: ApiResellerHealth
+  /** Section names that failed to resolve. Empty on a healthy read. */
+  errors: string[]
+  generated_at: number
+}
+
+/** Money summary. Every amount is integer **cents** of `currency`. */
+export interface ApiPaymentTotals {
+  /** Empty when there are no payments yet, or when `mixed_currency` is true. */
+  currency: string
+  currencies: string[]
+  /** More than one currency exists, so the summed amounts are 0 on purpose. */
+  mixed_currency: boolean
+  /** NET revenue inside the calendar month. */
+  month_cents: number
+  month_sales: number
+  avg_ticket_cents: number
+  /** Whole percent vs the previous calendar month; 0 when there was no prior revenue. */
+  month_delta_pct: number
+  /** Last six calendar months, oldest first, zero-filled where nothing sold. */
+  months: { month: string; cents: number }[]
+  /** NET revenue all time. */
+  confirmed_cents: number
+  pending_cents: number
+  pending_count: number
+  refund_cents: number
+}
+
+/** The reseller book, reduced to the facts an owner acts on. */
+export interface ApiResellerHealth {
+  total: number
+  /** Signed in within the last 30 days. */
+  active: number
+  /** At >= 90% of the ceiling but not yet full. */
+  quota_near: number
+  quota_full: number
+  /** No ACTIVE assignment created this month. */
+  no_sales: number
+  never_logged_in: number
+  /** The five resellers closest to their ceiling, fullest first. */
+  top: {
+    id: number
+    display_name: string
+    email: string
+    quota_used: number
+    quota_limit: number
+  }[]
+}
+
 /** The console's filters. Empty/undefined means "no restriction". */
 export interface ApiAdminVPNQuery {
   tag?: string
@@ -394,6 +458,15 @@ export interface ApiUser {
    * signed in — this only means the display name and creation date are unknown.
    */
   profile_read_error?: boolean
+  /**
+   * The IANA zone every screen must render an absolute instant in (D-099), e.g.
+   * `Asia/Colombo`. Absent on responses other than /api/me, and absent entirely
+   * from a server that has not been configured with one.
+   *
+   * It is a zone NAME, not an offset: `+05:30` would keep showing the wrong hour
+   * if the zone's rules ever change, and an offset is exactly what drifts.
+   */
+  display_timezone?: string
 }
 
 /**
@@ -520,6 +593,23 @@ export interface ApiVpn {
    * number that means nothing to a customer.
    */
   server_name?: string
+  /**
+   * Unix seconds when the customer put this VPN to sleep (D-094); absent or
+   * null means awake.
+   *
+   * It is optional because the row is also produced by endpoints that predate
+   * dormancy — an absent field reads as "awake", which is the behaviour every
+   * row had before this existed.
+   */
+  dormant_at?: number | null
+  /**
+   * Unix seconds this row entered its current `status` (D-098). Absent or null
+   * when it has never moved.
+   *
+   * A suspended VPN that can only say "suspended" leaves the customer asking the
+   * one question this answers — since when? — and that becomes a support call.
+   */
+  status_changed_at?: number | null
   /*
    * Who sold it (Bible §2.3) — a client must be able to see the responsible
    * seller and reach them. Before these fields the screen could do no better
@@ -545,11 +635,98 @@ export interface ApiUsagePoint {
 }
 
 /**
- * The ranges the owner named (D-038 P-06): 7 days, 30 days, 3 months, 1 year,
- * plus `all` from the VPN's creation day. The backend answers **422** for
- * anything else rather than silently showing a different window.
+ * The ranges the owner named (D-038 P-06), extended by D-092 with `24h` and a
+ * free-form `custom` window driven by `since`/`until`. The backend answers
+ * **422** for anything else rather than silently showing a different window.
  */
-export type ApiUsageRange = '7d' | '30d' | '3m' | '1y' | 'all'
+export type ApiUsageRange = '24h' | '7d' | '30d' | '3m' | '1y' | 'all' | 'custom'
+
+/**
+ * Which MEASUREMENT SOURCE a history read covers (D-095).
+ *
+ * There is exactly one today: the server measuring whether the VPN's panel
+ * client answers (`server_reachability`). `all` means "every source".
+ *
+ * This is a real distinction rather than a decorative filter: the product must
+ * never present the server's probe as the customer's own device latency
+ * (D-026.2), so when a client-side probe is added it gets its own value here
+ * instead of being merged into the same line.
+ */
+export type ApiUsageSource = 'server_reachability' | 'all'
+
+/**
+ * One hour of traffic movement (`GET /api/vpns/{id}/usage/hourly`, D-092).
+ *
+ * A DELTA, not a running total: `total_bytes` is what moved during that hour.
+ * `measurements` is how many sync snapshots landed in it — the tick is ~15
+ * minutes, so a full hour holds four and a single one is a gap worth naming.
+ */
+export interface ApiHourlyBucket {
+  hour_start: number
+  /** 0–23 in UTC, matching the bucket the rows were summed into. */
+  hour_of_day: number
+  up_bytes: number
+  down_bytes: number
+  total_bytes: number
+  measurements: number
+}
+
+export interface ApiHourlyUsage {
+  vpn_id: number
+  window?: { key: ApiUsageRange; since_sec: number; until_sec: number }
+  source: string
+  buckets: ApiHourlyBucket[]
+}
+
+/**
+ * One measured rate between two consecutive sync snapshots
+ * (`GET /api/vpns/{id}/speed-history`, D-092).
+ *
+ * `source: 'unavailable'` means the interval cannot be measured (zero elapsed,
+ * or a counter reset). It is NOT an idle link — zero would be the idle answer.
+ */
+export interface ApiSpeedPoint {
+  taken_at: number
+  up_bps: number
+  down_bps: number
+  elapsed_sec: number
+  source: 'measured' | 'unavailable'
+}
+
+export interface ApiSpeedHistory {
+  vpn_id: number
+  window?: { key: ApiUsageRange; since_sec: number; until_sec: number }
+  /** Constant label: an average between sync readings, never a speed test. */
+  scope: 'average_between_sync_readings'
+  points: ApiSpeedPoint[]
+}
+
+/**
+ * One stored reachability probe (`GET /api/vpns/{id}/ping/history`, D-092).
+ *
+ * `latency_ms` is **-1** when the probe failed, and `reachable: false` is a
+ * MEASUREMENT — the probe ran and the server did not answer.
+ */
+export interface ApiPingPoint {
+  taken_at: number
+  reachable: boolean
+  latency_ms: number
+  scope: string
+}
+
+export interface ApiPingHistory {
+  vpn_id: number
+  window?: { key: ApiUsageRange; since_sec: number; until_sec: number }
+  /** Constant label the UI must display: server reachability, not own latency. */
+  scope: 'server_reachability'
+  /**
+   * The measurement source the filter ACTUALLY applied (D-095): the named scope,
+   * or `all`. The server echoes it so a chart cannot claim a filtered read covers
+   * every source.
+   */
+  source?: 'server_reachability' | 'all'
+  points: ApiPingPoint[]
+}
 
 /**
  * `GET /api/vpns/{id}/usage` (httpapi.VPNUsage).
@@ -579,8 +756,24 @@ export interface ApiVpnUsage {
   /** `PARTIAL` = snapshots exist but the window starts later than creation. */
   history: 'AVAILABLE' | 'NONE' | 'PARTIAL'
   first_snapshot_at: number | null
-  /** Echoed by the server so a chart can label its range without guessing. */
-  window?: { key: ApiUsageRange; since_sec: number; until_sec: number }
+  /**
+   * Echoed by the server so a chart can label its range without guessing.
+   *
+   * `bucket_sec` / `bucket` say how wide one plotted point is (D-096). Before
+   * they existed the UI labelled an 18-hour slice "Last 30 days", because the
+   * server returned the newest 240 raw rows for every range. A chart must label
+   * its axis from these, never from the range key.
+   */
+  window?: {
+    key: ApiUsageRange
+    since_sec: number
+    until_sec: number
+    bucket_sec?: number
+    bucket?: string
+  }
+  /** The width/name the points were REALLY plotted at, after any span sizing. */
+  bucket_sec?: number
+  bucket?: string
   points: ApiUsagePoint[]
 }
 
@@ -668,8 +861,55 @@ export interface ApiOffer {
   /** ISO code the price is quoted in, e.g. LKR. */
   currency: string
   active: boolean
+  /**
+   * Unix seconds when the offer was retired from the catalogue (P-4); `null` while
+   * it is still listed. The backend reads this from `vpn_offers.archived_at`.
+   */
+  archived_at?: number | null
   created_at: number
   updated_at: number
+}
+
+/**
+ * One entry of the CUSTOMER catalogue (`GET /api/packages`, D-035.2).
+ *
+ * WHY THIS TYPE EXISTS AND `ApiPlan` IS NOT USED HERE.
+ *
+ * `/api/packages` and `/api/plans` do not send the same shape, and the difference
+ * is not cosmetic. Verified against the running server on 2026-11-08: the packages
+ * payload carries exactly these eleven keys —
+ *
+ *   currency · device_limit · duration_days · id · kind · name · price_cents ·
+ *   priced_per_order · purchasable · server_label · traffic_gb
+ *
+ * it does **not** send `active`, `archived` or `slots_remaining`, which `ApiPlan`
+ * declares as required. Typing this endpoint as `ApiPlan` therefore handed callers
+ * `undefined` for three fields while TypeScript reported success — a false type, not
+ * a convenience. The rows here are already filtered to active packages by the
+ * server, so `active` has no meaning on the wire and is not invented here.
+ *
+ * `kind` is widened to `string` on purpose: the handler rewrites a custom package to
+ * `"CUSTOM"` before serialising (plan_routes.go), so a customer-facing screen can
+ * receive a third value the `ApiPlanKind` union does not admit. The screen folds it
+ * into Premium (S6 category rule) rather than trusting the discriminant.
+ */
+export interface ApiPackage {
+  id: number
+  /** `FREE`, `PREMIUM`, or `CUSTOM` for a package priced per order. */
+  kind: string
+  name: string
+  traffic_gb: number
+  duration_days: number
+  device_limit: number
+  price_cents: number
+  /** Empty string when nobody priced the package — NOT the same as zero. */
+  currency: string
+  /** A coarse server identifier such as `server 11`; never a panel URL or token. */
+  server_label: string
+  /** Whether the caller may obtain it at all (active + has stock, server-side). */
+  purchasable: boolean
+  /** True for a package whose price is computed by `POST /api/orders/quote`. */
+  priced_per_order: boolean
 }
 
 /** One release record (D-027). `panel_client_kept` is always true. */
@@ -684,6 +924,32 @@ export interface ApiVpnRelease {
   restored_at: number | null
   removed_at: number | null
   panel_client_kept: boolean
+}
+
+/**
+ * The result of replacing a VPN (D-112).
+ *
+ * Two panel clients exist afterwards: `new` is the freshly created one, and
+ * `old_*` names the VPN that was released — not deleted, so its undo window is
+ * still open. `claim_consumed` records what a FREE replace cost, because the
+ * customer must be told before the action and this is the proof afterwards.
+ */
+export interface ApiVpnReplace {
+  new: {
+    vpn_id: number
+    /** The panel identity of the NEW client — a different value from the old one. */
+    panel_email: string
+    status: string
+    confirmed: boolean
+    recorded: boolean
+  }
+  old_vpn_id: number
+  old_panel_email: string
+  release_id: number
+  /** Epoch seconds — the old VPN can be restored until this passes. */
+  restore_deadline: number
+  claim_consumed: boolean
+  claims_remaining: number
 }
 
 /** The connection material a client needs to actually connect (D-026). */
@@ -768,6 +1034,17 @@ export interface ApiPayment {
   confirmed_at: number | null
   created_at: number
   updated_at: number
+  /**
+   * WHO placed the order (D-113). The row used to carry only `payer_user_id`,
+   * so an operator could not tell whose money it was without a second lookup.
+   * Empty means the account no longer exists — the UI states that plainly.
+   */
+  payer_email?: string
+  /** The account the order is FOR; differs when bought on someone's behalf. */
+  target_email?: string
+  /** The package being bought. Empty for a manual record — never a blank cell. */
+  offer_name?: string
+  offer_kind?: string
 }
 
 /** One chat message (`GET /api/chat/threads/{id}/messages`). */
@@ -1292,6 +1569,17 @@ export const api = {
     }),
   resetAdminStaffPassword: (id: number) =>
     request<{ password: string; note: string }>(`/api/super/staff/${id}/reset-password`, { method: 'POST' }),
+
+  /**
+   * The Super Admin overview (D-107): money, the reseller book, and which sections
+   * failed to load.
+   *
+   * ONE call, because the page renders once. `errors` names the sections that did
+   * not resolve, so the screen shows the parts that worked and says which did not
+   * — the alternative, a 500 for the whole page, throws away a money row that
+   * arrived perfectly well.
+   */
+  superOverview: () => request<ApiSuperOverview>('/api/super/overview/summary'),
   adminVpns: (q: ApiAdminVPNQuery = {}) => {
     const params = new URLSearchParams()
     for (const [k, v] of Object.entries(q)) {
@@ -1581,6 +1869,15 @@ export const api = {
 
   resumeVpn: (id: number) => request<void>(`/api/vpns/${id}/resume`, { method: 'POST' }),
 
+  /**
+   * Puts a VPN to sleep for this customer (D-094). No panel client is touched
+   * and nothing is deleted — the VPN just stops asking for attention.
+   */
+  dormantVpn: (id: number) => request<void>(`/api/vpns/${id}/dormant`, { method: 'POST' }),
+
+  /** Wakes a dormant VPN. It does not repair it; it only makes it visible again. */
+  wakeVpn: (id: number) => request<void>(`/api/vpns/${id}/wake`, { method: 'POST' }),
+
   /** Revocation is asynchronous: the backend returns the status it reached. */
   revokeVpn: (id: number) =>
     request<{ status: string; confirmed: boolean }>(`/api/vpns/${id}/revoke`, { method: 'POST' }),
@@ -1595,6 +1892,23 @@ export const api = {
    * one refuses with 409 `vpn_still_on_panel` while the client still exists.
    */
   deleteVpn: (id: number) => request<void>(`/api/vpns/${id}`, { method: 'DELETE' }),
+
+  /**
+   * Retires a VPN RECORD while deliberately KEEPING its panel client (P-3).
+   *
+   * `deleteVpn` correctly refuses (409) while the panel still holds the client,
+   * which left an operator with no way to clear a record whose client must stay
+   * (D-027.3 forbids Veylix from ever deleting a panel client). This is that path.
+   *
+   * Super Admin only. `confirmPanelEmail` must repeat the VPN's identity back —
+   * the API answers 422 `confirm_panel_email_required` when it does not, naming the
+   * value to type. The call never reaches the panel: `DeleteClient` is not invoked.
+   */
+  purgeVpnRecord: (id: number, confirmPanelEmail: string) =>
+    request<void>(`/api/vpns/${id}/purge`, {
+      method: 'POST',
+      body: JSON.stringify({ confirm_panel_email: confirmPanelEmail }),
+    }),
 
   /**
    * Runs a sync pass NOW, instead of waiting for the 5-minute scheduler.
@@ -1613,18 +1927,80 @@ export const api = {
   /**
    * Usage history for one VPN.
    *
-   * `range` is the owner's switch (P-06): 7d / 30d / 3m / 1y / all. The backend
-   * refuses a typo with 422 instead of showing a different window, so the value
-   * is passed through untouched.
+   * `range` is the owner's switch (P-06), extended by D-092 with `24h` and a
+   * custom window. The backend refuses a typo with 422 instead of showing a
+   * different window, so the value is passed through untouched.
+   *
+   * A custom window needs `since` (and usually `until`) as epoch seconds. Both
+   * are appended only when supplied, because a bare `?since=` is a well-defined
+   * request — a named range with its lower edge moved — and the backend accepts
+   * it.
    */
-  vpnUsage: (id: number, range: ApiUsageRange = '30d', limit = 240) =>
-    request<ApiVpnUsage>(`/api/vpns/${id}/usage?range=${range}&limit=${limit}`),
+  vpnUsage: (id: number, range: ApiUsageRange = '30d', limit = 240, bounds?: { since?: number; until?: number }) => {
+    const q = new URLSearchParams({ range, limit: String(limit) })
+    if (bounds?.since && bounds.since > 0) q.set('since', String(Math.floor(bounds.since)))
+    if (bounds?.until && bounds.until > 0) q.set('until', String(Math.floor(bounds.until)))
+    return request<ApiVpnUsage>(`/api/vpns/${id}/usage?${q.toString()}`)
+  },
+
+  /**
+   * Per-hour traffic deltas for the "usage by time" chart (D-092).
+   *
+   * The same window as `vpnUsage`, so both charts always describe the same
+   * period — a page whose two charts covered different ranges would be worse
+   * than having one.
+   */
+  vpnUsageHourly: (id: number, range: ApiUsageRange = '30d', bounds?: { since?: number; until?: number }) => {
+    const q = new URLSearchParams({ range })
+    if (bounds?.since && bounds.since > 0) q.set('since', String(Math.floor(bounds.since)))
+    if (bounds?.until && bounds.until > 0) q.set('until', String(Math.floor(bounds.until)))
+    return request<ApiHourlyUsage>(`/api/vpns/${id}/usage/hourly?${q.toString()}`)
+  },
+
+  /**
+   * Measured rates between consecutive sync snapshots (D-092).
+   *
+   * An interval the counters cannot describe comes back with
+   * `source: 'unavailable'`; the caller must render a gap, never a zero.
+   */
+  vpnSpeedHistory: (id: number, range: ApiUsageRange = '30d', bounds?: { since?: number; until?: number }) => {
+    const q = new URLSearchParams({ range })
+    if (bounds?.since && bounds.since > 0) q.set('since', String(Math.floor(bounds.since)))
+    if (bounds?.until && bounds.until > 0) q.set('until', String(Math.floor(bounds.until)))
+    return request<ApiSpeedHistory>(`/api/vpns/${id}/speed-history?${q.toString()}`)
+  },
+
+  /**
+   * Stored reachability probes for one VPN (D-092).
+   *
+   * Answers 404 when the deployment has no sample store, which is honest: there
+   * is no latency history to read, and an empty 200 would look like a measured
+   * silence.
+   */
+  /**
+   * Stored latency probes (D-092) with an optional measurement-source filter
+   * (D-095).
+   *
+   * `source` is forwarded verbatim so an unknown value is refused by the server
+   * with `422` instead of being silently dropped here — a client-side default
+   * would turn a typo into "everything matched".
+   */
+  vpnPingHistory: (id: number, range: ApiUsageRange = '24h', source?: ApiUsageSource) => {
+    const q = new URLSearchParams({ range })
+    if (source && source !== 'all') q.set('source', source)
+    return request<ApiPingHistory>(`/api/vpns/${id}/ping/history?${q.toString()}`)
+  },
 
   // --- release / restore (D-027) -------------------------------------------
   /**
    * Releases a depleted VPN and opens the **3-day undo window** (D-027.2).
    * Nothing is deleted: the panel client keeps working and the record survives
    * until the window closes.
+   *
+   * `reason` is optional for the OWNER (it defaults to "quota exhausted") and
+   * **mandatory for a Super Admin** releasing somebody else's VPN (P-2) — the API
+   * answers 422 `reason_required` without one, and audits the act as
+   * `vpn.force_release`.
    */
   releaseVpn: (id: number, reason?: string) =>
     request<ApiVpnRelease>(`/api/vpns/${id}/release`, {
@@ -1635,6 +2011,23 @@ export const api = {
   /** The undo button. Refused with 409 once the window has closed. */
   restoreRelease: (releaseId: number) =>
     request<ApiVpnRelease>(`/api/vpn-releases/${releaseId}/restore`, { method: 'POST' }),
+
+  /**
+   * Replace a VPN (D-112): build a NEW one, then release the current one.
+   *
+   * `confirm` is required by the route — the action has two side effects (a new
+   * panel client and a released VPN), so it is never taken on a request that
+   * could be a stray retry. `offer_id` is omitted to keep the same package.
+   */
+  replaceVpn: (id: number, body: { offerId?: number; reason?: string } = {}) =>
+    request<ApiVpnReplace>(`/api/vpns/${id}/replace`, {
+      method: 'POST',
+      body: JSON.stringify({
+        confirm: true,
+        ...(body.offerId ? { offer_id: body.offerId } : {}),
+        ...(body.reason ? { reason: body.reason } : {}),
+      }),
+    }),
 
   /** The caller's release timeline (a client sees only their own). */
   listReleases: () => request<ApiVpnRelease[]>('/api/vpn-releases'),
@@ -1724,6 +2117,27 @@ export const api = {
       }),
     }),
 
+  /**
+   * Retires an offer from the catalogue without destroying it (P-4).
+   *
+   * `updateOffer({active:false})` hid an offer but recorded no reason, and the row
+   * stayed in every listing labelled "inactive" forever. Archiving records the
+   * moment and takes it out of the shop, keeping the row for anything that
+   * references it. Idempotent: the FIRST timestamp is kept.
+   */
+  archiveOffer: (id: number) =>
+    request<ApiOffer>(`/api/offers/${id}/archive`, { method: 'POST' }),
+
+  /**
+   * Removes an offer NOTHING depends on (P-4).
+   *
+   * Refused with 409 `offer_in_use` when a VPN or a payment names it — both
+   * foreign keys are `ON DELETE SET NULL`, so without that guard the delete would
+   * silently erase which product a customer paid for. The UI offers archive in
+   * that case instead of pretending the delete worked.
+   */
+  deleteOffer: (id: number) => request<void>(`/api/offers/${id}`, { method: 'DELETE' }),
+
   // --- observability (Stage E5) -------------------------------------------
   /** Server-wide CPU/RAM history. Labelled `server_wide` by the backend. */
   serverMetrics: (id: number, limit = 240) =>
@@ -1811,8 +2225,41 @@ export const api = {
   listPayments: (pendingOnly = false) =>
     request<ApiPayment[]>(`/api/payments${pendingOnly ? '?pending=1' : ''}`),
 
-  /** Records an intent to pay. Amount is integer **cents**, never a float. */
-  createPayment: (input: { amountCents: number; methodId?: number; assignmentId?: number; reference?: string }) =>
+  /**
+   * The order list together with the UNCAPPED total (D-116).
+   *
+   * The plain `listPayments` returns at most 200 rows and says nothing about
+   * the rest, so a screen built on it cannot tell "there are 200 orders" from
+   * "there are 200 shown of 2,400". This call carries the count, which is the
+   * only honest basis for that sentence.
+   *
+   * `total` is **-1 when the count could not be taken** — never 0. A failed
+   * count must not be rendered as "no orders exist".
+   */
+  listPaymentsPaged: (pendingOnly = false) =>
+    request<{
+      payments: ApiPayment[]
+      shown: number
+      total: number
+      truncated: boolean
+    }>(`/api/payments?envelope=1${pendingOnly ? '&pending=1' : ''}`),
+
+  /**
+   * Records an intent to pay. Amount is integer **cents**, never a float.
+   *
+   * `offerId` is what turns an intent into an ORDER: with it the server prices the
+   * plan itself (the payer never sets the product's price) and confirmation builds
+   * a VPN (D-031.1). Without it the payment is a deposit that releases no product,
+   * so a buyer choosing a plan must always send it.
+   */
+  createPayment: (input: {
+    amountCents: number
+    methodId?: number
+    assignmentId?: number
+    reference?: string
+    offerId?: number
+    quantity?: number
+  }) =>
     request<ApiPayment>('/api/payments', {
       method: 'POST',
       body: JSON.stringify({
@@ -1820,6 +2267,8 @@ export const api = {
         method_id: input.methodId ?? 0,
         assignment_id: input.assignmentId ?? 0,
         reference: input.reference ?? '',
+        offer_id: input.offerId ?? 0,
+        quantity: input.quantity ?? 0,
       }),
     }),
 
@@ -1937,6 +2386,21 @@ export const api = {
 
   /** Only what the caller may actually buy or claim. */
   listPackages: () => request<ApiPlan[]>('/api/packages'),
+
+  /**
+   * The customer catalogue, correctly typed (`GET /api/packages`).
+   *
+   * `listPackages()` above is kept unchanged because `packagesStore` already
+   * consumes it, and repointing one endpoint at a second TypeScript shape is how a
+   * shared module breaks a screen it was not meant to touch. That older signature
+   * is nonetheless wrong — it promises `active`, `archived` and `slots_remaining`,
+   * none of which this endpoint sends — so a caller that wants to READ the real
+   * payload (Section 03's catalogue) calls this instead. One endpoint, one request;
+   * only the declared shape differs, and this one matches the wire.
+   *
+   * See the note on `ApiPackage` for the verified field list.
+   */
+  listPackagesTyped: () => request<ApiPackage[]>('/api/packages'),
 
   getPlan: (id: number) => request<ApiPlan>(`/api/plans/${id}`),
 

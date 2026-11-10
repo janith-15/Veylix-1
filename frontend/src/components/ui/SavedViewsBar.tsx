@@ -99,14 +99,14 @@ export function SavedViewsBar({ screen }: { screen: string }) {
           </>
         }
       >
-        <div className="ui-col" style={{ gap: 10 }}>
+        <div className="ui-col ui-saved-views__form">
           <Input
             label="Name"
             placeholder="Untagged queue, Expiring this week…"
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
           />
-          <p className="ui-muted t-sm2" style={{ margin: 0 }}>
+          <p className="ui-muted t-sm2 ui-saved-views__note">
             Saved to this browser, not your account. Filters: <code>{current}</code>
           </p>
           {error && <p className="ui-field__error" role="alert">{error}</p>}

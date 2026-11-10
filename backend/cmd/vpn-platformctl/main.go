@@ -176,7 +176,9 @@ Commands:
   doctor                  re-run every preflight check on this host
   versions                list every published release and mark the one running
   update                  upgrade to the latest release (backup first)
-  rollback                return to the previous binary / backup
+  rollback                return to the previous binary / backup (backup first;
+                          pass --skip-backup only if you mean to lose the
+                          state being replaced)
   domain-set <domain>     change the public domain (validate, reload, verify)
   backup                  take a verified backup of the database and keys
   restore <dir>           restore a backup directory over the live data

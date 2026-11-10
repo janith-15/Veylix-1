@@ -35,6 +35,26 @@ const (
 	ActionRevoke               = "vpn.revoke"
 	ActionSuspend              = "vpn.suspend"
 	ActionResume               = "vpn.resume"
+	// ActionVPNDormant records that a customer put a VPN to sleep (D-094). It is
+	// a LOCAL preference: no panel client is touched, nothing is deleted, and the
+	// VPN keeps reporting the panel's own status. It is audited because it
+	// changes what the customer is shown and what gets polled, but it is
+	// deliberately NOT notified — putting a VPN to sleep must not generate the
+	// very inbox entry the customer was trying to escape.
+	ActionVPNDormant = "vpn.dormant"
+	// ActionVPNWake records the customer taking a VPN out of dormancy.
+	ActionVPNWake = "vpn.wake"
+	// ActionVPNStaleReleased records the lifecycle sweep setting a long-inactive
+	// VPN aside (D-098). It is NOT a deletion: the row moves to RELEASED, the
+	// 3-day undo window opens, and the 3X-UI client is untouched. The context
+	// carries the status it held, how long it held it, and the window that was
+	// crossed, so a later reader can tell a policy sweep apart from a customer
+	// releasing their own VPN.
+	ActionVPNStaleReleased = "vpn.stale_released"
+	// ActionVPNStaleFailed records a row the sweep could NOT move. The VPN is NOT
+	// set aside and the next tick retries it — an entry here is a warning that
+	// the intended tidy-up did not happen, never a claim that it did.
+	ActionVPNStaleFailed = "vpn.stale_failed"
 	// ActionVPNAbsent records that the panel positively reported a VPN's client
 	// gone, and the local status was reconciled to SERVER_UNAVAILABLE (D-024.5).
 	ActionVPNAbsent = "vpn.absent"
@@ -46,6 +66,12 @@ const (
 	ActionAdminServerAssign = "admin.servers_assign"
 	ActionOfferCreate       = "offer.create"
 	ActionOfferUpdate       = "offer.update"
+	// ActionOfferArchive records retiring an offer from the catalogue (P-4). The
+	// row survives; this marks WHY it left the shop, which `active = false` alone
+	// never recorded.
+	ActionOfferArchive = "offer.archive"
+	// ActionOfferDelete records removing an offer nothing depended on (P-4).
+	ActionOfferDelete = "offer.delete"
 	// ActionPanelClientTag records a FREE/PREMIUM (re)classification of a panel
 	// client (D-024.3/.7). The context carries the server, the panel email, the
 	// previous tag ("untagged" when there was none) and the new one, so a later
@@ -90,6 +116,17 @@ const (
 	// ActionVPNRelease records a client releasing a depleted VPN. The VPN is NOT
 	// deleted: a 3-day undo window opens (D-027.2).
 	ActionVPNRelease = "vpn.release"
+	// ActionVPNForceRelease records a SUPER ADMIN releasing somebody else's VPN
+	// (P-2). A separate action, not a flag on vpn.release: "the owner set this
+	// aside" and "an operator set this aside on the owner's behalf" are different
+	// events, and the difference is exactly what gets asked about months later.
+	// It carries a mandatory reason.
+	ActionVPNForceRelease = "vpn.force_release"
+	// ActionVPNForcePurge records a SUPER ADMIN deleting a local VPN RECORD while
+	// the panel client deliberately stays alive (P-3, D-027.3). Distinct from
+	// vpn.remove_absent, where the panel positively reported the client gone: here
+	// the client exists and was not touched, so the trail must not imply otherwise.
+	ActionVPNForcePurge = "vpn.force_purge"
 	// ActionVPNRestore records the undo of a release inside that window.
 	ActionVPNRestore = "vpn.restore"
 	// ActionVPNPurge records the LOCAL removal of a released VPN after the grace
@@ -249,7 +286,7 @@ func (l *Logger) notify(ctx context.Context, e Entry) {
 		case ActionProvision, ActionRevoke, ActionSuspend, ActionResume,
 			ActionPaymentConfirm, ActionPaymentReject, ActionPaymentRefund,
 			ActionPaymentMethodCreate, ActionPaymentMethodUpdate,
-			ActionOfferCreate, ActionOfferUpdate,
+			ActionOfferCreate, ActionOfferUpdate, ActionOfferArchive, ActionOfferDelete,
 			ActionServerAdd, ActionServerDisable, ActionServerRemove:
 			targets[e.ActorID] = true
 		}
@@ -292,6 +329,10 @@ func describe(e Entry) (kind, title string) {
 			return "error", "Payment decision was not applied"
 		case ActionOfferCreate, ActionOfferUpdate:
 			return "error", "Offer was not saved"
+		case ActionOfferArchive:
+			return "warning", "Offer archived — removed from the catalogue"
+		case ActionOfferDelete:
+			return "warning", "Offer deleted"
 		case ActionQuotaAdjust:
 			return "error", "Quota change was not applied"
 		case ActionPasswordChangeFailed:
@@ -317,6 +358,10 @@ func describe(e Entry) (kind, title string) {
 		return "error", "VPN missing on the panel"
 	case ActionVPNRelease:
 		return "warning", "VPN released — 3 days to undo"
+	case ActionVPNForceRelease:
+		return "warning", "VPN released by an operator — 3 days to undo"
+	case ActionVPNForcePurge:
+		return "warning", "VPN record purged — the panel client was kept"
 	case ActionVPNRestore:
 		return "success", "VPN restored"
 	case ActionVPNPurge:
@@ -341,6 +386,10 @@ func describe(e Entry) (kind, title string) {
 		return "success", "Offer created"
 	case ActionOfferUpdate:
 		return "info", "Offer updated"
+	case ActionOfferArchive:
+		return "info", "Offer archived"
+	case ActionOfferDelete:
+		return "info", "Offer deleted"
 	case ActionPaymentConfirm:
 		return "success", "Payment confirmed"
 	case ActionPaymentReject:

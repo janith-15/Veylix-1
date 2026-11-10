@@ -74,13 +74,22 @@ New files **link** to those homes. They never copy their content.
 
 ## Glossary — the words that carry rules
 
-- **VPN** — a 3X-UI *client*. Not a server, not an inbound.
-- **FREE / PREMIUM** — a **visibility tag**, stored locally, never written to the
-  panel. Not an account tier.
+- **VPN** — a 3X-UI *client*. Not a server, not an inbound. **A VPN with no panel
+  client is not a VPN** (D-091.1).
+- **Panel email** — the VPN's **name and identity**. `<client email>_<kind>_<n>`,
+  e.g. `nimal@gmail.com_paid_2`. The slot only moves forward. Customers must be able
+  to read and copy it (D-091.4, D-034).
+- **FREE / PREMIUM** — a **business** label, stored locally, never written to the
+  panel. FREE and PREMIUM are the *same* 3X-UI client; the tag exists so one product
+  can sell for revenue (PREMIUM) and acquire customers (FREE). Not an account tier.
+  **Only the Super Admin sets or changes it**, and it locks once issued (D-091.2/.3).
 - **vpn_instances** — a **mirror** of a confirmed panel client, never an intent row.
 - **Release** — removal from Veylix only. It **never** deletes a panel client.
 - **Quota** — a reseller's sellable slots, counted in-transaction.
 - **Panel wins** — on any disagreement between Veylix and 3X-UI, the panel is right.
+- **Gone** — a mirrored panel client that the panel positively reports absent:
+  `SERVER_UNAVAILABLE`, never `REVOKED`. It is **surfaced on the VPN**, with a
+  sentence the customer can act on (D-091.5, INV-1).
 
 ## Non-negotiables
 
@@ -89,6 +98,20 @@ New files **link** to those homes. They never copy their content.
 3. Never report a feature done because a page or button exists.
 4. Never claim a command ran when it did not run.
 5. Never claim remote success from local database state alone.
+6. **A VPN is a 3X-UI client, or it is nothing.** Local state is not proof —
+   confirm with `cmd/panelprobe` or `GET /clients/get/{email}`. FREE and PREMIUM are
+   the same object; the tag is a local business label the Super Admin alone may set,
+   and it locks once issued (D-091.1/.2/.3, D-024).
+7. **Every client screen that lists a VPN shows the panel identity** in a readable,
+   copyable form, beside the package name — never one without the other (D-091.4).
+8. **A non-active VPN state is explained, not just coloured.** `SERVER_UNAVAILABLE`
+   and its siblings get a sentence on the row *and* on the detail page; an unknown
+   status gets a generic sentence, never an invented one (D-091.5).
+9. **One layout hierarchy per screen, and no inline styles.** Sections are either all
+   `<h2>` or all titled `Card`s, never mixed in one column; the same word never
+   appears at two levels at once; shared layout lives in a class in that screen's
+   stylesheet, not in a `style={{ … }}` (D-059, D-091).
+
 
 ## Session protocol
 

@@ -9,6 +9,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"syscall"
 	"time"
 )
 
@@ -72,10 +73,41 @@ func New(opts Options) (*Client, error) {
 
 	transport := opts.Transport
 	if transport == nil {
+		/*
+		 * B-4: closing the DNS-rebinding window.
+		 *
+		 * `ParseTarget` resolves the host and checks the addresses ONCE, at
+		 * registration time. Between that check and the dial there is a gap: a
+		 * hostile DNS server can answer the validation query with a public address
+		 * and the dial query with `127.0.0.1` or `169.254.169.254`. `DialContext`
+		 * would then connect to exactly the address the guard was meant to refuse.
+		 *
+		 * `Control` is called AFTER the name is resolved and IMMEDIATELY BEFORE
+		 * connect(2), with the concrete IP the socket is about to use — so the
+		 * policy is enforced on the address that is actually dialled, whatever DNS
+		 * answers. That is the only place the check cannot be raced.
+		 */
+		allowPrivate := opts.Target.AllowPrivate
+		dialer := &net.Dialer{
+			Timeout:   5 * time.Second,
+			KeepAlive: 30 * time.Second,
+			Control: func(network, address string, _ syscall.RawConn) error {
+				host, _, err := net.SplitHostPort(address)
+				if err != nil {
+					return reject("unparseable destination address")
+				}
+				ip := net.ParseIP(host)
+				if ip == nil {
+					return reject("destination is not an IP address")
+				}
+				return checkIP(ip, allowPrivate)
+			},
+		}
+
 		transport = &http.Transport{
 			// TLS verification is never disabled (Bible §8).
 			Proxy:                 http.ProxyFromEnvironment,
-			DialContext:           (&net.Dialer{Timeout: 5 * time.Second, KeepAlive: 30 * time.Second}).DialContext,
+			DialContext:           dialer.DialContext,
 			ForceAttemptHTTP2:     true,
 			MaxIdleConns:          maxIdleConns,
 			MaxIdleConnsPerHost:   maxIdleConns,

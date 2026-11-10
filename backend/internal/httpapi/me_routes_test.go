@@ -9,6 +9,7 @@ import (
 
 	"veylix/backend/internal/audit"
 	"veylix/backend/internal/auth"
+	"veylix/backend/internal/config"
 	"veylix/backend/internal/httpapi"
 	"veylix/backend/internal/store"
 )
@@ -39,6 +40,11 @@ func meHarness(t *testing.T) (*httptest.Server, *store.Store) {
 		Health: st, Version: "test", Auth: authSvc, Sessions: sessions, Authn: sessions,
 		UserAdmin: authSvc, SetupState: authSvc,
 		Accounts: st,
+		// D-099: the zone a real deployment always publishes. Without it here,
+		// /api/me would answer without `display_timezone` and every screen would
+		// quietly render in the device's zone — so the harness carries it, not
+		// just the assertion.
+		DisplayTimezone: config.DefaultDisplayTimezone,
 	}))
 	t.Cleanup(srv.Close)
 	return srv, st
@@ -98,6 +104,43 @@ func TestMeReturnsDisplayNameAndCreatedAt(t *testing.T) {
 	// A successful read must NOT be flagged as a failed one.
 	if flagged, _ := me["profile_read_error"].(bool); flagged {
 		t.Error("profile_read_error is set on a read that succeeded")
+	}
+}
+
+// TestMePublishesTheDisplayTimezone is D-099's contract with the UI.
+//
+// Every screen renders stored instants in this zone. If /api/me stopped sending
+// it, each formatter would silently fall back to the DEVICE's zone — the exact
+// defect this decision removed — and nothing else in the product would fail.
+func TestMePublishesTheDisplayTimezone(t *testing.T) {
+	srv, _ := meHarness(t)
+	client := &http.Client{Jar: mustJar(t), Timeout: 10 * time.Second}
+
+	// Bootstrap signs the caller in, so the very next call can read /api/me.
+	// Creating a real account rather than faking a principal keeps this on the
+	// same path a customer takes.
+	resp, body := postJSON(t, client, srv.URL+"/api/setup/bootstrap", map[string]string{
+		"email": "tz@example.com", "password": "a very long password",
+		"display_name": "Timezone Check",
+	})
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("bootstrap = %d %v", resp.StatusCode, body)
+	}
+
+	resp, me := getJSON(t, client, srv.URL+"/api/me")
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("GET /api/me = %d, want 200", resp.StatusCode)
+	}
+
+	zone, ok := me["display_timezone"].(string)
+	if !ok || zone == "" {
+		t.Fatalf("display_timezone = %v, want a zone name (the UI has no other source)",
+			me["display_timezone"])
+	}
+	// A zone NAME, not an offset: "+05:30" would go stale the moment the zone's
+	// rules changed, and a browser could not resolve it to a location.
+	if _, err := time.LoadLocation(zone); err != nil {
+		t.Errorf("display_timezone = %q is not a loadable IANA zone: %v", zone, err)
 	}
 }
 

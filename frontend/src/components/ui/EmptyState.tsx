@@ -21,11 +21,8 @@ export function EmptyState({
         look is unchanged.
       */}
       <h2 className="ui-strong ui-empty__title">{title}</h2>
-      {description && (
-        <p className="ui-muted" style={{ maxWidth: 420 }}>
-          {description}
-        </p>
-      )}
+      {/* D-059: the measure lives in `.ui-empty__desc`, not a style prop. */}
+      {description && <p className="ui-muted ui-empty__desc">{description}</p>}
       {action && <div className="ui-mt-1">{action}</div>}
     </div>
   )

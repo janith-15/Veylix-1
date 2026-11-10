@@ -41,7 +41,7 @@
 | `GET` | `/api/admins` | `?role=admin\|client\|super_admin` | `[user]` | super-admin only |
 | `POST` | `/api/admins` | `{email, password, display_name, role, quota_limit}` | `201 {user}` | super-admin only; the only way to mint an `admin` |
 | `PATCH` | `/api/admins/{id}` | `{status?, quota_limit?}` | `200 {user}` | suspend revokes every session; self-suspend → 422 |
-| `GET` | `/api/me` | — | `200 {id, email, role, display_name, created_at, email_verified}` | **D1/D2** — `display_name` and `created_at` are read from the account row. When no reader is wired the two keys are **absent** (never guessed) and the route still answers `200`; a failed read adds `profile_read_error: true` |
+| `GET` | `/api/me` | — | `200 {id, email, role, display_name, created_at, email_verified, display_timezone}` | **D1/D2** — `display_name` and `created_at` are read from the account row. When no reader is wired the two keys are **absent** (never guessed) and the route still answers `200`; a failed read adds `profile_read_error: true`. **D-099** — `display_timezone` is the IANA zone every screen must render stored instants in (`Asia/Colombo` by default, from `VEYLIX_DISPLAY_TIMEZONE`). It is a zone **name**, never an offset, and is omitted when the server has none configured (the UI then falls back to the browser's zone rather than guessing) |
 | `POST` | `/api/auth/google` | `{id_token}` | `200 {user}` + cookie | 🟡 **designed only** — token must be verified server-side (no credentials yet) |
 | `PATCH` | `/api/me` | `{display_name?, contacts?, theme_prefs?}` | `200 {user}` | 🟡 designed only |
 
@@ -60,7 +60,7 @@
 | `POST` | `/api/servers/:id/test` | — | `200 {status, panel_version, xray_version, latency_ms}` | `GET /panel/api/server/status` |
 | `POST` | `/api/servers/:id/disable` | — | `204` | — |
 | `DELETE` | `/api/servers/:id` | — | `204` (status → `REMOVED`, history kept) | — |
-| `GET` | `/api/servers/:id/inbounds` | — | `[{id, remark, tag, protocol, port, enabled}]` | `GET /panel/api/inbounds/list/slim` |
+| `GET` | `/api/servers/:id/inbounds` | — | `[{id, remark, tag, protocol, port, enabled}]` — `id` is the **local `inbounds.id`**, the value `POST /api/offers` requires; it is *not* the panel's inbound number, which lives in `inbounds.remote_id` and is translated server-side by `provisioning.panelInboundID` (D-110) | `GET /panel/api/inbounds/list/slim` |
 
 **Status mapping** (`docs/3XUI_API_CONTRACT.md` §7): `200` → `ACTIVE` · `401/403` → `REAUTH_REQUIRED` · timeout/DNS/TLS/5xx → `CONNECTION_UNAVAILABLE`. An outage **never** yields `REVOKED`.
 
@@ -71,14 +71,20 @@
 | Method | Path | Body | Response | Rules |
 |---|---|---|---|---|
 | `GET` | `/api/offers` | — | `[{id, kind, name, limits, active}]` | Free offers visible to clients |
-| `POST` | `/api/offers` | `{kind, name, server_id, inbound_id, traffic_gb, duration_days, device_limit}` | `201 {offer}` | super-admin only |
+| `POST` | `/api/offers` | `{kind, name, server_id, inbound_id, traffic_gb, duration_days, device_limit}` | `201 {offer}` · `422 offer_incomplete` if `inbound_id` is absent · `422 inbound_mismatch` if that inbound belongs to another server (D-108) | super-admin only |
 | `PATCH` | `/api/offers/:id` | partial | `200 {offer}` | deactivating removes it from the client catalog (REQUIREMENTS §2.4) |
+| `GET` | `/api/plans` | `?kind=PREMIUM&scope=unowned\|mine&archived=1` | Operator: `[{id, kind, name, traffic_gb, duration_days, device_limit, price_cents, currency, server_label, slots_remaining, purchasable, server_id, inbound_id, active, archived, owner_user_id}]` · Client: the `planFact` subset only | Every `ApiPlan` field must be present — `server_label`, `slots_remaining` and `purchasable` are **derived**, so a handler that returns the raw store row blanks them and the screen renders "no server" (D-111) |
+| `POST` | `/api/plans` | `{kind, name, server_id, inbound_id, traffic_gb, duration_days, device_limit, price_cents, currency, slots_total, is_custom}` | `201 {plan}` | super-admin only (`offer:manage`); a FREE custom package is 422 |
 | `GET` | `/api/admins` | — | `[{id, email, status, quota_used, quota_limit}]` | super-admin only |
+| `POST` | `/api/vpns/:id/replace` | `{offer_id?, reason?, confirm: true}` | `201 {new:{vpn_id,panel_email,status,confirmed,recorded}, old_vpn_id, old_panel_email, release_id, restore_deadline, claim_consumed, claims_remaining}` · `422 confirmation_required` without `confirm` · `409 no_claim_remaining` · `422 kind_mismatch` · `422 target_mismatch` · `409 not_replaceable` · `422 plan_archived` · `403` for a reseller | D-112. Creates the NEW panel client **first**; the old VPN is released **only** if that create is confirmed (`recorded && confirmed`), so a panel failure releases nothing. The old VPN keeps its 3-day undo (`release_id`). A FREE replace occupies the replaced claim's concurrent slot in the same transaction but still **consumes** a monthly claim (§17.18). |
 | `POST` | `/api/admins` | `{email, quota_limit, server_ids[]}` | `201 {admin}` | super-admin only |
 | `PATCH` | `/api/admins/:id` | `{status?, quota_limit?}` | `200 {admin}` | audited |
 | `GET` | `/api/quotas/me` | — | `{used, limit, remaining}` — a client (no reseller quota) gets the constant `{0, 0, -1}` (D-021) | any authenticated role |
-| `GET` | `/api/vpns/{id}/usage` | `?since&limit` | `{vpn_id, status, limit_bytes, lifetime_up_bytes, lifetime_down_bytes, remote_reset_count, history, first_snapshot_at, points[]}` | owner / seller / super admin (D-023) |
+| `GET` | `/api/vpns/{id}/usage` | `?range=24h\|7d\|30d\|3m\|1y\|all\|custom` · `since`/`until` · `limit` · `?summary=1` — D-096 | `{vpn_id, status, limit_bytes, lifetime_up_bytes, lifetime_down_bytes, remote_reset_count, history, first_snapshot_at, window{key, since_sec, until_sec, bucket_sec, bucket}, bucket_sec, bucket, points[]}` — points are **fixed-width time buckets**, not raw snapshots: `24h→hour`, `7d→6h`, `30d→day`, `3m→week`, `1y→month`, and `all`/`custom` size theirs from the real span once the first snapshot is read. `window.bucket_sec`/`window.bucket` report the width **actually used**, so a chart can label its axis instead of guessing from the range key. A range whose data covers less than the window says so; it is never stretched. Unknown range or `since >= until` → **422** | owner / seller / super admin (D-023) |
 | `GET` | `/api/servers/{id}/metrics` | `?since&limit` | `{scope:"server_wide", points[]}` | super admin, or an admin **assigned** to it |
+| `GET` | `/api/vpns/{id}/usage/hourly` | `?range=24h\|7d\|30d\|3m\|1y\|all` · `since`/`until` (D-092) | `{vpn_id, window, source, buckets[{hour_start, hour_of_day, up_bytes, down_bytes, total_bytes, measurements}]}` — **per-hour deltas**, not lifetime totals; a counter reset yields 0, never a negative bar | owner / seller / super admin; stranger → 403, anonymous → 401; bad range → 422 |
+| `GET` | `/api/vpns/{id}/speed-history` | `?range=…` · `since`/`until` (D-092) | `{vpn_id, window, scope:"average_between_sync_readings", points[{taken_at, up_bps, down_bps, elapsed_sec, source:"measured"\|"unavailable"}]}` — derived from stored counters; **not a speed test** | owner / seller / super admin; stranger → 403 |
+| `GET` | `/api/vpns/{id}/ping/history` | `?range=` (default `24h`) · `since`/`until` · `limit` (max 500) · **`source`** (`server_reachability` \| `all`, default `all`) — D-095 | `{vpn_id, window, scope:"server_reachability", source, points[{taken_at, reachable, latency_ms, scope}]}` — `latency_ms` is **-1** on a failed probe; a failed probe is stored, not dropped. `source` is the filter **actually applied** and is echoed back. An unknown `source` is **422 `validation_failed`**, never a silent match-all. Route is **not registered** without a `PingSampleStore` (404) | owner / seller / super admin; stranger → 403 |
 | `GET` | `/api/sync/status` | — | `{stale_after_seconds, servers[{server_id,name,status,last_sync,stale,age_seconds}]}` | super admin / admin (clients → 403) |
 | `GET` | `/api/offers` | `?active=1` | `[{id,kind,name,server_id,inbound_id,traffic_gb,duration_days,device_limit,active,…}]` | client → **active FREE only**; admin/super → all (P3) |
 | `POST` | `/api/offers` | `{kind,name,server_id,inbound_id?,traffic_gb?,duration_days?,device_limit?,active?}` | `201 {offer}` | super admin only; audited |
@@ -100,7 +106,7 @@
 | `POST` | `/api/vpns` | `{offer_id, client_user_id?}` | `201 {vpn, provisioning_state}` | ✅ Free: self-service; Premium: seller with quota. **Panel write first, confirm, then record (D-024.1a)** — a failed create returns an error and leaves **no** VPN row. A FREE claim is booked in the **same transaction**; hitting a cap returns **409 `free_concurrent_limit`** (3 concurrent) or **409 `free_monthly_limit`** (5 per rolling 30 days, D-025.4/.5) and creates nothing |
 | `GET` | `/api/vpns/claims/me` | `?server_id=N` (required), `?client_user_id=` (admin only) | `{concurrent, used_this_window, monthly_limit, concurrent_limit}` | ✅ **implemented 2026-10-24** — show the caps **before** claiming, because releasing does not refund a slot (REQUIREMENTS §2.0.1); missing `server_id` → 422; a client asking for another client → 403 |
 | `GET` | `/api/vpns` | `?tag=free\|premium\|untagged` | `[{id, server_id, panel_email, status, owner_user_id, seller_user_id, expires_at, created_at, tag\|null, source}]` | ✅ **implemented 2026-10-24 (D-024.3)** — **Super Admin**: panel-backed and includes **untagged** clients (`source:"panel"`, merged with local ownership) or `source:"local"` when the panel could not be read. **Admin/Client**: local rows with a **required** tag join, so only published (tagged) VPNs appear. Unknown `?tag=` → **422** |
-| `GET` | `/api/vpns/:id` | — | `{vpn, usage, limits, seller}` | 🟡 404 for non-owners (T-14/T-15); `limits` are panel values |
+| `GET` | `/api/vpns/:id` | — | `{vpn, usage, limits, seller}` | 🟡 404 for non-owners (T-14/T-15); `limits` are panel values. **`status_changed_at`** (D-100) is published on `GET /api/vpns` and here: Unix seconds the row entered its current `status`, or `null`. It reads D-098's column, and `null`/`0` must render as **nothing** — never as 1970 |
 | `POST` | `/api/vpns/:id/suspend` | — | `200 {vpn}` | ✅ `POST /clients/bulkDisable` |
 | `POST` | `/api/vpns/:id/resume` | — | `200 {vpn}` | ✅ `POST /clients/bulkEnable` |
 | `POST` | `/api/vpns/:id/revoke` | — | `202 {state:"REVOCATION_PENDING"}` | ✅ verified delete → `REVOKED`; unreachable → stays pending (T-09/T-10) |
@@ -152,10 +158,13 @@
 | `POST` | `/api/payment-methods` | `{kind, label, details, instructions}` | `201 {payment_method}` | super admin → **global** (`owner_user_id: null`); admin → own; client → **403** |
 | `PATCH` | `/api/payment-methods/:id` | `{active}` | `200 {payment_method}` | owner or super admin; **never a delete** |
 | `GET` | `/api/payments` | `?pending=1` | `[payment]` | super admin all / admin own + sold / client own |
-| `POST` | `/api/payments` | `{assignment_id, method_id, amount_cents, reference}` | `201 {payment}` | `amount_cents` is an **integer**; no reference → `PENDING`, with one → `AWAITING_CONFIRMATION` |
+| `GET` | `/api/payments` | (see above) | `[payment]` — each row **also** carries `payer_email`, `target_email`, `offer_name`, `offer_kind` | D-113. `payer_email` is WHO placed the order and `target_email` who it is FOR (they differ when a reseller buys for a customer). `offer_name`/`offer_kind` name the package. All four are `""` when absent (manual record, deleted plan, deleted account) — a renderer must SAY that, never show a blank cell. |
+| `GET` | `/api/payments` | `?envelope=1` (optionally with `?pending=1`) | `{payments: [payment], shown, total, truncated}` | D-116. `total` is the **uncapped** count for the same role scope and pending filter, so a screen can say "showing the newest 200 of 2,400" instead of implying the page is everything. `total` is **`-1` when the count could not be read** — never `0`; a renderer must say the total is unknown rather than show a reassuring zero. Without `envelope=1` the response stays the bare `[payment]` array every existing caller expects. |
+
+| `POST` | `/api/payments` | `{assignment_id, method_id, amount_cents, reference, offer_id?, quantity?}` | `201 {payment}` | `amount_cents` is an **integer**; no reference → `PENDING`, with one → `AWAITING_CONFIRMATION`. **`offer_id` makes it an order**: the server prices the plan and confirmation builds a VPN. Without it the row is a deposit that releases no product (D-108) |
 | `GET` | `/api/payments/:id` | — | `{payment}` | not the caller's → **404** (never 403: no id enumeration) |
 | `POST` | `/api/payments/:id/reference` | `{reference}` | `200 {payment}` | payer only, from `PENDING` only |
-| `POST` | `/api/payments/:id/confirm` | — | `200 {payment}` | `payment:confirm`; from `PENDING`/`AWAITING_CONFIRMATION`; **audited**, never automatic (T-17) |
+| `POST` | `/api/payments/:id/confirm` | — | `200 {payment}` or `200 {payment, vpn, links, link_source}` | `payment:confirm`; from `PENDING`/`AWAITING_CONFIRMATION`; **audited**, never automatic (T-17). An order carrying `offer_id` is settled **through the provisioning service and returns the VPN it built**; if that service is not wired the route answers `503 orders_unavailable` rather than settling money without a product. A plan-less payment settles as a deposit and returns the payment alone with `vpn_instance_id: null` (D-108) |
 | `POST` | `/api/payments/:id/reject` | — | `200 {payment}` | reviewed once, never re-opened |
 | `POST` | `/api/payments/:id/refund` | — | `200 {payment}` | from `CONFIRMED` only |
 | `POST` | `/api/payments/:id/cancel` | — | `200 {payment}` | payer, before review (`PENDING` only) |
@@ -235,7 +244,7 @@ Releasing is undoable for **3 days**; after that only Veylix's record is removed
 
 | Method | Path | Body / query | Response | Rules |
 |---|---|---|---|---|
-| `POST` | `/api/vpns/{id}/release` | `{reason}` (optional) | `201 {release}` | **owner only** (an operator → **403**); open release already pending → **409 `already_released`** |
+| `POST` | `/api/vpns/{id}/release` | `{reason}` (optional for the owner, **required** for an operator) | `201 {release}` | **owner**, or the **Super Admin** acting on the owner's behalf (D-103) — a forced release without a reason → **422 `reason_required`** and is audited as `vpn.force_release`; any other role → **403**; open release already pending → **409 `already_released`** |
 | `POST` | `/api/vpn-releases/{id}/restore` | — | `200 {release}` | owner only; past the deadline or already restored → **409 `not_restorable`** |
 | `GET` | `/api/vpn-releases` | `?client_user_id=` | `[release]` | a client sees only their own; a reseller cannot read another's client timeline |
 
@@ -315,6 +324,9 @@ audit row, `removed_at` not restamped).
 | `GET /api/offers` | **implemented + live** (client → FREE only, super admin → all) |
 | `POST /api/offers` | **implemented + live** (201; client → 403; 422 on bad input) |
 | `PATCH /api/offers/{id}` | **implemented + live** (deactivation removes it from the client catalogue) |
+| `POST /api/offers/{id}/archive` | **implemented + live** (D-104; `archived_at` set, row kept, idempotent) |
+| `DELETE /api/offers/{id}` | **implemented + live** (D-104; 409 `offer_in_use` when a VPN or payment names it) |
+| `POST /api/vpns/{id}/purge` | **implemented + live** (D-103; Super Admin only; 422 `confirm_panel_email_required`; **panel client never deleted**) |
 | `GET/PUT /api/admins/{id}/servers` | **implemented + live** (reseller immediately sees the assigned panel; replace semantics tested) |
 | `GET /api/clients` | **implemented + live** (super admin 1, fresh reseller `[]`, client 403) |
 | `GET` | `/api/setup/status` | **implemented + live** (drives `/setup`) |
@@ -323,12 +335,15 @@ audit row, `removed_at` not restamped).
 | `POST` | `/api/vpns` | **implemented + tested** (201 ACTIVE confirmed, 202 when unconfirmed) |
 | `POST` | `/api/vpns/{id}/suspend` | **implemented + tested** |
 | `POST` | `/api/vpns/{id}/resume` | **implemented + tested** |
+| `POST` | `/api/vpns/{id}/dormant` | **implemented + tested** (D-094) — the owner puts a VPN to sleep: `dormant_at` is stamped and nothing else changes. **No panel call, no deletion, no status change** — `status` keeps reporting what 3X-UI says. The row still appears in `GET /api/vpns` with `dormant_at` set, and the client sorts it last, drops it from "Needs attention" and stops polling its usage. `204`; idempotent (a second call keeps the original stamp). Foreign id → `404` |
+| `POST` | `/api/vpns/{id}/wake` | **implemented + tested** (D-094) — clears `dormant_at`; `204`. It does **not** repair the VPN: if the panel still cannot see the client the status stays `SERVER_UNAVAILABLE` |
 | `POST` | `/api/vpns/{id}/revoke` | **implemented + tested** (200 only when verified; else 202 `REVOCATION_PENDING`) |
 | `GET` | `/api/system/version` | **implemented + tested** (D-081) — the running build: `{version, schema_version, ui, go_version, platform}` |
 | `GET` | `/api/system/releases` | **implemented + tested** (D-081) — Super Admin; `{releases:[{tag, published_at, is_current, is_latest, notes_url}]}`; 503 when the feed is unwired |
 | `GET` | `/api/system/update-check` | **implemented + tested** (D-081) — Super Admin; `{current, latest?, update_available, checked_at?, release_url?, error?}`. An unreachable feed answers `error`, never "up to date" |
 | `GET` | `/api/super/settings/google` | **implemented + tested** (D-080, D-082) — Super Admin; masked `{client_id, has_secret, redirect_url, configured, source, expected_redirect_url}`. `expected_redirect_url` is **derived from the request's own origin** (`<origin>/api/auth/google/callback`) so the page can hand the operator the exact string to register. The secret is **never** in the body |
 | `PUT` | `/api/super/settings/google` | **implemented + tested** (D-080, D-082) — Super Admin; body `{client_id, client_secret?, redirect_url}`. `redirect_url` must **end with `/api/auth/google/callback`** (else `400 invalid_setting`), so a path Google would accept but Veylix never answers cannot be saved. An empty secret keeps the stored one; applied live; audited as `settings.update` |
+| `GET` | `/api/super/overview/summary` | **implemented + tested 2026-11-10 (D-107)** — Super Admin only (`PermAdminManage`), read-only, no audit entry. One response with `{money, resellers, errors, generated_at}`. **`money`**: `currency`, `currencies[]`, `mixed_currency`, `month_cents` (**net** = confirmed − refunded, calendar month), `month_sales`, `avg_ticket_cents`, `month_delta_pct`, `months[6]`, `confirmed_cents` (net, all time), `pending_cents`, `pending_count`, `refund_cents`. **`resellers`**: `total`, `active` (30d), `quota_near` (≥90%), `quota_full`, `no_sales` (this month), `never_logged_in`, `top[5]` fullest-first. **`errors`** names any section that failed to resolve; that section is `null` and the others are still returned. **When `mixed_currency` is true every summed amount is `0` on purpose** — USD + LKR is never added. A failed section never becomes `0`, and an unconfigured store answers `503`, never zeroes |
 
 `GET /api/ready` now also returns `version` (the running build) beside `status`,
 `schema_version` and `ui`, so an operator reads the release from the process that

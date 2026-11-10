@@ -37,12 +37,20 @@ func ReleaseRoutes(mux *http.ServeMux, svc ReleaseService, authed func(http.Hand
 			WriteError(w, http.StatusBadRequest, "invalid_id", "invalid vpn id")
 			return
 		}
-		// Only the owner releases. An operator acting on a client's behalf would
-		// destroy property they do not own, so it is refused rather than
-		// "helpfully" allowed.
-		if !p.IsClient() {
+		/*
+		 * A client may release only their own VPN; a SUPER ADMIN may release any
+		 * (P-2). The old rule refused the operator outright, which left the
+		 * platform owner unable to act on an abused account or a support request
+		 * except through the 3X-UI panel — where nothing is recorded and no undo
+		 * window opens.
+		 *
+		 * Ownership is still enforced where it belongs: `CreateReleaseAtAs` checks
+		 * it for a client and skips it only for the explicit super-admin path, and
+		 * a forced release REQUIRES a reason (ErrReasonRequired → 422).
+		 */
+		if !p.IsClient() && !p.IsSuperAdmin() {
 			WriteError(w, http.StatusForbidden, "forbidden",
-				"only the VPN's owner can release it")
+				"only the VPN's owner or the platform owner can release it")
 			return
 		}
 		var in struct {
@@ -120,6 +128,11 @@ func writeReleaseError(w http.ResponseWriter, err error, fallback string) {
 	case errors.Is(err, releases.ErrState):
 		WriteError(w, http.StatusConflict, "not_restorable",
 			"the 3-day undo window has closed, or the release was already restored")
+	case errors.Is(err, releases.ErrReasonRequired):
+		// P-2: an operator releasing somebody else's VPN must say why. 422, not
+		// 400: the request is well-formed, a required field is empty.
+		WriteError(w, http.StatusUnprocessableEntity, "reason_required",
+			"a reason is required when releasing another account's VPN")
 	default:
 		WriteError(w, http.StatusInternalServerError, "internal_error", fallback)
 	}

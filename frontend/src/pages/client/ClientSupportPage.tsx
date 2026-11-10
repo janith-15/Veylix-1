@@ -3,6 +3,7 @@ import { MessageSquare, ShieldQuestion } from 'lucide-react'
 import { Button, Card, EmptyState } from '../../components/ui'
 import { ClientPage, ClientSection } from '../../components/client/ClientPage'
 import '../../components/client/client.css'
+import './support.css'
 
 /**
  * Support & Chat — client shell (S10 outer layer).
@@ -45,21 +46,21 @@ export function ClientSupportPage() {
     >
       <ClientSection title="How to reach us">
         <Card>
-          <div className="ui-col" style={{ gap: 10 }}>
-            <span className="ui-row" style={{ gap: 8, alignItems: 'center' }}>
-              <MessageSquare size={16} aria-hidden="true" style={{ color: 'var(--text-muted)' }} />
+          <div className="ui-col sup__stack">
+            <span className="ui-row sup__row">
+              <MessageSquare size={16} aria-hidden="true" className="sup__icon" />
               <strong>In-product chat is the quickest route</strong>
             </span>
-            <p className="ui-muted t-sm2" style={{ margin: 0 }}>
+            <p className="ui-muted t-sm2 sup__note">
               Messages are tied to your account, so the person answering can already see which VPNs
               you own without you having to describe them. Their reply arrives in your notifications
               as well as in the conversation.
             </p>
-            <p className="ui-muted t-sm2" style={{ margin: 0 }}>
+            <p className="ui-muted t-sm2 sup__note">
               You can only start a conversation with someone connected to your account — your seller,
               or a platform administrator. A message history is never deleted.
             </p>
-            <div className="ui-row" style={{ gap: 8 }}>
+            <div className="ui-row sup__actions">
               <Button size="sm" variant="primary" onClick={() => navigate('/chat')}>
                 Open chat
               </Button>

@@ -237,6 +237,147 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+# T8 - `out` exists. It was referenced nine times in install.sh and defined
+# nowhere, so under `set -euo pipefail` every dry-run line aborted the installer
+# with "out: command not found" (exit 127).
+# ---------------------------------------------------------------------------
+
+if type out >/dev/null 2>&1; then
+	ok "T8 out() is defined by common.sh"
+else
+	bad "T8 out() is undefined - a --dry-run line would abort the installer"
+fi
+if grep -qF -- "command not found" "$WORK/dryrun.log"; then
+	bad "T8 the dry run hit 'command not found'"
+else
+	ok "T8 the dry run hit no missing command"
+fi
+case "$dry_rc" in
+	127) bad "T8 dry run exited 127 (missing command)" ;;
+	*)   ok "T8 dry run did not exit 127 (rc $dry_rc)" ;;
+esac
+
+# ---------------------------------------------------------------------------
+# T9 - repository slug validation. The shipped default is a placeholder; taking
+# it to github.com produced a 404 reported as a network failure.
+# ---------------------------------------------------------------------------
+
+for good in acme/veylix difanmax/Veylix-2 a.b/c_d; do
+	if ( validate_repo "$good" ); then
+		ok "T9 validate_repo accepts '$good'"
+	else
+		bad "T9 validate_repo refused '$good'"
+	fi
+done
+
+for bad_repo in "" "$PLACEHOLDER_REPO" "https://github.com/acme/veylix" \
+                "git@github.com:acme/veylix.git" "acme" "acme/" "/veylix" "a/b/c" "ac me/veylix"; do
+	if ( validate_repo "$bad_repo" ); then
+		bad "T9 validate_repo accepted '$bad_repo'"
+	else
+		ok "T9 validate_repo refused '${bad_repo:-<empty>}'"
+	fi
+done
+
+# --repo and --repo= must both reach $REPO, and the flag must win over the env.
+REPO="$PLACEHOLDER_REPO"
+parse_args --repo acme/veylix
+if [ "$REPO" = "acme/veylix" ]; then ok "T9 --repo sets the slug"; else bad "T9 --repo left REPO=$REPO"; fi
+REPO="$PLACEHOLDER_REPO"
+parse_args --repo=other/repo
+if [ "$REPO" = "other/repo" ]; then ok "T9 --repo= sets the slug"; else bad "T9 --repo= left REPO=$REPO"; fi
+
+# A placeholder repo must be refused BEFORE anything is downloaded, with exit 2.
+REPO="$PLACEHOLDER_REPO"
+( main --domain vpn.example.com --dry-run --skip-dns --skip-ports --skip-caddy ) \
+	>"$WORK/placeholder.log" 2>&1
+expect_rc "T9 a placeholder repo is refused (exit 2)" $? 2
+expect_grep "T9 the refusal names --repo" "--repo" "$WORK/placeholder.log"
+
+# ---------------------------------------------------------------------------
+# T10 - deployment templates resolve, and only from a trusted source.
+#
+# A release used to publish binaries only, so a one-curl install had no
+# Caddyfile, no unit and no backup script. resolve_deploy_dir() must find the
+# release bundle, and must extract ONLY deploy/* from it.
+# ---------------------------------------------------------------------------
+
+# (a) a checkout next to the installer is used as-is
+# The probe runs in a FUNCTION, not a subshell: resolve_deploy_dir sets the
+# global DEPLOY_SRC, and a (subshell) would throw that assignment away.
+probe_deploy_dir() { resolve_deploy_dir >/dev/null 2>&1; }
+DEPLOY_SRC=""
+probe_deploy_dir
+if [ "$(deploy_file veylixd.service)" = "$ROOT/deploy/veylixd.service" ]; then
+	ok "T10 the checkout deploy/ is used when present"
+else
+	bad "T10 the checkout deploy/ was not used"
+fi
+if ( deploy_file nosuchfile >/dev/null 2>&1 ); then
+	bad "T10 deploy_file returned a path for a missing template"
+else
+	ok "T10 deploy_file reports a missing template"
+fi
+
+# (b) with no checkout, the release bundle is used - and a hostile member
+#     outside deploy/ is NOT extracted.
+BUNDLE_ROOT="$WORK/bundle"
+mkdir -p "$BUNDLE_ROOT/deploy" "$BUNDLE_ROOT/outside"
+printf 'unit\n' >"$BUNDLE_ROOT/deploy/veylixd.service"
+printf 'site\n' >"$BUNDLE_ROOT/deploy/Caddyfile"
+printf 'backup\n' >"$BUNDLE_ROOT/deploy/veylix-backup.sh"
+printf 'PWNED\n' >"$BUNDLE_ROOT/outside/evil.txt"
+( cd "$BUNDLE_ROOT" && tar -czf "$WORK/veylix-deploy.tar.gz" deploy outside ) >/dev/null 2>&1
+
+HERE_NO_DEPLOY="$WORK/empty-hosts"
+mkdir -p "$HERE_NO_DEPLOY"
+SCRIPT_BASE=""
+# Stand in for the network: 'curl' copies the local bundle, so the real
+# extraction filter is what gets exercised.
+curl() {
+	local out="" url=""
+	while [ $# -gt 0 ]; do
+		case "$1" in
+			-o) out=$2; shift 2 ;;
+			-*|-fsSL|-fsS) shift ;;
+			*)  url=$1; shift ;;
+		esac
+	done
+	case "$url" in
+		*veylix-deploy.tar.gz) [ -n "$out" ] && cp "$WORK/veylix-deploy.tar.gz" "$out"; return 0 ;;
+		*) return 22 ;;
+	esac
+}
+probe_bundle() { HERE="$HERE_NO_DEPLOY"; resolve_deploy_dir >/dev/null 2>&1; }
+DEPLOY_SRC=""
+probe_bundle
+resolved="$DEPLOY_SRC"
+if [ -f "${resolved:-/nonexistent}/veylixd.service" ]; then
+	ok "T10 the release bundle supplies the systemd unit"
+else
+	bad "T10 the release bundle was not used (DEPLOY_SRC=${resolved:-<empty>})"
+fi
+if [ -f "${resolved:-/nonexistent}/veylix-backup.sh" ] && [ -f "${resolved:-/nonexistent}/Caddyfile" ]; then
+	ok "T10 the release bundle supplies the Caddyfile and the backup script"
+else
+	bad "T10 the release bundle is missing a template"
+fi
+if find "${resolved:-/nonexistent}" -name 'evil.txt' 2>/dev/null | grep -q .; then
+	bad "T10 a member OUTSIDE deploy/ was extracted"
+else
+	ok "T10 nothing outside deploy/ was extracted"
+fi
+unset -f curl
+
+# (c) nothing found at all: honest refusal, no fabricated source
+HERE="$HERE_NO_DEPLOY"
+SCRIPT_BASE=""
+DEPLOY_SRC=""
+( resolve_deploy_dir ) >"$WORK/deploy-none.log" 2>&1
+expect_rc "T10 no templates is reported as a miss" $? 1
+expect_grep "T10 the miss names --script-base" "--script-base" "$WORK/deploy-none.log"
+
+# ---------------------------------------------------------------------------
 # T7 - checksum enforcement (the same helper the installer uses).
 # ---------------------------------------------------------------------------
 

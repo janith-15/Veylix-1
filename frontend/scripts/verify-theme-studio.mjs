@@ -124,15 +124,62 @@ const afterOpen = await evaluate(`(() => {
   };
 })()`)
 
-await evaluate(`(() => {
+/*
+ * Wait for the BUTTON, not just for the dialog.
+ *
+ * `.studio` can mount one frame before its header controls do. Clicking blind with
+ * `if (expand) expand.click()` then silently did nothing, the check read the
+ * unchanged data-view, and the gate reported "expand does not work" — about one
+ * run in three. A silent no-op inside a gate is a false failure.
+ */
+const clickedExpand = await evaluate(`(() => {
   const expand = document.querySelector('.studio .studio__expand');
-  if (expand) expand.click();
+  if (!expand) return false;
+  expand.click();
   return true;
 })()`)
-await sleep(600)
+if (!clickedExpand) {
+  console.error('FAIL  the design studio has no expand control to click')
+  ws.close()
+  chrome.kill()
+  process.exit(1)
+}
+/*
+ * Poll for the OUTCOME instead of sleeping a fixed 600 ms.
+ *
+ * A fixed delay is a race: on a loaded machine the React re-render plus the CSS
+ * transition can exceed it, and the check then reports "expand did not work" when
+ * it merely had not finished. That made this gate fail about one run in three,
+ * and a flaky gate gets ignored — which is worse than no gate.
+ */
+async function waitForDataView(want, budgetMs = 6000) {
+  const deadline = Date.now() + budgetMs
+  let last = null
+  while (Date.now() < deadline) {
+    last = await evaluate(`(() => {
+      const studio = document.querySelector('.studio');
+      return studio ? studio.getAttribute('data-view') : null;
+    })()`)
+    if (last === want) return last
+    await sleep(150)
+  }
+  return last
+}
+/*
+ * The studio PERSISTS its view (`studioView` in localStorage), so it reopens in
+ * whatever state the previous run left it. Asserting "clicking expand yields full"
+ * therefore passed or failed depending on the run before it — the gate was
+ * order-dependent, which is a false failure about half the time.
+ *
+ * What must be true is that the control is a real TOGGLE: clicking it flips
+ * data-view to the other value, and the button's own label describes the action.
+ */
+const expandBefore = afterOpen.dataView
+const expandWanted = expandBefore === 'full' ? 'compact' : 'full'
+const expandedView = await waitForDataView(expandWanted)
 const afterExpand = await evaluate(`(() => {
   const studio = document.querySelector('.studio');
-  return { studioPresent: !!studio, dataView: studio ? studio.getAttribute('data-view') : null };
+  return { studioPresent: !!studio, dataView: ${JSON.stringify(expandedView)} };
 })()`)
 
 await evaluate(`(() => {
@@ -149,7 +196,7 @@ const checks = {
   expandButtonPresent: afterOpen.expandPresent === true,
   expandIsNotInsideClose: afterOpen.expandInsideClose === false,
   expandKeepsStudioOpen: afterExpand.studioPresent === true,
-  expandTogglesToFull: afterExpand.dataView === 'full',
+  expandToggles: afterExpand.dataView === expandWanted,
   closeDismisses: afterClose === false,
 }
 

@@ -7,7 +7,12 @@ interface CheckboxProps {
 
 export function Checkbox({ checked, onChange, label, disabled }: CheckboxProps) {
   return (
-    <label className="ui-row" style={{ gap: 8, cursor: disabled ? 'not-allowed' : 'pointer' }}>
+    /*
+     * D-059: `gap`, cursor and label size are layout facts shared by every
+     * checkbox, so they live in `.ui-check` in the stylesheet. A style prop here
+     * was copied onto the DOM of every checkbox in the application.
+     */
+    <label className="ui-row ui-check" data-disabled={disabled ? 'true' : undefined}>
       <input
         type="checkbox"
         className="ui-checkbox"
@@ -15,7 +20,7 @@ export function Checkbox({ checked, onChange, label, disabled }: CheckboxProps) 
         disabled={disabled}
         onChange={(e) => onChange(e.target.checked)}
       />
-      {label && <span className="ui-muted" style={{ fontSize: 14 }}>{label}</span>}
+      {label && <span className="ui-muted ui-check__label">{label}</span>}
     </label>
   )
 }

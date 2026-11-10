@@ -1,19 +1,23 @@
 ﻿import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Badge, Button, Card, MetricCard, PageHeader, Skeleton, StatusBadge, Table, type Column } from '../components/ui'
+import { Badge, Button, Card, EmptyState, MetricCard, PageHeader, Skeleton, StatusBadge, Table, type Column } from '../components/ui'
 import { DonutChart, LineChart, Progress } from '../components/charts'
-import { AlertTriangle, Plus, RefreshCw, Server, Users, ShieldCheck, Wifi } from 'lucide-react'
+import { AlertTriangle, RefreshCw, Server, Users, ShieldCheck, Wallet, Wifi } from 'lucide-react'
 import {
   api,
   ApiError,
   type ApiAdminVPNSummary,
   type ApiClient,
   type ApiMetricPoint,
+  type ApiPaymentTotals,
+  type ApiResellerHealth,
+  type ApiSuperOverview,
   type ApiSyncServer,
 } from '../lib/api'
+import { formatMoney } from '../lib/format'
 import { useServersStore } from '../stores/serversStore'
 import { useVpnStore } from '../stores/vpnStore'
-import { relativeTime } from '../lib/time'
+import { activeTimeZone, relativeTime } from '../lib/time'
 import './dashboard.css'
 
 /**
@@ -52,6 +56,278 @@ function TiltCard({ children, className = '' }: { children: ReactNode; className
   )
 }
 
+/**
+ * MoneyHero — the one number this page exists for (D-107).
+ *
+ * Why it is not a `MetricCard`: a KPI tile holds ONE value with an optional delta.
+ * This section is a hero amount plus three supporting amounts that answer the
+ * follow-up questions an owner asks immediately — *what is waiting, what came back
+ * out, what have I made in total* — and a tile cannot hold four numbers without
+ * turning into a spreadsheet.
+ *
+ * **Mixed currencies are refused, not summed.** When `mixed_currency` is true the
+ * server answers 0 for every amount on purpose, so this renders counts and the
+ * currency list and says plainly that a single total is not meaningful. Printing
+ * the 0 would be a lie; printing a sum would be a worse one.
+ */
+function MoneyHero({ money, onOpenPayments }: { money: ApiPaymentTotals | null; onOpenPayments: () => void }) {
+  if (!money) {
+    return (
+      <Card title="Money this month">
+        <EmptyState
+          icon={<AlertTriangle size={22} />}
+          title="Revenue could not be read"
+          description="The payments summary did not load. The other sections on this page are unaffected."
+        />
+      </Card>
+    )
+  }
+
+  if (money.mixed_currency) {
+    return (
+      <Card
+        title="Money this month"
+        actions={<Badge tone="warning" dot>Mixed currencies</Badge>}
+        data-testid="money-hero-mixed"
+      >
+        <p className="dash-money__mixed">
+          This platform holds payments in <strong>{money.currencies.join(' and ')}</strong>. A single
+          total would add unlike amounts together, so none is shown. Counts are still exact.
+        </p>
+        <div className="dash-money__row">
+          <MoneyMini label="Payments waiting" value={String(money.pending_count)} tone="warning" />
+          <MoneyMini label="Currencies" value={String(money.currencies.length)} />
+        </div>
+        <Button size="sm" variant="outline" onClick={onOpenPayments}>
+          Open payments
+        </Button>
+      </Card>
+    )
+  }
+
+  const hasAny = money.month_cents > 0 || money.confirmed_cents > 0 || money.pending_count > 0
+  if (!hasAny) {
+    return (
+      <Card title="Money this month" data-testid="money-hero-empty">
+        <EmptyState
+          icon={<Wallet size={22} />}
+          title="No revenue yet"
+          description="Once a payment is confirmed, the month's total appears here. Nothing is shown as zero until something has actually been sold."
+          action={
+            <Button size="sm" variant="outline" onClick={onOpenPayments}>
+              Open payments
+            </Button>
+          }
+        />
+      </Card>
+    )
+  }
+
+  const trend = money.month_delta_pct
+  return (
+    <Card
+      title="Money this month"
+      actions={
+        trend === 0 ? (
+          <Badge tone="default">no prior month to compare</Badge>
+        ) : (
+          <Badge tone={trend > 0 ? 'success' : 'error'} dot>
+            {trend > 0 ? '↑' : '↓'} {Math.abs(trend)}% vs last month
+          </Badge>
+        )
+      }
+      data-testid="money-hero"
+    >
+      <div className="dash-money">
+        <div className="dash-money__hero">
+          <span className="dash-money__value">{formatMoney(money.month_cents, money.currency)}</span>
+          <span className="dash-money__sub">
+            {money.month_sales} sale{money.month_sales === 1 ? '' : 's'}
+            {money.month_sales > 0 && (
+              <>
+                {' · '}average {formatMoney(money.avg_ticket_cents, money.currency)}
+              </>
+            )}
+            {' · '}net of refunds
+          </span>
+        </div>
+        <div className="dash-money__row">
+          <MoneyMini
+            label="Waiting review"
+            value={formatMoney(money.pending_cents, money.currency)}
+            hint={`${money.pending_count} payment${money.pending_count === 1 ? '' : 's'}`}
+            tone="warning"
+          />
+          <MoneyMini
+            label="Refunded"
+            value={formatMoney(money.refund_cents, money.currency)}
+            hint="money that went back out"
+            tone="error"
+          />
+          <MoneyMini
+            label="All time"
+            value={formatMoney(money.confirmed_cents, money.currency)}
+            hint="net of refunds"
+          />
+        </div>
+      </div>
+    </Card>
+  )
+}
+
+/**
+ * MoneyMini is one supporting amount under the hero.
+ *
+ * `hint` is required rather than optional: a bare number under a bare label is the
+ * ambiguity this dashboard used to have ("Refunded 0" told an operator nothing about
+ * whether that was good news).
+ */
+function MoneyMini({
+  label,
+  value,
+  hint,
+  tone,
+}: {
+  label: string
+  value: string
+  hint?: string
+  tone?: 'warning' | 'error'
+}) {
+  return (
+    <div className="dash-money__mini" data-tone={tone}>
+      <span className="dash-money__mini-label">{label}</span>
+      <span className="dash-money__mini-value">{value}</span>
+      {hint && <span className="dash-money__mini-hint">{hint}</span>}
+    </div>
+  )
+}
+
+/**
+ * ResellerSection — the reseller book's five actionable facts (D-107).
+ *
+ * These are numbers an owner cannot get anywhere else on one screen: a reseller
+ * about to be blocked, one already blocked, one producing nothing, one who never
+ * signed in. Each row is a button to the staff console, because a number nobody can
+ * open is a dead end.
+ */
+function ResellerSection({
+  resellers,
+  onOpenStaff,
+}: {
+  resellers: ApiResellerHealth | null
+  onOpenStaff: (quota?: 'full') => void
+}) {
+  if (!resellers) {
+    return (
+      <Card title="Resellers">
+        <EmptyState
+          icon={<AlertTriangle size={22} />}
+          title="Reseller health could not be read"
+          description="The staff summary did not load. The other sections on this page are unaffected."
+        />
+      </Card>
+    )
+  }
+  if (resellers.total === 0) {
+    return (
+      <Card title="Resellers" data-testid="reseller-section">
+        <EmptyState
+          icon={<Users size={22} />}
+          title="No resellers yet"
+          description="Accounts you create appear here with how much quota each has left."
+          action={
+            <Button size="sm" variant="outline" onClick={() => onOpenStaff()}>
+              Open staff
+            </Button>
+          }
+        />
+      </Card>
+    )
+  }
+
+  const rows = [
+    {
+      key: 'active',
+      label: 'Signed in recently',
+      value: `${resellers.active} / ${resellers.total}`,
+      hint: 'active in the last 30 days',
+      tone: undefined as 'warning' | 'error' | undefined,
+    },
+    {
+      key: 'full',
+      label: 'Out of quota',
+      value: String(resellers.quota_full),
+      hint: 'cannot sell until you raise the ceiling',
+      tone: resellers.quota_full > 0 ? ('error' as const) : undefined,
+    },
+    {
+      key: 'near',
+      label: 'Nearly out',
+      value: String(resellers.quota_near),
+      hint: 'at 90% or more of their ceiling',
+      tone: resellers.quota_near > 0 ? ('warning' as const) : undefined,
+    },
+    {
+      key: 'idle',
+      label: 'No sales this month',
+      value: String(resellers.no_sales),
+      hint: 'accounts that produced nothing',
+      tone: undefined,
+    },
+    {
+      key: 'never',
+      label: 'Never signed in',
+      value: String(resellers.never_logged_in),
+      hint: 'invites that never landed',
+      tone: resellers.never_logged_in > 0 ? ('warning' as const) : undefined,
+    },
+  ]
+
+  return (
+    <Card
+      title="Resellers"
+      actions={
+        <Button size="sm" variant="ghost" onClick={() => onOpenStaff()}>
+          Open staff
+        </Button>
+      }
+      data-testid="reseller-section"
+    >
+      <ul className="dash-resellers">
+        {rows.map((r) => (
+          <li key={r.key}>
+            <button
+              type="button"
+              className="dash-resellers__row"
+              data-tone={r.tone}
+              onClick={() => onOpenStaff(r.key === 'full' ? 'full' : undefined)}
+            >
+              <span className="dash-resellers__value">{r.value}</span>
+              <span className="dash-resellers__text">
+                <span className="ui-strong">{r.label}</span>
+                <span className="ui-muted t-sm2">{r.hint}</span>
+              </span>
+            </button>
+          </li>
+        ))}
+      </ul>
+      {resellers.top.length > 0 && (
+        <div className="dash-resellers__top">
+          <span className="ui-muted t-sm2">Closest to their ceiling</span>
+          {resellers.top.slice(0, 3).map((t) => (
+            <div key={t.id} className="dash-resellers__top-row">
+              <span className="dash-resellers__who">{t.display_name || t.email}</span>
+              <span className="dash-resellers__quota">
+                {t.quota_limit > 0 ? `${t.quota_used} / ${t.quota_limit}` : `${t.quota_used} used`}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </Card>
+  )
+}
+
 interface ServerRow {
   id: string
   label: string
@@ -71,8 +347,8 @@ const COLUMNS: Column<ServerRow>[] = [
     render: (r) => (
       <span>
         <span className="ui-strong">{r.label}</span>
-        <span className="ui-muted t-sm" style={{ marginLeft: 8 }}>
-          {r.lastSync ? new Date(r.lastSync * 1000).toLocaleTimeString() : 'never synced'}
+        <span className="ui-muted t-sm dash-sync-time">
+          {r.lastSync ? new Date(r.lastSync * 1000).toLocaleTimeString(undefined, { timeZone: activeTimeZone() }) : 'never synced'}
         </span>
       </span>
     ),
@@ -207,6 +483,12 @@ export function DashboardPage({ loading = false }: { loading?: boolean }) {
   const [vpnSummary, setVpnSummary] = useState<ApiAdminVPNSummary | null>(null)
   /** Size of the payment queue (`?pending=1` returns PENDING + AWAITING_CONFIRMATION). */
   const [pendingPayments, setPendingPayments] = useState(0)
+  /**
+   * The business row (D-107): money and the reseller book. `null` means it has not
+   * loaded — it never means "zero", which is why every consumer renders an
+   * explained empty state rather than `0`.
+   */
+  const [overview, setOverview] = useState<ApiSuperOverview | null>(null)
   /** Ticks every 30s so the header freshness note keeps telling the truth. */
   const [nowTick, setNowTick] = useState(() => Date.now())
 
@@ -238,7 +520,7 @@ export function DashboardPage({ loading = false }: { loading?: boolean }) {
       await loadServers()
       void loadVpns()
 
-      const [syncRes, clientRes, vpnSumRes, payRes] = await Promise.all([
+      const [syncRes, clientRes, vpnSumRes, payRes, overviewRes] = await Promise.all([
         guard(() => api.syncStatus()),
         guard(() => api.listClients()),
         // The summary is one small read and it is what "Needs attention" is built
@@ -247,11 +529,18 @@ export function DashboardPage({ loading = false }: { loading?: boolean }) {
         // The payment queue: `?pending=1` returns exactly PENDING +
         // AWAITING_CONFIRMATION, so the length is the queue depth.
         guard(() => api.listPayments(true)),
+        /*
+         * D-107: money and the reseller book. `null` here means "did not load", and
+         * every consumer renders an explained empty state rather than a zero — a
+         * failed read must never read as "you have sold nothing".
+         */
+        guard(() => api.superOverview()),
       ])
       if (syncRes) setSync(syncRes.servers)
       if (clientRes) setClients(clientRes)
       setVpnSummary(vpnSumRes?.summary ?? null)
       if (payRes) setPendingPayments(payRes.length)
+      setOverview(overviewRes ?? null)
 
       // Metrics are per server, and each read is one panel round-trip.
       const rows = useServersStore.getState().servers
@@ -265,7 +554,9 @@ export function DashboardPage({ loading = false }: { loading?: boolean }) {
       for (const [id, points] of perServer) if (points) next[id] = points
       setMetrics(next)
 
-      if (failures.length > 0) setError(failures[0])
+      // P1-8: every failure is named, not just the first. Reporting one of four
+      // failed reads tells the operator the other three worked — which they did not.
+      if (failures.length > 0) setError(failures.join(' · '))
       if (showSpinner) setRefreshing(false)
     },
     [loadServers, loadVpns],
@@ -385,6 +676,44 @@ export function DashboardPage({ loading = false }: { loading?: boolean }) {
       })
   }
 
+  /*
+   * D-107: two queue items that only the Super Admin can clear, and that no other
+   * screen surfaces as a queue. A reseller who has run out cannot sell, and one who
+   * never signed in is an invite that did not land — both are chases for the owner,
+   * not statistics.
+   */
+  if (overview) {
+    if (overview.resellers.quota_full > 0)
+      attention.push({
+        key: 'quota_full',
+        label: 'resellers out of quota',
+        count: overview.resellers.quota_full,
+        hint: 'They cannot sell until you raise their ceiling.',
+        cta: 'Open staff',
+        to: '/staff?quota=full',
+        tone: 'danger',
+      })
+    if (overview.resellers.never_logged_in > 0)
+      attention.push({
+        key: 'never_signed_in',
+        label: 'resellers who never signed in',
+        count: overview.resellers.never_logged_in,
+        hint: 'The account exists but was never used — resend the invite or remove it.',
+        cta: 'Open staff',
+        to: '/staff',
+        tone: 'warning',
+      })
+  }
+
+  /*
+   * The ITEM total, which is what the rows add up to.
+   *
+   * It is deliberately NOT used as a plain sum of overlapping buckets in any
+   * money context — but a queue row is a distinct piece of work per record, so the
+   * sum is the honest denominator for "how much is there to do".
+   */
+  const attentionTotal = attention.reduce((sum, a) => sum + a.count, 0)
+
   const syncById = new Map(sync.map((s) => [s.server_id, s]))
   const serverRows: ServerRow[] = servers.map((s) => {
     const fresh = syncById.get(s.apiId)
@@ -438,8 +767,14 @@ export function DashboardPage({ loading = false }: { loading?: boolean }) {
             >
               {refreshing ? 'Refreshing…' : 'Refresh'}
             </Button>
-            <Button size="sm" leading={<Plus size={14} />} onClick={() => navigate('/servers')}>
-              New server
+            {/*
+              P1-7: this was "New server", which made CREATING a panel the primary
+              action on the page an owner opens to CHECK the platform. The first job
+              here is to see where things stand; adding a panel is a follow-up and it
+              already lives on `/servers`.
+            */}
+            <Button size="sm" leading={<Server size={14} />} onClick={() => navigate('/servers')}>
+              Manage panels
             </Button>
           </>
         }
@@ -451,7 +786,7 @@ export function DashboardPage({ loading = false }: { loading?: boolean }) {
           explicit, announced, and carries the retry. Individual failures stay
           non-blocking: one 403 must not blank the page (see `guard` in runRefresh). */}
       {error && (
-        <div className="ui-async ui-async--error" role="alert" style={{ marginBottom: 12 }}>
+        <div className="ui-async ui-async--error dash-error-banner" role="alert">
           <AlertTriangle size={18} aria-hidden="true" />
           <div className="ui-async__body">
             <strong>Some figures could not be loaded</strong>
@@ -471,6 +806,16 @@ export function DashboardPage({ loading = false }: { loading?: boolean }) {
 
       {loading || (serversLoading && serverRows.length === 0) ? (
         <>
+          {/*
+            The skeleton mirrors the real layout on purpose. A generic stack of
+            boxes makes the page jump when the data lands; a skeleton with the same
+            shape as the content it replaces makes the load feel instant because
+            nothing moves.
+          */}
+          <div className="dash-business">
+            <Card><Skeleton height={132} /></Card>
+            <Card><Skeleton height={132} /></Card>
+          </div>
           <div className="ui-grid">
             {[0, 1, 2, 3].map((i) => (
               <Card key={i}><Skeleton height={64} /></Card>
@@ -491,43 +836,86 @@ export function DashboardPage({ loading = false }: { loading?: boolean }) {
         </>
       ) : (
         <>
+          {/*
+            D-107: the business row comes FIRST. An owner opening this page is
+            asking "is the business alive, and what must I do today?" — not "how
+            many panels do I have". The infrastructure row below it answers the
+            second question for the operator who asks it.
+          */}
+          <div className="dash-business">
+            <MoneyHero money={overview?.money ?? null} onOpenPayments={() => navigate('/payments')} />
+            <ResellerSection
+              resellers={overview?.resellers ?? null}
+              onOpenStaff={(quota) => navigate(quota ? `/staff?quota=full` : '/staff')}
+            />
+          </div>
+
           <div className="ui-grid">
             <TiltCard>
               <MetricCard
                 label="Panels"
                 onClick={() => navigate('/servers')}
                 value={`${activeServers} / ${totalServers}`}
-                delta={attentionServers > 0 ? `${attentionServers} need attention` : 'all active'}
-                deltaDirection={attentionServers > 0 ? 'down' : 'up'}
+                delta={
+                  totalServers === 0
+                    ? 'none connected'
+                    : attentionServers > 0
+                      ? `${attentionServers} need attention`
+                      : 'all active'
+                }
+                deltaDirection={totalServers === 0 ? 'neutral' : attentionServers > 0 ? 'down' : 'up'}
                 icon={<span className="dash-3d__icon"><Server size={18} /></span>}
               />
             </TiltCard>
             <TiltCard>
+              {/*
+                P1-3/P1-4: `delta` used to read `'from /api/clients'` — an endpoint
+                name, not a fact about clients — and `deltaDirection` was hardcoded
+                `'up'`, so an installation with ZERO clients still showed a green
+                upward arrow. A delta is a claim about change; when nothing changed
+                it must say nothing rather than imply growth.
+              */}
               <MetricCard
                 label="Clients"
                 onClick={() => navigate('/clients')}
                 value={clientCount.toLocaleString()}
-                delta={clients.length === 0 ? 'none yet' : 'from /api/clients'}
-                deltaDirection="up"
+                delta={clients.length === 0 ? 'none yet' : `${clientCount} signed up`}
+                deltaDirection="neutral"
                 icon={<span className="dash-3d__icon"><Users size={18} /></span>}
               />
             </TiltCard>
             <TiltCard>
+              {/* P1-3: `'N total records'` was database vocabulary, not a fact about VPNs. */}
               <MetricCard
                 label="Active VPNs"
                 onClick={() => navigate('/vpns')}
                 value={activeVpns.toLocaleString()}
-                delta={`${vpns.length} total records`}
+                delta={`of ${vpns.length} total`}
+                deltaDirection="neutral"
                 icon={<span className="dash-3d__icon"><Wifi size={18} /></span>}
               />
             </TiltCard>
             <TiltCard>
+              {/*
+                P1-1/P1-5. Two defects lived here:
+                  * with no panels at all it rendered "Healthy 0%" AND "All synced",
+                    which contradict each other — the platform was not 0% healthy,
+                    it had nothing to be healthy about;
+                  * "Healthy" duplicated "Panels" (the same ratio) and did not say
+                    WHAT was healthy.
+              */}
               <MetricCard
-                label="Healthy"
+                label="Panel health"
                 onClick={() => navigate('/servers')}
-                value={`${healthyPct}%`}
-                delta={staleServers === 0 ? 'All synced' : `${staleServers} stale`}
-                deltaDirection={staleServers === 0 ? 'up' : 'down'}
+                value={totalServers === 0 ? '—' : `${healthyPct}%`}
+                delta={
+                  totalServers === 0
+                    ? 'no panels connected'
+                    : staleServers === 0
+                      ? 'all synced'
+                      : `${staleServers} awaiting sync`
+                }
+                deltaDirection={totalServers === 0 ? 'neutral' : staleServers === 0 ? 'up' : 'down'}
                 icon={<span className="dash-3d__icon"><ShieldCheck size={18} /></span>}
               />
             </TiltCard>
@@ -545,9 +933,20 @@ export function DashboardPage({ loading = false }: { loading?: boolean }) {
           {attention.length > 0 && (
             <Card
               title="Needs attention"
-              actions={<Badge tone="warning">{attention.length} thing(s)</Badge>}
+              actions={
+                /*
+                  P1-6: the badge counted GROUPS while every row counted ITEMS, so
+                  "5 thing(s)" sat above rows saying 4, 2, 7, 2, 3. Two different
+                  measures in one card read as a counting bug.
+                */
+                <Badge tone={attentionTotal > 0 ? 'error' : 'warning'} dot>
+                  {attentionTotal} item{attentionTotal === 1 ? '' : 's'} in {attention.length} group
+                  {attention.length === 1 ? '' : 's'}
+                </Badge>
+              }
+              data-testid="attention-card"
             >
-              <div className="ui-col" style={{ gap: 8 }}>
+              <div className="ui-col dash-attention-list">
                 {attention.map((a) => (
                   <button
                     key={a.key}
@@ -574,9 +973,19 @@ export function DashboardPage({ loading = false }: { loading?: boolean }) {
               title={metricSource ? `Server CPU — ${metricSource.name}` : 'Server CPU'}
               actions={
                 <>
-                  <span className="dash-live" title="Sampled by the background sync">
+                  {/*
+                    P1-2: this used to be a green pulsing dot and the word "Synced",
+                    unconditionally. A chart frozen for hours still read as live —
+                    the one claim a stale chart must never make. It now states the
+                    actual freshness, and goes red when a panel is stale.
+                  */}
+                  <span
+                    className="dash-live"
+                    data-stale={staleServers > 0}
+                    title="Sampled by the background sync; not a live socket"
+                  >
                     <span className="dash-live__dot" aria-hidden="true" />
-                    Synced
+                    {staleServers > 0 ? `${staleServers} stale` : freshnessNote}
                   </span>
                   <div className="dash-ranges" role="group" aria-label="Time range">
                     {RANGES.map((r) => (
@@ -620,7 +1029,7 @@ export function DashboardPage({ loading = false }: { loading?: boolean }) {
                   centerLabel={`${healthyPct}%`}
                   legend={false}
                 />
-                <div className="ui-col" style={{ flex: 1 }}>
+                <div className="ui-col dash-health-col">
                   <Progress value={healthyPct} label="Panels active" tone={healthyPct === 100 ? 'success' : 'warning'} />
                   <Progress
                     value={totalServers === 0 ? 0 : Math.round(((totalServers - staleServers) / totalServers) * 100)}
@@ -655,7 +1064,7 @@ export function DashboardPage({ loading = false }: { loading?: boolean }) {
         {serverRows.length === 0 ? (
           <p className="ui-muted rhythm">
             No panel integrations yet — add one with “New server” and this table fills from
-            <code style={{ marginLeft: 4 }}>GET /api/servers</code>.
+            <code className="dash-endpoint">GET /api/servers</code>.
           </p>
         ) : (
           <Table columns={COLUMNS} data={serverRows} rowKey={(r) => r.id} />

@@ -381,7 +381,7 @@ export function ProfilePage() {
                 </span>
               </div>
             </div>
-            <label className="ui-col" style={{ gap: 6 }}>
+            <label className="ui-col prof-field">
               <span className="ui-strong text-[12.5px]">About you</span>
               <textarea className="ui-textarea" rows={3} maxLength={500} value={bio}
                 onChange={(e) => setBio(e.target.value)} placeholder="Optional — visible to staff" />

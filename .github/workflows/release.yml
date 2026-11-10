@@ -151,6 +151,27 @@ jobs:
         working-directory: dist
         run: cat ./*.sha256 > SHA256SUMS
 
+      # THE TEMPLATES ARE PART OF THE RELEASE.
+      #
+      # install.sh needs deploy/Caddyfile, deploy/veylixd.service and
+      # deploy/veylix-backup.sh. Without this bundle a host installed from
+      # release artifacts had no HTTPS config, no hardened unit and no backup
+      # script - and `vpn-platformctl update` then refused to run its own
+      # backup step. The installer resolves this tarball at
+      # <release>/veylix-deploy.tar.gz and extracts ONLY deploy/* from it.
+      - name: bundle the deployment templates
+        working-directory: dist
+        run: |
+          set -euo pipefail
+          tar -czf veylix-deploy.tar.gz -C .. deploy
+          tar -tzf veylix-deploy.tar.gz | grep -q '^deploy/veylixd.service$' \
+            || { echo "the bundle is missing deploy/veylixd.service"; exit 1; }
+          tar -tzf veylix-deploy.tar.gz | grep -q '^deploy/Caddyfile$' \
+            || { echo "the bundle is missing deploy/Caddyfile"; exit 1; }
+          tar -tzf veylix-deploy.tar.gz | grep -q '^deploy/veylix-backup.sh$' \
+            || { echo "the bundle is missing deploy/veylix-backup.sh"; exit 1; }
+          sha256sum veylix-deploy.tar.gz >> SHA256SUMS
+
       - uses: softprops/action-gh-release@v2
         with:
           files: |
@@ -158,5 +179,6 @@ jobs:
             dist/veylixd-linux-arm64
             dist/vpn-platformctl-linux-amd64
             dist/vpn-platformctl-linux-arm64
+            dist/veylix-deploy.tar.gz
             dist/SHA256SUMS
           generate_release_notes: true

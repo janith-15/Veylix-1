@@ -281,14 +281,16 @@ func TestUsageHistoryOwnerReadsOwnVPN(t *testing.T) {
 			body["lifetime_up_bytes"], body["lifetime_down_bytes"])
 	}
 
+	// Since D-096 the points are time buckets, not raw snapshots. The two seeded
+	// readings (taken_at 100 and 200) sit inside one bucket, so the read returns
+	// a single point — and the assertion that matters for this test is ownership
+	// plus "the history is readable and says AVAILABLE", not the row count.
 	pts, ok := body["points"].([]any)
-	if !ok || len(pts) != 2 {
-		t.Fatalf("points = %v, want 2 entries", body["points"])
+	if !ok || len(pts) != 1 {
+		t.Fatalf("points = %v, want 1 bucket", body["points"])
 	}
-	first, _ := pts[0].(map[string]any)
-	last, _ := pts[1].(map[string]any)
-	if first["taken_at"] != float64(100) || last["taken_at"] != float64(200) {
-		t.Errorf("points are not chronological: %v then %v", first["taken_at"], last["taken_at"])
+	if _, ok := pts[0].(map[string]any); !ok {
+		t.Fatalf("point is not an object: %v", pts[0])
 	}
 }
 

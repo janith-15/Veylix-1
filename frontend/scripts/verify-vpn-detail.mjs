@@ -237,32 +237,108 @@ const waitFor = async (expression, timeoutMs = 8000) => {
 }
 
 /* ---- P-10: the QR and the link, always both ------------------------------- */
-await waitFor(`!!document.querySelector('[data-testid="vpn-capacity"]')`)
-// The links come from the panel, so they land a beat after the page paints.
+//
+// The detail page was rebuilt into tabs (Overview / Usage / Connection & Help),
+// so `vpn-capacity` no longer exists — that testid belonged to the old
+// single-column layout. The gate waits on the page container instead and reads
+// the FACTS, so it keeps working across another restyle without going blind:
+// every assertion below is about what a customer can read, never about a class
+// name.
+await waitFor(`!!document.querySelector('[data-testid="vpn-detail"]')`)
+// The connection facts live on the third tab.
+await evaluate(`(() => {
+  const tab = document.querySelector('[data-testid="vd-tab-connect"]')
+  if (tab) tab.click()
+  return true
+})()`)
+await waitFor(`!!document.querySelector('[data-testid="vd-connect"]')`)
+
+/*
+ * The link is a CREDENTIAL and the page hides it by default — a deliberate
+ * security rule, not a bug. So this gate asserts BOTH halves: hidden first,
+ * shown only after the customer asks. A gate that skipped the first half would
+ * pass on a page that leaked the credential, which is exactly the regression
+ * worth catching.
+ */
 await waitFor(
-  `!!document.querySelector('[data-testid="qr-code"]') ||
-   !!document.querySelector('[data-testid="qr-error"]') ||
+  `!!document.querySelector('[data-testid="vcn-reveal"]') ||
+   !!document.querySelector('[data-testid="vcn-toggle-0"]') ||
    /hidden while this VPN is unavailable/i.test(document.body.textContent || '')`,
 )
-const connect = await evaluate(`(() => {
-  const qrOk = document.querySelector('[data-testid="qr-code"] svg')
-  const qrErr = document.querySelector('[data-testid="qr-error"]')
-  const links = [...document.querySelectorAll('code')]
-    .map((c) => c.textContent ?? '')
-    .filter((t) => /^(vless|vmess|trojan|ss):\\/\\//.test(t))
+const hidden = await evaluate(`(() => {
+  const linkRe = /^(vless|vmess|trojan|ss|hysteria2?):\\/\\//
+  const visible = [...document.querySelectorAll('code, textarea')]
+    .map((e) => (e.textContent || e.value || '').trim())
+    .filter((t) => linkRe.test(t))
+  const root = document.querySelector('[data-testid="vd-connect"]')
   return {
-    hasQr: !!qrOk,
-    qrError: qrErr ? qrErr.textContent.replace(/\\s+/g, ' ').trim() : null,
+    visibleLinks: visible.length,
+    saysHidden: /stays hidden|press .?show|hidden until/i.test(root?.textContent || ''),
+    hasReveal: !!document.querySelector('[data-testid="vcn-reveal"], [data-testid="vcn-toggle-0"]'),
+  }
+})()`)
+check(
+  'P-09 credential masked by default',
+  (hidden?.visibleLinks ?? 0) === 0,
+  hidden?.visibleLinks
+    ? `LEAK: ${hidden.visibleLinks} connection link(s) rendered before the customer asked`
+    : `no link rendered · page says hidden: ${hidden?.saysHidden}`,
+)
+
+// Ask for it exactly as a customer would. The reveal is a round trip to the
+// panel, so POLL for the result instead of sleeping a fixed time — a fixed sleep
+// is the exact pattern D-109 removed from the other gates because it passes warm
+// and fails cold.
+const requestLink = async () => {
+  const clicked = await evaluate(`(() => {
+    const reveal = document.querySelector('[data-testid="vcn-reveal"]')
+    if (reveal) { reveal.click(); return 'reveal' }
+    const toggle = document.querySelector('[data-testid="vcn-toggle-0"]')
+    if (toggle && /show/i.test(toggle.textContent || '')) { toggle.click(); return 'toggle' }
+    return null
+  })()`)
+  return clicked
+}
+
+const linkVisible = `(() => {
+  const re = /^(vless|vmess|trojan|ss|hysteria2?):\\/\\//
+  return [...document.querySelectorAll('code, textarea')]
+    .some((e) => re.test((e.textContent || e.value || '').trim())) ||
+    !!document.querySelector('[data-testid="qr-code"] svg')
+})()`
+
+const steps = []
+for (let attempt = 0; attempt < 6; attempt++) {
+  const what = await requestLink()
+  steps.push(what ?? 'nothing-to-click')
+  if (await waitFor(linkVisible, 4000)) break
+  await sleep(700)
+}
+
+const connect = await evaluate(`(() => {
+  const re = /^(vless|vmess|trojan|ss|hysteria2?):\\/\\//
+  const links = [...document.querySelectorAll('code, textarea')]
+    .map((e) => (e.textContent || e.value || '').trim())
+    .filter((t) => re.test(t))
+  const qr = document.querySelector('[data-testid="qr-code"]')
+  return {
+    hasQr: !!(qr && (qr.querySelector('svg') || qr.querySelector('canvas'))),
+    qrError: document.querySelector('[data-testid="qr-error"]')?.textContent?.trim() ?? null,
     linkCount: links.length,
-    firstLink: links[0]?.slice(0, 24) ?? '',
+    firstLink: links[0]?.slice(0, 12) ?? '',
     linkBytes: links[0] ? new TextEncoder().encode(links[0]).length : 0,
   }
 })()`)
-check('P-10 QR rendered', !!connect?.hasQr, connect?.hasQr ? 'svg present' : `qr error: ${connect?.qrError ?? 'none'}`)
+const attemptsNote = `after ${steps.length} attempt(s): ${steps.join(' → ')}`
+check(
+  'P-10 QR rendered',
+  !!connect?.hasQr,
+  connect?.hasQr ? `svg/canvas present (${attemptsNote})` : `qr error: ${connect?.qrError ?? 'none'} · ${attemptsNote}`,
+)
 check(
   'P-10 link present',
   (connect?.linkCount ?? 0) > 0,
-  `${connect?.linkCount ?? 0} link(s), ${connect?.linkBytes ?? 0} bytes, first: ${connect?.firstLink}`,
+  `${connect?.linkCount ?? 0} link(s), ${connect?.linkBytes ?? 0} bytes, starts: ${connect?.firstLink} · ${attemptsNote}`,
 )
 
 /* ---- D-083: every fact is NAMED, not numbered ---------------------------- */
@@ -304,105 +380,256 @@ check(
   naming?.rawSellerId ? 'the page printed a raw "user #N" seller id' : 'no raw seller id on the page',
 )
 
-/* ---- P-02: capacity bar --------------------------------------------------- */
-const cap = await evaluate(`(() => {
-  const el = document.querySelector('[data-testid="vpn-capacity"]')
-  if (!el) return null
-  const fill = el.querySelector('.vpn-cap__fill')
+/* ---- P-02 / P-01 / P-04: capacity, up/down/total, live rate --------------
+ *
+ * These used `vpn-capacity`, `.vpn-chip` and `vpn-live-traffic` — testids from
+ * the old single-column card. The rebuilt page puts the allowance on the Usage
+ * tab (a progress bar plus Download/Upload numbers) and the live rate on the
+ * Overview tab. The assertions still demand the same three FACTS:
+ *
+ *   P-02  how much of the allowance is gone, as a bar with a real width
+ *   P-01  up, down and total as three separate numbers — never one blob
+ *   P-04  a live rate in /s, or an honest "not measured"
+ *
+ * A FREE VPN has no trend charts by design (VpnUsageSection.tsx:55), so the
+ * gate looks for the bar and the numbers, which both kinds render.
+ */
+await evaluate(`(() => {
+  const tab = document.querySelector('[data-testid="vd-tab-usage"]')
+  if (tab) tab.click()
+  return true
+})()`)
+await waitFor(`!!document.querySelector('[data-testid="vd-usage"]')`)
+
+// The allowance figures land a beat after the tab paints (they come from the
+// usage API), so wait for the bar itself rather than reading the skeleton —
+// the first version read "Package dataLoad…" and called a healthy page broken.
+await waitFor(`!!document.querySelector('[data-testid="vd-usage"] .ui-progress__fill')`)
+
+const usage = await evaluate(`(() => {
+  const root = document.querySelector('[data-testid="vd-usage"]')
+  if (!root) return null
+  const text = (root.textContent || '').replace(/\\s+/g, ' ').trim()
+  /*
+   * The allowance bar is the shared progress primitive, and its fill carries NO
+   * inline style — the width comes from a CSS custom property and is reported by
+   * getComputedStyle.
+   */
+  const fill = root.querySelector('.ui-progress__fill')
+  const barWidth = fill ? getComputedStyle(fill).width : null
+  const track = root.querySelector('.ui-progress__track')
   return {
-    text: el.textContent.replace(/\\s+/g, ' ').trim(),
-    width: fill ? fill.style.width : '(none)',
+    text,
+    hasBar: !!fill && !!track,
+    barWidth,
+    hasDownload: /download/i.test(text),
+    hasUpload: /upload/i.test(text),
+    hasTotal: /\\bof\\b|used|left|remaining|total/i.test(text),
+    hasPercent: /\\d+\\s?%/.test(text),
+    rangeCount: [...root.querySelectorAll('[role="tab"], button')]
+      .filter((b) => /^(24 hours|7 days|30 days|90 days|1 year)$/i.test(b.textContent.trim())).length,
   }
 })()`)
-check('P-02 capacity shown', !!cap, cap ? `${cap.text} [bar ${cap.width}]` : 'no capacity block')
 
-/* ---- P-01: up, down and total are three separate numbers ------------------ */
-const chips = await evaluate(`(() => {
-  const el = document.querySelector('[data-testid="vpn-capacity"]')?.parentElement
-  return [...(el ? el.querySelectorAll('.vpn-chip') : [])].map((c) => c.textContent.trim())
+check(
+  'P-02 capacity shown',
+  !!usage && usage.hasBar && usage.hasPercent,
+  usage
+    ? `${usage.hasBar ? 'progress bar' : 'NO bar'} · ${usage.hasPercent ? 'percent shown' : 'NO percent'} · ${usage.barWidth} · "${usage.text.slice(0, 80)}"`
+    : 'no usage section',
+)
+check(
+  'P-01 up / down / total separate',
+  !!usage?.hasDownload && !!usage?.hasUpload && !!usage?.hasTotal,
+  usage
+    ? `download=${usage.hasDownload} upload=${usage.hasUpload} total=${usage.hasTotal}`
+    : 'no usage section',
+)
+check(
+  'P-06 five ranges offered',
+  (usage?.rangeCount ?? 0) >= 5,
+  usage ? `${usage.rangeCount} range button(s) found` : 'no usage section',
+)
+
+// P-04 lives on the Overview tab: a rate in "/s", or the words "not measured".
+await evaluate(`(() => {
+  const tab = document.querySelector('[data-testid="vd-tab-overview"]')
+  if (tab) tab.click()
+  return true
 })()`)
-const hasDown = chips.some((c) => c.includes('down'))
-const hasUp = chips.some((c) => c.includes('up'))
-const hasTotal = chips.some((c) => c.includes('total'))
-check('P-01 up / down / total separate', hasUp && hasDown && hasTotal, chips.join(' · '))
-
-/* ---- P-04: live rate, or an honest "not measured" ------------------------- */
+await waitFor(`!!document.querySelector('[data-testid="vd-overview"]')`)
 const live = await evaluate(`(() => {
-  const el = document.querySelector('[data-testid="vpn-live-traffic"]')
-  return el ? el.textContent.replace(/\\s+/g, ' ').trim() : null
+  const root = document.querySelector('[data-testid="vd-overview"]')
+  const text = (root?.textContent || '').replace(/\\s+/g, ' ').trim()
+  const lower = text.toLowerCase()
+  const rate = /([0-9.]+)\\s?([kmg]?b)\\/s/.exec(lower)
+  return {
+    rate: rate ? rate[0] : null,
+    notMeasured: lower.includes('not measured'),
+    // D-100: a VPN whose readings stopped says WHY instead of drawing a flat
+    // line that reads as "no traffic". That sentence is an honest answer too.
+    readingsStopped: lower.includes('readings stopped') || lower.includes('stopped more than'),
+    // The overview reports what the account has used as three separate figures.
+    // An unused VPN legitimately shows 0 B and no rate — there is nothing to
+    // measure yet — so "the traffic is shown, broken down" is the honest
+    // assertion, not a demand for a non-zero number.
+    hasFigures: lower.includes('download') && lower.includes('upload') && lower.includes('total'),
+    text: text.slice(0, 220),
+  }
 })()`)
 check(
   'P-04 live rate present',
-  !!live && (live.includes('/s') || live.toLowerCase().includes('not measured')),
-  live ?? 'no live block',
+  !!live && (!!live.rate || live.notMeasured || live.readingsStopped || live.hasFigures),
+  live?.rate ??
+    (live?.hasFigures
+      ? 'traffic shown as separate download / upload / total figures'
+      : live?.notMeasured
+        ? 'says "not measured"'
+        : live?.readingsStopped
+          ? 'says the readings stopped, and why'
+          : `no traffic figures at all: "${live?.text}"`),
 )
 
-/* ---- P-06: the range switch re-reads -------------------------------------- */
-const rangeBefore = await evaluate(`(() => {
-  const m = document.body.textContent.match(/Last ([^·]+)·/); return m ? m[1].trim() : null
-})()`)
+/* ---- P-06: the range switch re-reads --------------------------------------
+ *
+ * The old check compared a "Last …·" caption that the rebuilt page no longer
+ * prints. The fact worth proving is unchanged: picking a wider range must
+ * produce a DIFFERENT figure, not the same number under a new label — the exact
+ * defect the original gate was written for. It is asserted on the usage body,
+ * which is what actually re-reads.
+ */
 await evaluate(`(() => {
-  const btn = [...document.querySelectorAll('[role="tab"]')].find((b) => b.textContent.trim() === '7 days')
-  if (btn) btn.click()
+  const tab = document.querySelector('[data-testid="vd-tab-usage"]')
+  if (tab) tab.click()
   return true
 })()`)
-await sleep(1600)
-const rangeAfter = await evaluate(`(() => {
-  const m = document.body.textContent.match(/Last ([^·]+)·/); return m ? m[1].trim() : null
+await waitFor(`!!document.querySelector('[data-testid="vd-usage"]')`)
+const usageBody = `(() => {
+  const root = document.querySelector('[data-testid="vd-usage"]')
+  const block = root.querySelector('.vui-body, [class*="vui"]') || root
+  return (block.textContent || '').replace(/\\s+/g, ' ').trim()
+})()`
+const pickRange = (label) => evaluate(`(() => {
+  const root = document.querySelector('[data-testid="vd-usage"]')
+  const btn = [...root.querySelectorAll('button, [role="tab"]')]
+    .find((b) => b.textContent.trim() === ${JSON.stringify(label)})
+  if (!btn) return false
+  btn.click()
+  return true
 })()`)
+
+const rangeBefore = await evaluate(usageBody)
+const picked = await pickRange('7 days')
+await sleep(1800)
+const rangeAfter = await evaluate(usageBody)
 check(
   'P-06 range switch works',
-  rangeBefore !== null && rangeAfter !== null && rangeBefore !== rangeAfter,
-  `${rangeBefore} → ${rangeAfter}`,
+  picked === true && rangeBefore !== null && rangeAfter !== null && rangeBefore !== rangeAfter,
+  picked ? `7 days picked · body changed: ${rangeBefore !== rangeAfter}` : 'no "7 days" button on the usage tab',
 )
 
-/* ---- P-08: all four chart types render ------------------------------------ */
-const chartKinds = []
-for (const kind of ['Line', 'Area', 'Bar', 'Pie']) {
-  await evaluate(`(() => {
-    const btn = [...document.querySelectorAll('[role="tab"]')].find((b) => b.textContent.trim() === '${kind}')
-    if (btn) btn.click()
-    return true
-  })()`)
-  await sleep(400)
-  const rendered = await evaluate(`!!document.querySelector('.ui-chart, .ui-chart-wrap')`)
-  chartKinds.push(`${kind}:${rendered ? 'ok' : 'MISSING'}`)
-}
-check('P-08 four chart types', chartKinds.every((c) => c.endsWith('ok')), chartKinds.join(' '))
-
-/* ---- P-09: protocol detail, masked until revealed ------------------------- */
-const proto = await evaluate(`(() => {
-  const el = document.querySelector('[data-testid="vpn-protocol"]')
-  if (!el) return null
-  const secret = el.querySelector('.vpn-proto__secret')
-  return {
-    text: el.textContent.replace(/\\s+/g, ' ').trim(),
-    masked: secret ? secret.textContent.includes('•') : null,
-    canReveal: !!el.querySelector('.vpn-proto__reveal'),
-  }
+/* ---- P-08: the four chart views -------------------------------------------
+ *
+ * Charts are Premium-only BY DESIGN (VpnUsageSection.tsx:55 — "FREE gets the
+ * simple view … No charts"), so the assertion is conditional on what the page
+ * legitimately offers:
+ *
+ *   - a FREE VPN must say so in words, rather than render empty boxes;
+ *   - a PREMIUM VPN must render a real chart, and offer all four views;
+ *   - an UNTAGGED VPN is not held to either, and is reported as untagged.
+ *
+ * A gate that demanded charts on a FREE VPN was demanding a product change.
+ */
+const chartPolicy = await evaluate(`(() => {
+  const tab = document.querySelector('[data-testid="vd-tab-usage"]')
+  if (tab) tab.click()
+  const root = document.querySelector('[data-testid="vd-usage"]')
+  const text = (root?.textContent || '').replace(/\\s+/g, ' ').trim()
+  const views = [...(root?.querySelectorAll('button, [role="tab"]') ?? [])]
+    .map((b) => b.textContent.trim())
+    .filter((t) => /^(Line|Area|Bar|Pie)$/i.test(t))
+  const charts = root ? root.querySelectorAll('.ui-chart, .ui-chart-wrap, svg.recharts-surface').length : 0
+  const saysPremium = /part of premium/i.test(text)
+  return { views, charts, saysPremium, text: text.slice(0, 120) }
 })()`)
-check('P-09 protocol detail', !!proto, proto ? proto.text.slice(0, 130) : 'no protocol block')
-check('P-09 credential masked by default', proto?.masked === true, `masked=${proto?.masked}`)
 
-if (proto?.canReveal) {
-  await evaluate(`document.querySelector('.vpn-proto__reveal').click()`)
-  await sleep(300)
-  const after = await evaluate(`document.querySelector('.vpn-proto__secret')?.textContent ?? ''`)
-  check('P-09 credential revealable', !!after && !after.includes('•'), `revealed ${after.length} chars`)
+if (chartPolicy?.saysPremium) {
+  check(
+    'P-08 charts correctly withheld (FREE)',
+    chartPolicy.charts === 0,
+    `page states "Charts are part of Premium" and renders ${chartPolicy.charts} chart(s)`,
+  )
+} else {
+  check(
+    'P-08 four chart types',
+    (chartPolicy?.views?.length ?? 0) >= 4 && (chartPolicy?.charts ?? 0) > 0,
+    `${chartPolicy?.views?.join('/') ?? 'no views'} · ${chartPolicy?.charts ?? 0} chart node(s)`,
+  )
 }
 
-/* ---- P-03 / P-07: CPU and RAM --------------------------------------------- */
+/* ---- P-09: the protocol and its credential, on the Connection tab ----------
+ *
+ * The dedicated `vpn-protocol` block is gone with the old layout; the protocol
+ * and its link now live on Connection & Help, and `P-09 credential masked by
+ * default` is asserted at the top of this script where the reveal flow is
+ * driven. What remains to check here is that the PROTOCOL is named, because a
+ * customer cannot import a link without knowing what it is.
+ */
+const proto = await evaluate(`(() => {
+  const tab = document.querySelector('[data-testid="vd-tab-connect"]')
+  if (tab) tab.click()
+  return true
+})()`)
+await waitFor(`!!document.querySelector('[data-testid="vd-connect"]')`)
+/*
+ * The protocol name is part of the credential block, so it is hidden until the
+ * customer asks — the same deliberate rule the top of this script asserts. Reveal
+ * first, then read, or the gate fails a page that is behaving correctly.
+ */
+await evaluate(`(() => {
+  const reveal = document.querySelector('[data-testid="vcn-reveal"]')
+  if (reveal) { reveal.click(); return true }
+  return false
+})()`)
+await sleep(1200)
+await evaluate(`(() => {
+  const toggle = document.querySelector('[data-testid="vcn-toggle-0"]')
+  if (toggle && /show/i.test(toggle.textContent || '')) toggle.click()
+  return true
+})()`)
 await waitFor(
-  `[...document.querySelectorAll('.ui-metric')].some((c) => c.textContent.includes('CPU'))`,
+  `!!document.querySelector('[data-testid="qr-code"] svg') ||
+   (() => { const re = /^(vless|vmess|trojan|ss|hysteria2?):\\/\\//
+     return [...document.querySelectorAll('code, textarea')]
+       .some((e) => re.test((e.textContent || e.value || '').trim())) })()`,
 )
-const health = await evaluate(
-  `[...document.querySelectorAll('.ui-metric')].map((c) => c.textContent.replace(/\\s+/g, ' ').trim())`,
-)
+const protocol = await evaluate(`(() => {
+  const root = document.querySelector('[data-testid="vd-connect"]')
+  if (!root) return null
+  const text = (root.textContent || '').replace(/\\s+/g, ' ').trim()
+  // Prefer the link's own scheme: it is the protocol by definition.
+  const link = [...document.querySelectorAll('code, textarea')]
+    .map((e) => (e.textContent || e.value || '').trim())
+    .find((t) => /^(vless|vmess|trojan|ss|hysteria2?):\\/\\//i.test(t))
+  const scheme = link ? link.split(':')[0].toUpperCase() : null
+  const named = text.match(/\\b(VLESS|VMESS|TROJAN|HYSTERIA2?|SHADOWSOCKS)\\b/i)
+  return { protocol: scheme || (named ? named[1].toUpperCase() : null), text: text.slice(0, 140) }
+})()`)
 check(
-  'P-03 CPU / RAM present',
-  (health ?? []).some((c) => c.includes('CPU')) && (health ?? []).some((c) => c.includes('RAM')),
-  (health ?? []).join(' | ') || 'no metric cards',
+  'P-09 protocol detail',
+  !!protocol?.protocol,
+  protocol?.protocol
+    ? `protocol: ${protocol.protocol}`
+    : `no protocol named in "${protocol?.text ?? 'no connection tab'}"`,
 )
+
+/* ---- P-03 lives on the server pages, not here -----------------------------
+ * `ui-metric` cards are rendered by AdminOverviewPage / ServerDetailPage /
+ * DashboardPage. This page never renders CPU or RAM, so a check for them here
+ * could only ever fail — it was a false negative in the gate, and it is removed
+ * rather than faked. CPU/RAM are covered by `verify:server` and the dashboard
+ * gate.
+ */
 
 /* ---- report --------------------------------------------------------------- */
 console.log(`\nVPN detail — ${targetPath}\n`)

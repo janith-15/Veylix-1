@@ -1,0 +1,167 @@
+/* Connection & Help (D-092 / brief §5, §9).
+ *
+ * Layout is classes, not inline `style={{ … }}` (D-059, D-091 rule 11). The one
+ * thing worth calling out: the URI block must WRAP, because a vless:// string is
+ * long and a horizontally-scrolling credential is unusable on a phone. */
+
+.vcn {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* The gate: the link is not drawn until the customer asks for it. */
+.vcn-gate {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.vcn-links {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.vcn-link {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--border, rgba(127, 127, 160, 0.22));
+  border-radius: var(--radius-sm, 10px);
+  background: var(--surface-2, rgba(127, 127, 160, 0.05));
+}
+
+.vcn-link__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.vcn-link__actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+/* A connection URI is long. It wraps rather than scrolling sideways, so the
+   whole credential can be read and selected on a phone. */
+.vcn-link__uri {
+  display: block;
+  padding: 8px 10px;
+  border: 1px solid var(--border, rgba(127, 127, 160, 0.24));
+  border-radius: var(--radius-sm, 8px);
+  background: var(--bg-card, var(--surface-1, #12141f));
+  color: var(--text-strong);
+  font-size: var(--t-xs, 11.5px);
+  line-height: 1.45;
+  word-break: break-all;
+  white-space: pre-wrap;
+}
+
+.vcn-warn {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 10px 12px;
+  border: 1px solid var(--warn-border, rgba(214, 158, 46, 0.42));
+  border-radius: var(--radius-sm, 10px);
+  background: var(--warn-soft, rgba(214, 158, 46, 0.1));
+  color: var(--text-strong);
+  font-size: var(--t-sm2, 12.5px);
+  line-height: 1.45;
+}
+
+.vcn-warn svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+  color: var(--warn, #d69e2e);
+}
+
+/* Numbered steps: the number is the visual, so the list stays ordered even when
+   the text wraps to three lines on a narrow screen. */
+.vcn-steps {
+  margin: 10px 0 0;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.vcn-steps li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: var(--t-sm2, 12.5px);
+  line-height: 1.45;
+}
+
+.vcn-steps strong {
+  color: var(--text-strong);
+}
+
+.vcn-steps span {
+  color: var(--text-muted);
+}
+
+.vcn-apps {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border, rgba(127, 127, 160, 0.16));
+}
+
+.vcn-app {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 9px;
+  border: 1px solid var(--border, rgba(127, 127, 160, 0.28));
+  border-radius: var(--radius-sm, 8px);
+  color: var(--text-strong);
+  font-size: var(--t-xs, 11.5px);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.vcn-app:hover {
+  border-color: var(--accent-border, rgba(120, 160, 255, 0.45));
+}
+
+.vcn-app:focus-visible {
+  outline: 2px solid var(--accent, #6f8cff);
+  outline-offset: 2px;
+}
+
+.vcn-faq {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.vcn-faq li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: var(--t-sm2, 12.5px);
+  line-height: 1.45;
+}
+
+.vcn-faq strong {
+  color: var(--text-strong);
+}
+
+.vcn-faq span {
+  color: var(--text-muted);
+}

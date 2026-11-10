@@ -6,6 +6,10 @@
 .ui-chart {
   display: block;
   overflow: visible;
+  /* D-059: width and height come from the component as custom properties. */
+  width: 100%;
+  height: var(--ui-chart-h, 160px);
+  touch-action: pan-y;
 }
 
 /* Animated draw-in for line / area paths */
@@ -31,11 +35,45 @@ html[data-chart-animate='true'] .ui-chart circle {
   to { opacity: 1; transform: none; }
 }
 
-.ui-sparkline { display: inline-block; vertical-align: middle; }
+.ui-sparkline {
+  vertical-align: middle;
+  /* D-059: dimensions arrive as custom properties from the component. */
+  display: block;
+  width: var(--ui-spark-w, 100%);
+  height: var(--ui-spark-h, 40px);
+}
+
+/* The value-axis tick text. A class rather than an inline style so a theme
+   preset can restyle the axis without touching the chart code (D-059). */
+.ui-chart-axis {
+  font-size: 10px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  fill: var(--chart-axis, var(--text-muted));
+  letter-spacing: 0.01em;
+}
 
 /* ---------- Chart tooltips, crosshair, legends (UI 2.1) ---------- */
 .ui-chart-wrap { position: relative; }
 .ui-chart-wrap > .ui-chart { display: block; }
+
+/* D-059: the donut's own box, sized from a custom property the component sets. */
+.ui-chart-wrap--donut {
+  width: var(--donut-size, 132px);
+  max-width: 100%;
+  margin: 0 auto;
+}
+.ui-chart--donut {
+  margin: 0 auto;
+  display: block;
+  touch-action: pan-y;
+  overflow: visible;
+  padding: 2px;
+}
+/* Only the arc strokes are hover targets; the centre text is not. */
+.ui-chart__arc {
+  pointer-events: stroke;
+}
 
 .ui-chart-root {
   display: flex;
@@ -47,6 +85,9 @@ html[data-chart-animate='true'] .ui-chart circle {
 
 .chart-tip {
   position: absolute;
+  /* D-059: position arrives as custom properties from the component. */
+  left: var(--chart-tip-x, 0%);
+  top: var(--chart-tip-y, 0%);
   z-index: var(--z-dropdown, 100);
   pointer-events: none;
   min-width: 150px;
@@ -68,7 +109,14 @@ html[data-chart-animate='true'] .ui-chart circle {
   margin-bottom: 5px;
 }
 .chart-tip__row { display: flex; align-items: center; gap: var(--space-2); margin-top: 3px; }
-.chart-tip__dot { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; }
+.chart-tip__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  flex-shrink: 0;
+  /* D-059: the series colour arrives as a custom property. */
+  background: var(--legend-color, currentColor);
+}
 .chart-tip__val { margin-left: auto; font-weight: 700; font-variant-numeric: tabular-nums; }
 
 .ui-chart-legend { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-2); }
@@ -88,7 +136,14 @@ html[data-chart-animate='true'] .ui-chart circle {
 }
 .ui-chart-legend__item:hover { border-color: var(--border-strong); color: var(--text); }
 .ui-chart-legend__item[data-off='true'] { opacity: 0.4; text-decoration: line-through; }
-.ui-chart-legend__dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.ui-chart-legend__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  /* D-059: the series colour arrives as a custom property. */
+  background: var(--legend-color, currentColor);
+}
 .ui-chart-legend__pct { margin-left: auto; font-variant-numeric: tabular-nums; }
 
 /* Donut hover feedback */
@@ -127,6 +182,8 @@ html[data-chart-animate='true'] .ui-chart--donut circle:not(.ring) {
 }
 .ui-progress__track {
   width: 100%;
+  /* D-059: height arrives as a custom property from the component. */
+  height: var(--ui-progress-h, 8px);
   border-radius: 999px;
   background: color-mix(in srgb, var(--text-muted) 18%, transparent);
   overflow: hidden;
@@ -136,6 +193,8 @@ html[data-chart-animate='true'] .ui-chart--donut circle:not(.ring) {
   border-radius: inherit;
   background: var(--chart-1, var(--c-primary));
   transition: width 420ms cubic-bezier(0.22, 1, 0.36, 1);
+  /* D-059: the percentage arrives as a custom property from the component. */
+  width: var(--ui-progress-pct, 0%);
 }
 .ui-progress--success .ui-progress__fill { background: var(--success); }
 .ui-progress--warning .ui-progress__fill { background: var(--warning); }

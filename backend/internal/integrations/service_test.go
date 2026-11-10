@@ -375,6 +375,68 @@ func TestInboundsCachesMetadata(t *testing.T) {
 	}
 }
 
+func TestInboundsReturnsLocalIDNotPanelID(t *testing.T) {
+	// The defect this pins: `GET /api/servers/{id}/inbounds` used to answer with
+	// the PANEL's inbound number, while `vpn_offers.inbound_id` is a foreign key
+	// to the LOCAL `inbounds.id`. On a database where the two collide or simply
+	// diverge — literally the development database, where the cached rows are
+	// 52/53/54 and 3X-UI calls the same inbounds 1/2/3 — the offer form
+	// submitted a number the FK could not resolve and every create failed with
+	// 422 `inbound_mismatch`, even though the inbound was listed for the named
+	// server. Provisioning translates local -> remote itself
+	// (`panelInboundID`), so the list must speak the local language.
+	svc, db := newTestService(t, &fakeClient{
+		health: activeHealth(),
+		inbounds: []panel.InboundOption{
+			{ID: 1, Remark: "(IN)-free_3", Protocol: "vless", Port: 443, Enable: true},
+			{ID: 2, Remark: "(IN)-free_1[hutch]", Protocol: "vless", Port: 445, Enable: true},
+			{ID: 3, Remark: "(IN)-free_2", Protocol: "hysteria", Port: 446, Enable: true},
+		},
+	})
+	view, _ := svc.Add(context.Background(), AddInput{Name: "p", PanelURL: "https://local.example.com", Token: testToken})
+
+	// Force the divergence the real database has: burn row ids so the local
+	// primary keys cannot equal the panel's numbers.
+	if _, err := db.Exec(`INSERT INTO inbounds (id, server_id, remote_id, synced_at) VALUES (51, ?, 99, 1)`, view.ID); err != nil {
+		t.Fatalf("seed gap: %v", err)
+	}
+
+	list, err := svc.Inbounds(context.Background(), view.ID)
+	if err != nil {
+		t.Fatalf("Inbounds: %v", err)
+	}
+	if len(list) != 3 {
+		t.Fatalf("inbounds = %d, want 3", len(list))
+	}
+
+	for _, ib := range list {
+		var localID, remoteID int64
+		if err := db.QueryRow(`SELECT id, remote_id FROM inbounds WHERE id = ? AND server_id = ?`,
+			ib.ID, view.ID).Scan(&localID, &remoteID); err != nil {
+			t.Fatalf("returned id %d is not a local inbounds.id for server %d: %v — "+
+				"the offer form would submit a foreign key that cannot resolve", ib.ID, view.ID, err)
+		}
+		if int64(ib.ID) == remoteID && remoteID <= 3 {
+			t.Errorf("inbound %q answered with the PANEL id %d, want the local row id %d",
+				ib.Remark, ib.ID, localID)
+		}
+	}
+
+	// The decisive assertion: the id the list hands out must satisfy the exact
+	// query `store.InboundBelongsToServer` runs for `POST /api/offers`. Spelled
+	// out here rather than imported because this package must not depend on
+	// `store`'s test helpers; the SQL is the same predicate.
+	for _, ib := range list {
+		var n int
+		if err := db.QueryRow(
+			`SELECT COUNT(*) FROM inbounds WHERE id = ? AND server_id = ?`,
+			ib.ID, view.ID).Scan(&n); err != nil || n == 0 {
+			t.Errorf("InboundBelongsToServer would refuse id %d that the list just offered (%q) — "+
+				"this is the inbound_mismatch that blocked every offer create", ib.ID, ib.Remark)
+		}
+	}
+}
+
 func TestDisableAndRemove(t *testing.T) {
 	svc, db := newTestService(t, &fakeClient{health: activeHealth()})
 	view, _ := svc.Add(context.Background(), AddInput{Name: "p", PanelURL: "https://life.example.com", Token: testToken})

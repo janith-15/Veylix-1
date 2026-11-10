@@ -19,6 +19,9 @@ type PaymentStore interface {
 	SetPaymentMethodActive(ctx context.Context, id int64, active bool) error
 
 	PaymentsVisible(ctx context.Context, callerID int64, callerRole string, onlyPending bool) ([]store.PaymentRow, error)
+	// PaymentsVisibleCount is the uncapped total the list is a window into, so a
+	// screen can state "showing the newest 200 of 2,400" (D-116).
+	PaymentsVisibleCount(ctx context.Context, callerID int64, callerRole string, onlyPending bool) (int, error)
 	PaymentByID(ctx context.Context, id int64) (*store.PaymentRow, error)
 	CanSeePayment(ctx context.Context, p *store.PaymentRow, callerID int64, callerRole string) (bool, error)
 	CreatePayment(ctx context.Context, in store.CreatePaymentInput) (*store.PaymentRow, error)
@@ -82,13 +85,27 @@ func orderConfirmRoute(mux *http.ServeMux, st PaymentStore, orders OrderService,
 				return
 			}
 
-			planAttached := false
-			if o, readErr := st.PaymentByID(r.Context(), id); readErr == nil &&
-				o.OfferID != nil && *o.OfferID > 0 {
-				planAttached = true
+			o, readErr := st.PaymentByID(r.Context(), id)
+			if readErr != nil {
+				writePaymentError(w, readErr, "could not read the payment")
+				return
 			}
+			planAttached := o.OfferID != nil && *o.OfferID > 0
 
-			if orders != nil && planAttached {
+			/*
+			 * A payment that names a plan MUST go through the settlement service,
+			 * because that is the only path that builds the VPN (D-031.1). When the
+			 * service is not wired we refuse rather than fall through to the
+			 * cash-only path below, which would mark a paid plan confirmed and
+			 * deliver nothing.
+			 */
+			if planAttached {
+				if orders == nil {
+					WriteError(w, http.StatusServiceUnavailable, "orders_unavailable",
+						"orders that name a plan can only be confirmed through the "+
+							"provisioning service, which is not available")
+					return
+				}
 				out, cerr := orders.Confirm(r.Context(), payments.ConfirmInput{
 					PaymentID: id,
 					Actor:     payments.Principal{UserID: p.UserID, Role: string(p.Role)},
@@ -109,7 +126,12 @@ func orderConfirmRoute(mux *http.ServeMux, st PaymentStore, orders OrderService,
 				return
 			}
 
-			// Settlement only: the record carries no plan (a deposit).
+			/*
+			 * Settlement only: the record carries no plan, so there is nothing to
+			 * provision. This is a deposit or a manual top-up, and it is reported as
+			 * such — `vpn_id: 0` in the audit entry says no product was released, so
+			 * a later reader cannot mistake it for a sale.
+			 */
 			if err := st.ConfirmPayment(r.Context(), id, p.UserID); err != nil {
 				writePaymentError(w, err, "could not confirm the payment")
 				return

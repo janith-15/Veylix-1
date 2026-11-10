@@ -6,6 +6,7 @@ import { useVpnStore, vpnDisplayName, vpnServerLabel } from '../stores/vpnStore'
 import { usePaymentsStore } from '../stores/paymentsStore'
 import { api, type ApiOrderEvent } from '../lib/api'
 import './history.css'
+import { activeTimeZone } from '../lib/time'
 
 /**
  * Purchase history.
@@ -90,7 +91,7 @@ export function HistoryPage() {
     status: string
   }
 
-  const fmt = (unix: number | null) => (unix ? new Date(unix * 1000).toLocaleDateString() : '—')
+  const fmt = (unix: number | null) => (unix ? new Date(unix * 1000).toLocaleDateString(undefined, { timeZone: activeTimeZone() }) : '—')
 
   const rows: Row[] = [
     ...pendingPayments.map((p) => ({
@@ -327,7 +328,7 @@ function OrderTimeline({
                 )}{' '}
                 <span className="ui-strong">{e.kind}</span>{' '}
                 <span className="ui-muted">
-                  {new Date(e.created_at * 1000).toLocaleString()}
+                  {new Date(e.created_at * 1000).toLocaleString(undefined, { timeZone: activeTimeZone() })}
                   {e.detail ? ` — ${e.detail}` : ''}
                 </span>
               </li>

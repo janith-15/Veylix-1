@@ -5,6 +5,7 @@ import { usePricingStore, type PricingInput, type PricingRates } from '../stores
 import { useServersStore } from '../stores/serversStore'
 import { ApiError } from '../lib/api'
 import './pricing.css'
+import { activeTimeZone } from '../lib/time'
 
 /**
  * L4 — the rate card (D-035.4).
@@ -251,7 +252,7 @@ export function PricingPage() {
 
           {current ? (
             <p className="ui-muted t-sm2 pricing-scope__meta">
-              Last saved {new Date(current.updatedAt * 1000).toLocaleString()}
+              Last saved {new Date(current.updatedAt * 1000).toLocaleString(undefined, { timeZone: activeTimeZone() })}
             </p>
           ) : scope !== null ? (
             <p className="ui-muted t-sm2 pricing-scope__meta">No override for this server yet.</p>

@@ -81,7 +81,8 @@ func (l *SQLVPNLister) ListVPNs(ctx context.Context, p auth.Principal, tagFilter
 	                COALESCE(o.name, ''),
 	                COALESCE(si.name, ''),
 	                COALESCE(su.display_name, ''), COALESCE(su.email, ''),
-	                COALESCE(su.whatsapp, ''), COALESCE(su.telegram, '')
+	                COALESCE(su.whatsapp, ''), COALESCE(su.telegram, ''),
+	                i.dormant_at, i.status_changed_at
 	           FROM vpn_instances i
 	           LEFT JOIN vpn_assignments a
 	                  ON a.vpn_instance_id = i.id AND a.status IN ('ACTIVE', 'PENDING')
@@ -127,16 +128,30 @@ func (l *SQLVPNLister) ListVPNs(ctx context.Context, p auth.Principal, tagFilter
 	for rows.Next() {
 		var r VPNRow
 		var exp sql.NullInt64
+		var dormant sql.NullInt64
+		// D-098's clock, so a screen can say "suspended 12 days ago" instead of
+		// only "suspended". Read as a plain int: the column is NOT NULL DEFAULT 0,
+		// and 0 means "never moved", which the UI shows as no date rather than
+		// as 1 Jan 1970.
+		var statusChanged int64
 		if err := rows.Scan(&r.ID, &r.ServerID, &r.PanelEmail, &r.Status, &r.OwnerID,
 			&r.SellerID, &exp, &r.CreatedAt, &r.Tag,
 			&r.OwnerEmail, &r.OwnerName,
 			&r.OfferID, &r.OfferKind, &r.KindSource, &r.OfferName,
-			&r.ServerName, &r.SellerName, &r.SellerEmail, &r.SellerWhatsApp, &r.SellerTelegram); err != nil {
+			&r.ServerName, &r.SellerName, &r.SellerEmail, &r.SellerWhatsApp, &r.SellerTelegram,
+			&dormant, &statusChanged); err != nil {
 			return nil, fmt.Errorf("httpapi: scan vpn: %w", err)
 		}
 		if exp.Valid {
 			v := exp.Int64
 			r.ExpiresAt = &v
+		}
+		if dormant.Valid {
+			v := dormant.Int64
+			r.DormantAt = &v
+		}
+		if statusChanged > 0 {
+			r.StatusChangedAt = &statusChanged
 		}
 		r.Source = SourceLocal
 		// A local row is a VPN a Veylix account holds by definition; the panel

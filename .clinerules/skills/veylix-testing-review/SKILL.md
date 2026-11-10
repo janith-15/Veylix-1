@@ -34,6 +34,27 @@ For any changed behaviour, cover the cases that apply:
 
 A change to an existing route without a negative test is incomplete.
 
+## VPN identity and status — the cases that are easy to miss
+
+`D-091` makes three things testable that used to have no check at all. A change
+touching a VPN list, a VPN card or the VPN detail page owes these:
+
+| Area | The check |
+|---|---|
+| **Panel identity is generated, not invented** | The panel email matches `<client email>_<kind>_<n>`; the slot is reserved inside the provisioning transaction; a retry does not produce a second client; `sub_id` stays `vyx-<id>` (D-034.1–.4). |
+| **The slot only moves forward** | Revoke `_paid_2`, create the next paid VPN, assert it is `_paid_3` — never `_paid_2` again (D-034.2). |
+| **A failed rename keeps the old name** | Assign a 3X-UI-created client with the rename failing: the VPN keeps the name it already had and the row is not left half-applied (D-063, D-034.5). |
+| **Tag authority** | A non-Super-Admin caller is refused `PUT /api/panel-clients/{server_id}/{email}/tag`; a re-tag of an issued VPN is refused and audited `DENIED`; the tag never reaches the panel (D-091.3, D-024.3). |
+| **The customer can see the identity** | Browser gate: a VPN card/row renders the `panelEmail` text **and** a copy affordance; the copy target is the exact panel email (D-091.4). |
+| **A gone client is explained, not hidden** | With a VPN in `SERVER_UNAVAILABLE`, the list **and** the detail page render a sentence containing what happened; the row is still listed; the status is never `REVOKED` and the row is never deleted (D-091.5, INV-1). |
+| **An unknown status gets no invented copy** | Feed a status outside `NOT_CONNECTABLE` and assert the generic sentence renders, not a fabricated explanation. |
+| **Layout discipline** | No `<h2>` and `<Card title>` repeat the same word in one column; no new layout `style={{ … }}` appears in the diff (D-059, D-091). |
+
+A browser gate for any of these must be a committed `frontend/scripts/verify-*.mjs`
+registered in `package.json`. Playwright MCP may *find* the problem; it can never be
+reported as the proof.
+
+
 ## Gate order (fastest feedback first)
 
 From `./backend/`:
@@ -140,3 +161,6 @@ position as still accurate — verify it.
 - [ ] Blocked gates reported as blocked, with the reason.
 - [ ] No test touched live data; any persistent test used an isolated directory.
 - [ ] Ledgers and `./docs/cline/progress.md` updated.
+- [ ] Panel email asserted against `<email>_<kind>_<n>`, and the slot monotonicity.
+- [ ] A non-`ACTIVE` status asserted for explanatory copy, on the row as well as detail.
+- [ ] Any new browser claim proved by a committed, registered `verify-*.mjs`.

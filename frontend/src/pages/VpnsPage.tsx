@@ -5,6 +5,7 @@ import {
   Badge,
   Button,
   Card,
+  Dialog,
   Dropdown,
   DropdownItem,
   EmptyState,
@@ -75,6 +76,27 @@ export function VpnsPage() {
    * the other moves a VPN that already works.
    */
   const [transferTarget, setTransferTarget] = useState<ApiAdminVPNRow | null>(null)
+  /**
+   * P-2: the row the operator is releasing on the owner's behalf.
+   *
+   * A separate dialog from transfer/assign because a release is destructive-ish —
+   * it opens a 3-day undo window and takes the VPN away from a paying customer. It
+   * REQUIRES a typed reason, which the API enforces (422 `reason_required`); the
+   * dialog makes that requirement visible instead of surfacing it as an error.
+   */
+  const [releaseTarget, setReleaseTarget] = useState<ApiAdminVPNRow | null>(null)
+  /**
+   * P-3: the row whose local RECORD the operator is retiring while keeping the
+   * panel client. Guarded by type-to-confirm on the panel email — the VPN's
+   * identity (D-091.4) — so a mis-clicked row cannot destroy the wrong record.
+   */
+  const [purgeTarget, setPurgeTarget] = useState<ApiAdminVPNRow | null>(null)
+  /** Typed reason for a forced release. Required by the API (P-2). */
+  const [releaseReason, setReleaseReason] = useState('')
+  const [busyRelease, setBusyRelease] = useState(false)
+  /** Typed panel email for a purge confirmation (P-3). */
+  const [purgeConfirm, setPurgeConfirm] = useState('')
+  const [busyPurge, setBusyPurge] = useState(false)
   /**
    * The row currently being re-classified, keyed by `rowKey`. Present so the
    * clicked pair disables itself instead of accepting a second click while the
@@ -208,6 +230,73 @@ export function VpnsPage() {
   }
 
   /**
+   * P-2 — release a customer's VPN on their behalf.
+   *
+   * The reason is not optional and not invented here: it goes into the audit trail
+   * as `vpn.force_release` and it is what the customer will read. The API refuses a
+   * blank one with 422, so the dialog disables the button rather than letting an
+   * operator discover the rule by error message.
+   */
+  const submitRelease = async () => {
+    const target = releaseTarget
+    if (!target || releaseReason.trim() === '') return
+    setBusyRelease(true)
+    try {
+      await api.releaseVpn(target.id, releaseReason.trim())
+      toast(
+        'success',
+        'Released',
+        `${target.panel_email} is set aside. The owner has 3 days to undo it and the panel client is untouched.`,
+      )
+      setReleaseTarget(null)
+      setReleaseReason('')
+      void load(committed)
+    } catch (err) {
+      toast(
+        'error',
+        'Could not release the VPN',
+        err instanceof Error ? err.message : 'Nothing was changed',
+      )
+    } finally {
+      setBusyRelease(false)
+    }
+  }
+
+  /**
+   * P-3 — retire the local record while keeping the panel client.
+   *
+   * The confirmation is checked here as well as on the server: the button only
+   * enables on an exact (case-insensitive) match, so a wrong value never becomes a
+   * round-trip. The server repeats the check, because a client-side guard is not a
+   * guard.
+   */
+  const submitPurge = async () => {
+    const target = purgeTarget
+    if (!target) return
+    if (purgeConfirm.trim().toLowerCase() !== target.panel_email.toLowerCase()) return
+    setBusyPurge(true)
+    try {
+      await api.purgeVpnRecord(target.id, purgeConfirm.trim())
+      toast(
+        'success',
+        'Record purged',
+        `${target.panel_email} is gone from Veylix. The 3X-UI client is still there and the customer is unaffected.`,
+      )
+      setPurgeTarget(null)
+      setPurgeConfirm('')
+      void load(committed)
+    } catch (err) {
+      toast(
+        'error',
+        'Could not purge the record',
+        err instanceof Error ? err.message : 'Nothing was changed',
+      )
+    } finally {
+      setBusyPurge(false)
+    }
+  }
+
+  /**
    * Classifies every selected VPN, ONE AT A TIME.
    *
    * Sequential on purpose: the deployment target is 1 vCPU (MASTER_PRODUCT_BIBLE
@@ -313,6 +402,9 @@ export function VpnsPage() {
     {
       key: 'panel_email',
       header: 'Panel client',
+      sortable: true,
+      searchValue: (v) => v.panel_email,
+      filter: { kind: 'text', getValue: (v) => v.panel_email, placeholder: 'Panel client…' },
       render: (v) => (
         <span className="cl-cell__text">
           <span className="ui-strong">{v.panel_email}</span>
@@ -332,6 +424,22 @@ export function VpnsPage() {
     {
       key: 'tag',
       header: 'Tag',
+      sortable: true,
+      sortValue: (v) => v.tag || '',
+      searchValue: (v) => `${v.tag ?? ''} ${v.tag ? '' : 'untagged'}`,
+      // The tag is a small closed set, so it is a select — an operator wants
+      // "show me the untagged ones", not a substring match.
+      filter: {
+        kind: 'select',
+        options: [
+          { value: 'FREE', label: 'FREE' },
+          { value: 'PREMIUM', label: 'PREMIUM' },
+          // `''` cannot mean "untagged" — an empty select value is how the
+          // toolbar says "no filter". A sentinel keeps the two distinguishable.
+          { value: '(none)', label: 'Untagged' },
+        ],
+        getValue: (v) => (v.tag ? v.tag : '(none)'),
+      },
       /*
        * FREE / PREMIUM is the Super Admin's publishing decision (D-024.3), and
        * until now it existed only as an API route — so an untagged panel client
@@ -380,6 +488,21 @@ export function VpnsPage() {
     {
       key: 'owner_name',
       header: 'Assigned to',
+      sortable: true,
+      // Sorted by account, then "unassigned" sorts ahead of everyone because an
+      // empty string precedes any name — which is where the operator's eye
+      // should go first.
+      sortValue: (v) => (v.assigned ? v.owner_name || v.owner_email || '' : ''),
+      searchValue: (v) =>
+        v.assigned ? `${v.owner_name ?? ''} ${v.owner_email ?? ''} unassigned` : 'unassigned',
+      filter: {
+        kind: 'select',
+        options: [
+          { value: 'yes', label: 'Assigned' },
+          { value: '(none)', label: 'Unassigned' },
+        ],
+        getValue: (v) => (v.assigned ? 'yes' : '(none)'),
+      },
       render: (v) =>
         v.assigned ? (
           <span className="cl-cell__text">
@@ -396,6 +519,8 @@ export function VpnsPage() {
       key: 'usage_pct',
       header: 'Usage',
       align: 'center',
+      sortable: true,
+      sortValue: (v) => (v.read_error ? -1 : v.usage_pct),
       render: (v) =>
         v.read_error ? (
           <span className="ui-muted" title="The panel could not be read for this server">—</span>
@@ -410,6 +535,24 @@ export function VpnsPage() {
       header: 'Expiry',
       align: 'center',
       hideOnMobile: true,
+      sortable: true,
+      // A VPN with no expiry sorts last: "never expires" is not sooner than
+      // everything else.
+      sortValue: (v) => (v.read_error || !v.expires_at ? Number.MAX_SAFE_INTEGER : v.days_left),
+      filter: {
+        kind: 'select',
+        options: [
+          { value: 'expired', label: 'Expired' },
+          { value: 'soon', label: 'Expiring within 7 days' },
+          { value: 'never', label: 'Never expires' },
+        ],
+        getValue: (v) => {
+          if (v.read_error) return ''
+          if (!v.expires_at) return 'never'
+          if (v.days_left < 0) return 'expired'
+          return v.days_left <= 7 ? 'soon' : ''
+        },
+      },
       render: (v) => {
         if (v.read_error) return <span className="ui-muted">—</span>
         if (!v.expires_at) return <span className="ui-muted">never</span>
@@ -425,6 +568,16 @@ export function VpnsPage() {
       header: 'Panel',
       align: 'center',
       hideOnMobile: true,
+      sortable: true,
+      sortValue: (v) => (v.enabled ? 1 : 0),
+      filter: {
+        kind: 'select',
+        options: [
+          { value: 'on', label: 'Enabled' },
+          { value: 'off', label: 'Disabled' },
+        ],
+        getValue: (v) => (v.enabled ? 'on' : 'off'),
+      },
       render: (v) =>
         v.enabled ? <Badge tone="success">enabled</Badge> : <Badge tone="warning">disabled</Badge>,
     },
@@ -432,6 +585,23 @@ export function VpnsPage() {
       key: 'status',
       header: 'Veylix',
       hideOnMobile: true,
+      sortable: true,
+      sortValue: (v) => v.status || '',
+      searchValue: (v) => (v.status || 'no record').replace(/_/g, ' '),
+      filter: {
+        kind: 'select',
+        options: [
+          { value: 'ACTIVE', label: 'Active' },
+          { value: 'SUSPENDED', label: 'Suspended' },
+          { value: 'SERVER_UNAVAILABLE', label: 'Server unavailable' },
+          { value: 'REVOKED', label: 'Revoked' },
+          { value: 'RELEASED', label: 'Released' },
+          { value: '(none)', label: 'No record' },
+        ],
+        // A panel client with no Veylix row is a real and important state, so it
+        // gets its own choice instead of hiding among the blanks.
+        getValue: (v) => (v.status ? v.status : '(none)'),
+      },
       render: (v) => {
         /*
          * Veylix's own lifecycle state and the panel's enable flag are two
@@ -468,6 +638,8 @@ export function VpnsPage() {
     {
       key: 'created_at',
       header: 'Since',
+      sortable: true,
+      sortValue: (v) => v.created_at ?? 0,
       hideOnMobile: true,
       render: (v) => <span className="ui-muted">{relativeTime(v.created_at)}</span>,
     },
@@ -485,7 +657,7 @@ export function VpnsPage() {
        * everything else is behind "⋯", so a mis-tap can no longer mean "revoke".
        */
       render: (v) => (
-        <span className="ui-row" style={{ gap: 6, justifyContent: 'flex-end' }}>
+        <span className="ui-row vp-row-actions">
           {v.assigned ? (
             <Button
               size="sm"
@@ -533,6 +705,27 @@ export function VpnsPage() {
                 Copy panel name
               </DropdownItem>
             )}
+            {/*
+              P-2 (D-106): the platform owner could not release a VPN at all — the
+              route answered 403 to every non-client, which left the 3X-UI panel as
+              the only way to act on an abused account, where nothing is audited.
+              Offered only for a VPN that is actually assigned: releasing an
+              unassigned one means nothing to a customer.
+            */}
+            {v.assigned && v.status !== 'RELEASED' && (
+              <DropdownItem onClick={() => setReleaseTarget(v)}>
+                Release on the owner's behalf…
+              </DropdownItem>
+            )}
+            {/*
+              P-3 (D-106): retire the RECORD while keeping the panel client. Offered
+              separately from Delete because the two answer different questions, and
+              "delete" would imply the panel client goes too — it never does
+              (D-027.3).
+            */}
+            <DropdownItem onClick={() => setPurgeTarget(v)}>
+              Purge the Veylix record (keep the panel client)…
+            </DropdownItem>
           </Dropdown>
         </span>
       ),
@@ -545,7 +738,7 @@ export function VpnsPage() {
         title="VPN management"
         subtitle="Every VPN the system knows — panel clients included, assigned or not"
         actions={
-          <div className="ui-row" style={{ gap: 8 }}>
+          <div className="ui-row vp-toolbar">
             {/*
               Freshness #9: the usage numbers come from a scheduled panel read, so
               their age is part of the number. Without this, "62% used" looked the
@@ -801,6 +994,9 @@ export function VpnsPage() {
             columns={columns}
             data={rows}
             rowKey={(v) => `${v.server_id}:${v.panel_email}`}
+            searchable
+            searchPlaceholder="Search panel client, owner, status or tag…"
+            caption="VPNs"
             selection={{
               selected,
               onSelectedChange: setSelected,
@@ -823,7 +1019,7 @@ export function VpnsPage() {
           onChange={(p) => q.setNow({ page: p })}
         />
         {total > 0 && (
-          <p className="ui-muted t-sm2" style={{ marginTop: 8 }}>
+          <p className="ui-muted t-sm2 vp-footnote">
             Showing {rows.length} of {total} VPN{total === 1 ? '' : 's'}
             {q.values.server_id ? ' on this server' : ''}. Unassigned panel clients sort first.
           </p>
@@ -877,6 +1073,102 @@ export function VpnsPage() {
         already-assigned VPN to another customer. The 3X-UI client is never renamed, so the
         connection keeps working; the previous owner loses access immediately.
       </p>
+
+      {/*
+        P-2 — releasing on the owner's behalf.
+        The reason field is required and the button stays disabled until it has
+        something in it, so the 422 the API would return is never reached by a real
+        operator. NN/g: be specific about what will happen (3 days, undoable, panel
+        client untouched), not "are you sure?".
+      */}
+      <Dialog
+        open={releaseTarget !== null}
+        title={releaseTarget ? `Release ${releaseTarget.panel_email}?` : 'Release VPN'}
+        onClose={() => {
+          setReleaseTarget(null)
+          setReleaseReason('')
+        }}
+        footer={
+          <>
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setReleaseTarget(null)
+                setReleaseReason('')
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              disabled={releaseReason.trim() === '' || busyRelease}
+              onClick={() => void submitRelease()}
+            >
+              Release this VPN
+            </Button>
+          </>
+        }
+      >
+        <p className="ui-muted">
+          This sets the VPN aside for its owner and opens a <strong>3-day undo window</strong>. The
+          3X-UI client is <strong>not</strong> deleted and keeps working; the customer sees the
+          reason you write here.
+        </p>
+        <Input
+          label="Why are you releasing it? (required)"
+          placeholder="e.g. abuse report received from the upstream provider"
+          value={releaseReason}
+          onChange={(e) => setReleaseReason(e.target.value)}
+        />
+      </Dialog>
+
+      {/*
+        P-3 — retire the record, keep the panel client.
+        Type-to-confirm on the panel email: the VPN's identity (D-091.4). A dialog
+        that only says "are you sure" would let a mis-clicked row destroy the wrong
+        record.
+      */}
+      <Dialog
+        open={purgeTarget !== null}
+        title={purgeTarget ? `Purge the Veylix record for ${purgeTarget.panel_email}?` : 'Purge record'}
+        onClose={() => {
+          setPurgeTarget(null)
+          setPurgeConfirm('')
+        }}
+        footer={
+          <>
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setPurgeTarget(null)
+                setPurgeConfirm('')
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              disabled={purgeConfirm.trim().toLowerCase() !== (purgeTarget?.panel_email ?? '').toLowerCase() || busyPurge}
+              onClick={() => void submitPurge()}
+            >
+              Purge the record
+            </Button>
+          </>
+        }
+      >
+        <p className="ui-muted">
+          This removes Veylix&rsquo;s <strong>record</strong> of the VPN. The 3X-UI client is{' '}
+          <strong>never deleted</strong> — the customer&rsquo;s connection keeps working — but this
+          console will no longer show the VPN, so it can no longer be suspended, moved or reported
+          on. Prefer <strong>Release</strong> unless you are sure.
+        </p>
+        <Input
+          label="Type the panel email to confirm"
+          placeholder={purgeTarget?.panel_email ?? ''}
+          value={purgeConfirm}
+          onChange={(e) => setPurgeConfirm(e.target.value)}
+        />
+      </Dialog>
     </div>
   )
 }

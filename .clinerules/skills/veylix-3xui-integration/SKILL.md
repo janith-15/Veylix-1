@@ -76,7 +76,62 @@ recorded once in `outbox` (`UNIQUE(server_id, op, idempotency_key)`) and
 reconciled. A retried provision must never create a second panel client
 (`vpn_instances UNIQUE(server_id, panel_email)`).
 
+A panel rejection is a **failure**: roll back the local row, its assignment and
+the quota slot in one transaction (`discardProvisional`), answer `502
+panel_rejected`. There is no phantom VPN (D-024.1a).
+
+## The panel email IS the VPN's name (D-034, D-091.4)
+
+A client's `email` is derived from the human who owns it — never an opaque id:
+
+```
+<client account email>_<kind>_<n>        nimal@gmail.com_free_1
+                                          nimal@gmail.com_paid_2
+```
+
+- `kind` is `free` or `paid`. `<n>` is a per-**(client, server, kind)** counter that
+  **only moves forward**: a revoked `_paid_2` is never re-issued, so the next paid
+  VPN is `_paid_3` (D-034.2). That monotonicity is what makes a panel email a stable
+  audit trail rather than a recycled label.
+- `panel_sub_id` stays `vyx-<vpn_instance_id>` so D-012's idempotency survives the
+  human-readable name (D-034.3).
+- The name is assigned **at creation, inside the provisioning transaction** — never
+  guessed afterwards (D-034.4). `domain.PanelBase` / `PanelFindNextFreeSlot` /
+  `PanelSlotNext` are the only producers; never hand-build one.
+- **Assigning a client created directly in 3X-UI renames it once** into the same
+  scheme (D-034.5, D-037.2). The rename runs **after** the assignment is committed,
+  and a failed rename changes nothing — the VPN keeps the name it already has, which
+  is a finished state, not a half-applied one (D-063). See `RenameAssignmentName`.
+- An opaque `vyx-21` on the panel for a **new** VPN is a defect, not a name.
+- **`email` is unique per panel** — that is exactly why the slot counter exists, and
+  why a rename must check the target before writing.
+
+## FREE and PREMIUM are the same panel object (D-091.2)
+
+Both are identical 3X-UI clients. The FREE/PREMIUM distinction is a **business**
+label Veylix stores locally and **never writes to the panel** (D-024.3): PREMIUM is
+sold for revenue, FREE is given away to acquire customers. Concretely:
+
+- Do **not** infer a kind from the panel email, the inbound, the protocol or a
+  panel-side `comment`. Only Veylix's own tag decides.
+- Do **not** write the tag to the panel's `comment` — a panel-side edit could
+  silently reclassify a VPN.
+- **Only the Super Admin sets or changes the tag** (`PermOfferManage`, `PUT
+  /api/panel-clients/{server_id}/{email}/tag`), and it **locks** once the VPN is
+  issued, so nobody can re-price what a customer already holds.
+- FREE device limits are a platform rule (`limitIp=2`, `limitHwid=2`) and are not
+  taken from the offer; PREMIUM keeps the operator's value (D-028.3/.4).
+
+## A missing client is surfaced, not hidden (D-091.5, INV-1)
+
+A client missing from a page-through becomes `SERVER_UNAVAILABLE` — **never**
+`REVOKED`, and its row is **never** deleted — until a direct
+`GET /clients/get/{email}` positively reports it absent. An unreadable panel changes
+nothing. Whatever the backend concludes, the customer-facing screen must **say it**:
+a status chip alone is not an explanation.
+
 ## Release and revocation
+
 
 **Release is local, never remote.** A released VPN is removed from Veylix after a
 3-day grace with undo. **The panel client is never deleted.** Do not "fix" a
@@ -99,3 +154,8 @@ runtime authority.
 - [ ] Health poll ≥ 30 s per panel.
 - [ ] Provisioning did write → fresh read → record.
 - [ ] Failure state is explicit and pending, not a pretend success.
+- [ ] Panel email built by `domain.PanelBase` / `PanelFindNextFreeSlot`, never by hand.
+- [ ] The slot was reserved **inside** the provisioning transaction.
+- [ ] The tag was not written to the panel, and not inferred from a panel-side field.
+- [ ] Any screen listing the VPN shows the panel identity, readable and copyable.
+- [ ] A `SERVER_UNAVAILABLE` client is explained to the customer, not just coloured.

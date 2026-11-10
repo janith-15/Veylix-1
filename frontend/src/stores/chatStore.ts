@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { api, ApiError, type ApiChatMessage, type ApiChatThread } from '../lib/api'
+import { activeTimeZone } from '../lib/time'
 
 /**
  * Internal support chat — backed by the real backend (`/api/chat/*`, P7).
@@ -702,12 +703,12 @@ export const dayLabel = (ms: number) => {
   const days = Math.round((midnight(new Date()) - midnight(d)) / DAY)
   if (days <= 0) return 'Today'
   if (days === 1) return 'Yesterday'
-  return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })
+  return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', timeZone: activeTimeZone() })
 }
 
 /** Clock for today, short date for older messages. */
 export const messageStamp = (ms: number) =>
-  Date.now() - ms < DAY ? clock(ms) : new Date(ms).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })
+  Date.now() - ms < DAY ? clock(ms) : new Date(ms).toLocaleDateString(undefined, { day: 'numeric', month: 'short', timeZone: activeTimeZone() })
 
 /** Relative label for thread-list previews. */
 export const relativeTime = (ms: number) => {
@@ -719,5 +720,5 @@ export const relativeTime = (ms: number) => {
   if (diff < hour) return `${Math.floor(diff / minute)}m`
   if (diff < DAY) return `${Math.floor(diff / hour)}h`
   if (diff < 7 * DAY) return `${Math.floor(diff / DAY)}d`
-  return new Date(ms).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })
+  return new Date(ms).toLocaleDateString(undefined, { day: 'numeric', month: 'short', timeZone: activeTimeZone() })
 }

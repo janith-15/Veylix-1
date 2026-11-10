@@ -50,6 +50,10 @@ func skipf(name, reason string) {
 // runner executes external commands, or records them when dryRun is set.
 type runner struct {
 	dryRun bool
+	// backupRoot is the backup root the environment is configured with. It is
+	// carried here so a parsed backup path can be checked against the root the
+	// script actually writes to, instead of "any absolute path".
+	backupRoot string
 }
 
 // run executes name with args. Output is captured and only shown on failure, so
@@ -227,6 +231,68 @@ func requireVersionAgreement(before, after readyReport) error {
 			before.SchemaVersion, after.SchemaVersion)
 	}
 	return nil
+}
+
+// takeBackupBefore is the single destructive-safety step shared by `update` and
+// `rollback`: run the shipped backup script, and refuse to continue when it is
+// missing or fails.
+//
+// It returns the backup DIRECTORY the script reported, when the script names
+// one. That value is what lets a later step restore exactly the state that was
+// just replaced, instead of telling an operator to go find a timestamp.
+//
+// `rollback` used to print "rollback complete. If the database was migrated,
+// also restore the pre-upgrade backup" having taken no backup at all - a
+// recovery instruction pointing at a file that did not exist.
+func takeBackupBefore(r runner, stepName string, dryRun bool) (dir string, err error) {
+	script := backupScript()
+	if !fileExists(script) {
+		return "", fmt.Errorf("refusing to %s without a backup: %s not found "+
+			"(it ships in the release bundle as deploy/veylix-backup.sh; "+
+			"set VEYLIX_DEPLOY_DIR to the directory that holds it)", stepName, script)
+	}
+
+	step("backup")
+	if dryRun {
+		out("[dry-run] bash %s backup", script)
+		return "", nil
+	}
+
+	text, runErr := r.run("bash", script, "backup")
+	if text != "" {
+		out("%s", strings.TrimSpace(redact(text)))
+	}
+	if runErr != nil {
+		return "", fmt.Errorf("backup failed; %s was not started: %w", stepName, runErr)
+	}
+	return backupDirFromOutput(text, r.backupRoot), nil
+}
+
+// backupDirFromOutput finds the directory a backup reported. The shipped script
+// prints its destination; an absent match is not an error, because the caller
+// can still describe the default root.
+//
+// The match is rooted at the backup root the CLI is configured with
+// (p.BackupDir) rather than "any absolute path", so a line of prose cannot be
+// mistaken for a directory on POSIX while a Windows-style path still matches on
+// Windows. The path must also exist, so a stale message is never trusted.
+func backupDirFromOutput(text, backupRoot string) string {
+	root := strings.TrimRight(backupRoot, `/\`)
+	if root == "" {
+		return ""
+	}
+	for _, line := range strings.Split(text, "\n") {
+		for _, field := range strings.Fields(line) {
+			f := strings.TrimRight(field, ",.;:")
+			if !strings.HasPrefix(f, root) {
+				continue
+			}
+			if fileExists(f) {
+				return f
+			}
+		}
+	}
+	return ""
 }
 
 // statusDoc is the machine-readable form of `status --json`. It is a named type

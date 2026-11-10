@@ -388,7 +388,65 @@ func (s *Service) Inbounds(ctx context.Context, id int64) ([]panel.InboundOption
 	if err := s.cacheInbounds(ctx, id, inbounds); err != nil {
 		return nil, err
 	}
-	return inbounds, nil
+	// Answer with the LOCAL `inbounds.id`, not the panel's number.
+	//
+	// This list exists so an operator can pick the inbound an offer will build
+	// its clients in, and `vpn_offers.inbound_id` is a foreign key to
+	// `inbounds(id)` — an AUTOINCREMENT row id local to Veylix, unrelated to the
+	// number 3X-UI uses (the development panel numbers its inbounds 1/2/3 while
+	// the cached rows are 52/53/54; `cacheInbounds` stores the panel number in
+	// `remote_id` for exactly this reason). Returning `ib.ID` here handed the
+	// form the panel's number, the form submitted it, and
+	// `InboundBelongsToServer` correctly refused it — `inbound_mismatch` on
+	// every create, with an inbound visibly listed for the server it named.
+	//
+	// `remote_id` is returned alongside as `remote_id` so a caller can still see
+	// the panel's number; provisioning translates local -> remote itself in
+	// `panelInboundID` and stays the only place that does.
+	return s.localInbounds(ctx, id, inbounds)
+}
+
+// localInbounds maps freshly-cached panel inbounds onto their local `inbounds.id`
+// so the answer matches the foreign key the offer row enforces.
+//
+// The rows were written by the preceding `cacheInbounds` call, so the lookup is
+// a single query over this server's mirror rather than one round trip per
+// inbound. An inbound the cache does not hold is skipped: it cannot be
+// referenced by an offer, so offering it would recreate the same refusal.
+func (s *Service) localInbounds(ctx context.Context, serverID int64, inbounds []panel.InboundOption) ([]panel.InboundOption, error) {
+	if len(inbounds) == 0 {
+		return []panel.InboundOption{}, nil
+	}
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT id, remote_id FROM inbounds WHERE server_id = ?`, serverID)
+	if err != nil {
+		return nil, fmt.Errorf("integrations: resolve local inbounds: %w", err)
+	}
+	defer rows.Close()
+
+	type keyed struct{ local, remote int64 }
+	local := make(map[int64]int64, len(inbounds))
+	for rows.Next() {
+		var k keyed
+		if err := rows.Scan(&k.local, &k.remote); err != nil {
+			return nil, fmt.Errorf("integrations: resolve local inbounds: %w", err)
+		}
+		local[k.remote] = k.local
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("integrations: resolve local inbounds: %w", err)
+	}
+
+	out := make([]panel.InboundOption, 0, len(inbounds))
+	for _, ib := range inbounds {
+		localID, ok := local[int64(ib.ID)]
+		if !ok || localID <= 0 {
+			continue
+		}
+		ib.ID = int(localID)
+		out = append(out, ib)
+	}
+	return out, nil
 }
 
 // PanelClientView is one client as the PANEL reports it, joined with Veylix's

@@ -44,10 +44,25 @@ const EXPECTED = {
   ],
   client: [
     '/client', '/client/vpns', '/client/usage',
-    '/client/offers', '/buy', '/client/billing', '/history',
+    '/client/offers', '/buy', '/client/billing',
     '/client/guides', '/client/support',
     '/client/notifications', '/profile',
   ],
+}
+
+/**
+ * Destinations that must be ABSENT from a role's sidebar even though the route
+ * still resolves.
+ *
+ * `/history` is the case this exists for (D-091 billing merge). `navModel.ts`
+ * folded "Payments & Billing" and "Purchases" into ONE destination and kept the
+ * `/history` ROUTE alive, because bookmarks, e-mail links and the Dashboard's
+ * "Open Purchases" button all resolve to it. Being reachable is not the same as
+ * being a second navigation item — and asserting the opposite made this gate fail
+ * on correct code, which is worse than no gate at all.
+ */
+const NOT_A_NAV_ITEM = {
+  client: ['/history'],
 }
 
 /**
@@ -154,6 +169,16 @@ for (const [role, paths] of Object.entries(EXPECTED)) {
   for (const p of FORBIDDEN[role] ?? []) {
     check(`${role} nav omits ${p}`, !hrefs.includes(p), hrefs.includes(p) ? 'LEAKED from another role' : '')
   }
+  for (const p of NOT_A_NAV_ITEM[role] ?? []) {
+    // The route still resolves — it is only not a second navigation item. The
+    // pair of assertions (absent here, and "resolves" further down) is what
+    // proves the merge instead of merely tolerating it.
+    check(
+      `${role} nav omits ${p} (route kept, not a nav item)`,
+      !hrefs.includes(p),
+      hrefs.includes(p) ? 're-added as a nav item after the billing merge' : '',
+    )
+  }
 }
 
 /*
@@ -176,6 +201,18 @@ for (const [role, paths] of Object.entries(EXPECTED)) {
       await sleep(1200)
       const landed = await evaluate('location.pathname')
       check(`client ${dest} resolves`, landed === dest, `landed: ${landed}`)
+    }
+    /*
+     * A route that is no longer a nav item must still RESOLVE — bookmarks,
+     * e-mail links and the Dashboard's "Open Purchases" button all point at
+     * `/history`. Removing it from the sidebar was the fix; removing the route
+     * would have been a regression, so both halves are asserted.
+     */
+    for (const dest of NOT_A_NAV_ITEM.client ?? []) {
+      await send('Page.navigate', { url: `${APP}${dest}` })
+      await sleep(1200)
+      const landed = await evaluate('location.pathname')
+      check(`client ${dest} still resolves (bookmark-safe)`, landed === dest, `landed: ${landed}`)
     }
   }
 }

@@ -18,6 +18,7 @@ import { useAuditStore, AUDIT_RANGES, type AuditEntry, type AuditFilters } from 
 import { useListQuery } from '../hooks/useListQuery'
 import { api, type ApiAuditEntry, type ApiAuditQuery } from '../lib/api'
 import { formatDateTime } from '../lib/time'
+import { csvCell as csvCellImpl } from '../lib/csv'
 
 const PAGE_SIZE = 50
 
@@ -109,8 +110,14 @@ function prettyContext(raw: string): string {
   }
 }
 
+/**
+ * The CSV cell escaper lives in `lib/csv.ts`, so it is unit-tested
+ * (`npm run audit:csv-selftest`) instead of only reviewed. B-3: the previous
+ * inline version quoted delimiters but let `=`, `+`, `-` and `@` through, so an
+ * audit export opened in Excel could execute a cell as a formula.
+ */
 function csvCell(value: string): string {
-  return /[",\n\r;]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value
+  return csvCellImpl(value)
 }
 
 /** Writes entries as CSV — the format an incident write-up actually gets pasted
@@ -227,7 +234,7 @@ export function AuditPage() {
       render: (r) => (
         <span>
           <span className="ui-strong">{ACTION_LABELS[r.action] ?? r.action}</span>
-          <span className="ui-muted t-sm2" style={{ display: 'block' }}>
+          <span className="ui-muted t-sm2 audit-action-code">
             {r.action}
           </span>
         </span>
@@ -284,10 +291,9 @@ export function AuditPage() {
         {/* The filter bar: one search box, the kind chips, the time window.
             Kind and range apply at once; the search debounces; `page` rides
             along so any filter change restarts at page 1. */}
-        <div className="ui-row" style={{ flexWrap: 'wrap', gap: 10, alignItems: 'center', marginBottom: 12 }}>
+        <div className="ui-row audit-filters-bar">
           <input
-            className="ui-input"
-            style={{ maxWidth: 250 }}
+            className="ui-input audit-filters-bar__search"
             placeholder="Search action, actor, target…"
             aria-label="Search the audit trail"
             value={filters.draft.q}
@@ -369,7 +375,7 @@ export function AuditPage() {
         }
       >
         {contextOf && (
-          <div className="ui-col" style={{ gap: 8 }}>
+          <div className="ui-col audit-context-wrap">
             <span className="ui-muted t-sm">
               {ACTION_LABELS[contextOf.action] ?? contextOf.action} ·{' '}
               {contextOf.actorName || (contextOf.actorId ? `user #${contextOf.actorId}` : 'system')} ·{' '}

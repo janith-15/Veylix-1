@@ -1,4 +1,93 @@
+
+## D-092 · Usage history became a real chart source: hourly buckets, derived speed history, stored latency, and a custom window
+
+**Date:** 2026-11-08 · **Status:** implemented · **Supersedes:** nothing · **Relates to:** D-026 (nothing is invented), D-038 (P-01/P-04/P-06/P-07), D-066 (single clock read), D-091.4/.5
+
+### The problem, as the owner stated it
+
+> *"usage eka pattama wikarayak wela … chart kihipayak bala poroththu una usage range ekka 7 day 30 day 90 y1 wage sudusu gelapena widihata chart walata dala hodatama bala ganna one"*
+
+The VPN details page had four charts that all answered the same question badly:
+
+| Chart | What it actually plotted | Why it was wrong |
+|---|---|---|
+| Line | `lifetime_*_bytes` (cumulative) | rising forever; says nothing about *when* traffic happened |
+| Bar | `last - first` of the window | **two bars** — Download and Upload — so 7d, 30d, 90d and 1y all looked identical |
+| Pie | the same two numbers | a donut of two segments is not an insight |
+| Line (server) | CPU / RAM | an operator metric on a customer's screen |
+
+Changing the range changed the *numbers* but never the *shape*, which is the opposite of what a range switch is for.
+
+### What was missing, and what was NOT
+
+The audit that preceded this found that three of the four gaps were **a missing endpoint, not a missing capability**:
+
+1. **Hourly traffic** — `usage_snapshots` already stores `taken_at` with cumulative `up_bytes`/`down_bytes`. Per-hour deltas are computable in SQL. **No new table was needed.**
+2. **Speed history** — the same counters plus elapsed time *are* a rate. `GET /traffic/live` only ever returned the last interval, so the series looked absent. **No new table was needed.**
+3. **Latency history** — genuinely absent: `POST /ping` measured and discarded. **This one required storage.**
+4. **24h and a custom window** — `UsageWindowFromQuery` knew only 7d/30d/3m/1y/all. **No schema change was needed.**
+
+### The decision
+
+**1 · Hourly buckets are deltas of stored counters, never interpolated.**
+`GET /api/vpns/{id}/usage/hourly` returns one bucket per clock hour, each carrying `up_bytes`, `down_bytes`, `total_bytes` and `measurements`. The rules:
+
+- A delta is `current - previous` across consecutive snapshots.
+- `MAX(0, delta)` absorbs a panel-side counter reset rather than drawing a negative bar — we cannot attribute pre-reset traffic to the hour it happened in.
+- The first snapshot inside the window has no predecessor, so it contributes **0**, not the whole lifetime total. An hour with one sample reports `measurements: 1`, letting the reader see a gap instead of a fabricated spike.
+
+
 # VEYLIX VPN — DECISIONS LOG
+
+
+**2 · Speed history is derived, and says so.**
+`GET /api/vpns/{id}/speed-history` returns `(bytes delta) / (elapsed seconds)` per interval, computed **in SQL** so the chart cannot disagree with the API. The response states `scope: "average_between_sync_readings"` — it is an average over the sync tick, **not a speed test**, and no screen may present it as one. An interval that cannot be measured (zero elapsed, or a counter reset) is returned with `source: "unavailable"`, never as `0`, because zero is a real measurement of an idle link (D-026.3).
+
+**3 · Latency is now stored — migration `0024_ping_samples`.**
+The only new table. `POST /api/vpns/{id}/ping` writes each probe, and `GET /api/vpns/{id}/ping/history` reads them back. Three properties are deliberate:
+
+- A **failed** probe is stored (`reachable = 0`, `latency_ms = -1`). It is a measurement, and dropping it would make an outage indistinguishable from a gap in testing.
+- `scope` is stored per row, so today's `server_reachability` probes can be told apart from any future client-side probe instead of being silently mixed.
+- The write is **best-effort**: a storage failure must not hide the number the customer just asked for, and it is not reported as success either.
+
+**4 · `24h` and a custom window, with one clock read.**
+`UsageWindowFromQuery` gained `24h`. A new `ResolveWindow` applies `?since=` and `?until=` on top of the named range and enforces these rules:
+
+| Input | Result |
+|---|---|
+| `range=24h\|7d\|30d\|3m\|1y\|all` | that named window |
+| `since` **and** `until` | a genuine `custom` window |
+| `since` alone, or `until` alone | the **named range** with one edge moved — a well-defined request, so it is accepted, not refused |
+| `until` in the future | clamped to now — a window cannot contain unrecorded traffic |
+| `since >= until` | **422**, because an inverted window would render as an empty chart, which reads as "no traffic" |
+| `range=custom` with no edges | **422** — genuinely under-specified |
+
+The window is resolved against **one** reading of the clock, so `/usage` and `/usage/hourly` cover exactly the same period and their totals agree (D-066).
+
+### Ownership
+
+Every new read resolves visibility through the **same predicate** `VPNUsageHistory` uses (`p.CanViewResource` against the row's owner and seller), factored into `requireVPNVisible`. Two different ownership rules for two endpoints on one row is how a later endpoint leaks a VPN the list endpoint hides. Missing row → `404`; row the caller may not see → `403`. Those stay distinct on purpose.
+
+A dedicated negative test (`TestNewUsageRoutesRefuseStrangers`) proves a stranger gets `403` and an anonymous caller gets `401` on every new route; `TestNewUsageRoutesRefuseMisspelledRange` proves the window validation is not weaker on the new routes than on the old one.
+
+### What this decision does NOT change
+
+- No existing table, column, index or row was altered. Migration 0024 is **additive only**, with `ON DELETE CASCADE` so a released VPN takes its probes with it.
+- No existing endpoint's response shape changed. `/usage` still returns the full history by default and still honours `?summary=1`.
+- `/traffic/live`, `/links`, `/protocol` and `/ping` keep their contracts; `/ping` merely also records.
+- Server-wide CPU/RAM stays an operator read (`PermServerMetrics`). This decision does **not** expose it to clients.
+- Nothing here invents a sample: an empty window returns an empty array, and the UI must render "no data", never a zero line.
+
+### Evidence
+
+| Gate | Result |
+|---|---|
+| `go build ./...` | PASS |
+| `go vet ./...` | PASS |
+| `go test ./... -count=1` | PASS — 17/17 packages |
+| `npm run docs:verify` | PASS — 24 migrations · 136 routes · 626 test functions |
+| New tests | `TestUsageWindowNamedRanges`, `TestUsageWindowUnknownRangeIsRefused`, `TestResolveWindowCustomBounds` (7 sub-cases), `TestResolveWindowEchoesOneClock`, `TestUsageHourlyBucketsD000`, `TestSpeedHistoryDerivesRateFromCounters`, `TestNewUsageRoutesRefuseStrangers` (4), `TestNewUsageRoutesRefuseMisspelledRange`, `TestPingHistoryRequiresSampleStore` |
+
 
 > Every owner-approved decision and Bible deviation is recorded here, with reason and date.
 > Format: **ID | Date | Decision | Reason | Approval**
@@ -2123,6 +2212,112 @@ D-004 (single shell + role-filtered navigation) by giving each role its own tree
    two minutes, once immediately at startup, recovering from a panic per tick.
 2. `provisioning.MaxOutboxAttempts = 8` caps retries. On the 8th failure the row
    becomes `FAILED` with `ErrOutboxExhausted` and no `next_attempt_at`, and the
+
+## D-089 · Offers and Orders are two different routes with two different owners
+
+**The question.** Both the Super Admin console and the Client Portal have a screen
+about offers. Are they one route with a role condition, or two?
+
+**The decision.** Two routes, two owners, no sharing:
+
+| Route | Owner | Renders |
+|---|---|---|
+| `/offers` | **Super Admin only** | `OffersPage` - publish and edit the catalogue |
+| `/client/offers` | **Client only** | `ClientOffersPage` - browse, claim, buy, compare, see orders |
+
+**Why this needed writing down.** During the Section 03 audit a collision was
+*reported* between the two routes. It did not exist. `App.tsx` has kept them in
+separate role-guarded trees since the navigation was split into three role-scoped
+trees (D-084), and `verify-nav.mjs` already refuses `/offers` for a client. The real
+defect was that **no decision recorded the split**, so the next reader had only the
+route table to go on and could reasonably have concluded the paths were duplicated.
+This entry closes that documentation gap; it changes no code.
+
+**What is preserved.**
+
+- No route is renamed.
+- No route is registered twice.
+- The existing role guards stay exactly as they are: `/offers` inside
+  `RequireAuth roles={['super-admin']}`, `/client/offers` inside the client tree.
+- The existing navigation model is untouched (`navModel.ts` is not modified).
+- The existing verification rule is untouched: `verify-nav.mjs` 74/74 must keep
+  passing, and it still asserts that a client is refused `/offers`.
+
+**Why not merge them.** A single `/offers` screen branching on role would have to
+carry the Super Admin's editor (create, price, archive) inside the same bundle a
+customer downloads, and every guard would become a runtime condition instead of a
+tree the router can enforce. Two owners is also what the route table already says,
+and D-084 established that shape deliberately.
+
+**Relates to** D-084 (three role-scoped navigation trees), D-088.1 (My VPNs),
+D-090 (Client Dashboard). **Supersedes** nothing.
+
+## ADR-010 · The client catalogue is read from `GET /api/packages`, once
+
+**The question.** Three endpoints can describe a package to a client:
+`/api/offers`, `/api/offers/premium`, and `/api/packages`. Which one is Section 03
+allowed to read?
+
+**The decision.** `GET /api/packages`, and nothing else.
+
+**Why that one.**
+
+1. It returns **both** kinds in one answer, already filtered to what the caller may
+   actually obtain. `/api/offers` is the FREE catalogue and `/api/offers/premium`
+   is the resale catalogue, so reading both would be two requests and a merge this
+   page would have to keep correct forever.
+2. It is the only one of the three that carries **`purchasable`** and
+   **`priced_per_order`**, which Section 03 needs to decide whether a Buy button may
+   be enabled at all.
+3. `offersStore` holds a **single** `offers` array, and `loadPremium()` overwrites
+   it. Calling two loaders from one screen races them, and whichever resolved last
+   wins - which is exactly the "competing loaders that overwrite each other's state"
+   this decision forbids.
+
+**The verified payload.** Checked against the running server on 2026-11-08. Each row
+carries exactly eleven keys:
+
+```
+currency · device_limit · duration_days · id · kind · name ·
+price_cents · priced_per_order · purchasable · server_label · traffic_gb
+```
+
+**What it does NOT carry, and why that matters.**
+
+- **No `server_id`.** A Free claim requires one, so it is resolved from the client's
+  own `GET /api/vpns` rows by `offer_id`. When that mapping does not exist, the
+  claim is disabled with a stated reason rather than guessed. `GET /api/servers` is
+  403 for a client, so the client's own VPN rows are the only entitled source.
+- **No `active`, `archived` or `slots_remaining`.** `api.ts` previously typed this
+  endpoint as `ApiPlan[]`, which *requires* all three. That was a false type: callers
+  read `undefined` while TypeScript reported success. `ApiPackage` now describes the
+  real payload, and `listPackagesTyped()` exposes it without repointing the existing
+  `listPackages()` that `packagesStore` already consumes.
+- **No customer-facing server name.** `server_label` is the literal string
+  `server 11` (plan_routes.go:56) - an internal placeholder. It is never rendered.
+  The real name comes from the client's own VPN rows; when absent the name is
+  omitted rather than invented.
+- **`kind` can be `"CUSTOM"`**, a third value the `ApiPlanKind` union does not admit.
+  The handler rewrites a priced-per-order package to it before serialising, so the
+  screen folds CUSTOM into Premium and keeps `is_custom` as a specification
+  indicator. It never becomes a fourth category.
+
+**Constraints this decision imposes.**
+
+- **No new API endpoint and no database migration.** Both were explicitly out of
+  scope, and neither is needed: every field the page renders is already on the wire.
+- One catalogue request per mount, then client-side search / filter / sort / page.
+  No re-fetch on a keystroke and no request per card.
+- The catalogue is not written to. Section 03 is a read-only screen plus the two
+  existing write flows (Free claim via `vpnStore.claimFree`, Premium via `/buy`).
+
+**Evidence.** `npm run verify:client-offers` - 40 checks, including that the request
+goes to `/api/packages`, that no row is re-fetched per card, that `CUSTOM` folds into
+Premium, and that no `server N` placeholder or panel URL reaches the DOM.
+
+**Relates to** D-035.2 (the packages endpoint), D-089 (route ownership),
+D-024.1a (panel-refusal handling on claim).
+
    pass reports the new `ReconcileExhausted` outcome.
 
 **Why.** `Reconcile` was fully implemented and covered by three tests but had
@@ -2134,6 +2329,57 @@ whose create timed out stayed `SERVER_UNAVAILABLE` until a human fixed it by
 hand.
 
 The ceiling is the other half. `backoff()` saturates at 6 â†’ 640 s, so without a
+
+---
+
+## D-093 · Install, upgrade, rollback and backup stay CLI-only, and every destructive command takes its own backup
+
+**Date:** 2026-11-08 · **Status:** accepted
+
+The install system is three tools with one job each, and that split is now
+decided, not incidental:
+
+| Job | Owner |
+|---|---|
+| First install on a host | `install.sh` (once per host, refuses an installed host) |
+| Every later change (release, domain, backup, rollback, repair, uninstall) | `vpn-platformctl` |
+| What the templates are | `deploy/`, published as `veylix-deploy.tar.gz` in every release |
+
+**Decision 1 — the deployment templates are part of a release.**
+A binary alone is not installable: HTTPS needs a `Caddyfile`, the service needs
+the unit, and both `update` and `rollback` refuse to run without
+`veylix-backup.sh`. The release therefore publishes a bundle, and
+`install.sh` resolves templates in this order: the checkout's `deploy/`, then
+`<release>/veylix-deploy.tar.gz`, then the legacy `--script-base`. Only members
+under `deploy/` are ever extracted from the archive. (F-060)
+
+**Decision 2 — every destructive command backs up first, or refuses.**
+`update` already did; `rollback` did not, and then instructed the operator to
+restore a backup it had never taken (F-061). Both now share one step, and the
+directory the backup reports becomes the default `restore` target, so the
+recovery path always points at a file that exists. `--skip-backup` exists, warns,
+and is the only way past the guard.
+
+**Decision 3 — lifecycle actions are deliberately NOT in the UI.**
+Install, upgrade, rollback, domain change, restore and uninstall stay on the
+command line. A web screen that performs them would only work while the service
+it is repairing is already up — the exact situation in which it is needed is the
+one in which it is unavailable — and it would put a host-destroying operation one
+stray click away, behind the same session cookie as an ordinary read. Restricted
+to SSH, every action is deliberate, replayable, covered by `--dry-run`, and
+produces a transcript an operator can paste into an incident. The UI may
+*display* version and lifecycle state, read-only, and never mutate it.
+
+**Decision 4 — a placeholder is refused, not requested.**
+`--repo` (or `VEYLIX_REPO`) must name a real `<owner>/<name>`; the shipped
+`your-org/veylix` default is refused with the exact correction on screen, because
+taking it to github.com produced a `404` reported as a network failure.
+
+- **Relates to** D-027.3 (removal never deletes a 3X-UI client), D-029 (one
+  binary), D-043 (one origin), D-079 (`install.sh`), INV-1 (honest failure).
+  **Supersedes** nothing; it records what F-060/F-061 fixed and what was
+  deliberately left out of scope.
+
 cap a permanently broken operation — a deleted inbound, a panel the token no
 longer opens, a client the panel rejects by validation — is retried roughly 135
 times a day forever. On a 1 vCPU box that is real waste, and a `RETRY` that never
@@ -2461,3 +2707,1648 @@ server / package, combinable Status / Server / Expiry filters, three sorts,
 
 **Supersedes** the "One implementation consequence" paragraph of D-088.
 **Relates to** D-088, D-038 P-06 (usage lives on the VPN detail screen).
+
+
+## D-091 · A VPN has one identity, and the customer can read it
+
+- **Date:** 2026-11-08. **Status:** **INVARIANT — owner-mandated.** Refines D-024
+  (VPN ≡ panel client), D-028 (panel email), D-034 (identity + slot) and D-063
+  (assignment naming). Adds three UI rules the owner raised as missing.
+
+- **Why this entry exists.** Every rule below was already true *somewhere* — in
+  `domain/identity.go`, in `provisioning`, in `store/assignment.go`, in one sentence
+  of `MASTER_SPEC.md` §3. What was missing was a single place that said them
+  together, in the owner's own terms, with the frontend consequences attached. The
+  owner reviewed the code and named three things missing from both the docs and the
+  screens:
+
+  > *"meka ahanna 3x ui eke client kenek = meke vpn ekak 3x ui client kenek
+  > neththan ekko e vpn eke weda karanne na, neththan eka fake ekak — me de
+  > amathaka karala me project eka hadanna ba"*
+  >
+  > *"free premium kiyala nam kalata ee dekama 3x ui eke client la deke wenasak na
+  > api bussness perpus ekata thama deka wen karala thiyenne premium sell karanna
+  > salli hoyanna free clienta alla ganna"*
+  >
+  > *"free premuum wenas karanna puluwan ekama kena super admin. yamkisi hethuwa kin
+  > 3x ui client eke vpn eka nethi unoth ee eroor eka vpn eke pennana one
+  > eewagema vpn detal page eke getaluwa pehediliwa sadahan wenna one"*
+
+- **The decision, in five parts.**
+
+  | # | Rule |
+  |---|---|
+  | **D-091.1** | **A VPN is a 3X-UI client, or it is nothing.** A row that cannot be shown to be a client on its panel is not a VPN. Local state is never proof — `cmd/panelprobe` / `GET /clients/get/{email}` is. |
+  | **D-091.2** | **FREE and PREMIUM are the same object.** Both are identical 3X-UI clients. The tag is a *business* label applied by Veylix so one product can do two jobs: sell PREMIUM for revenue, give FREE away to acquire customers. It is never written to the panel (D-024.3). |
+  | **D-091.3** | **Only the Super Admin sets or changes the tag**, and it locks once the VPN is issued. |
+  | **D-091.4** | **The panel email is the VPN's name, and the customer sees it.** `<client email>_<kind>_<n>`, slot monotonic (D-034.1/.2), `sub_id` still deterministic (D-034.3). Any client screen listing an owned VPN shows the panel identity **in a readable, copyable form** *and* the package it came from. |
+  | **D-091.5** | **A missing panel client is surfaced on the VPN, not hidden.** `SERVER_UNAVAILABLE`, explained on the row *and* the detail page. Never `REVOKED`, never deleted (D-024.5). An unknown status gets a generic sentence, never an invented one. |
+
+- **What the audit found.** Four parts confirmed, three gaps:
+
+  | Part | State | Evidence |
+  |---|---|---|
+  | D-091.1 panel-first, no phantom row | ✅ **C** | `provisioning.Create` → `discardProvisional` (D-024.1a) |
+  | D-091.2 FREE ≡ PREMIUM as a panel object | ✅ **C** | `policy.go` treats both through one `specFor` |
+  | D-091.3 SA-only tag + lock | ✅ **C** | `RequirePermission(auth.PermOfferManage)` on `PUT /api/panel-clients/{server_id}/{email}/tag`; `panel_client_tags.locked_at` |
+  | D-091.4a identity generated | ✅ **C** | `domain.PanelBase`, `PanelFindNextFreeSlot`, `PanelSlotNext` |
+  | D-091.4b identity **shown to the client** | 🔴 **BUG → DEV-014** | `MyVpnsPage.tsx` has **no** `panelEmail` reference at all and titles each card with `vpnDisplayName(v)` — the package name |
+  | D-091.5a detail page explains statuses | ✅ **C** | `VPNDetailPage.tsx` `NOT_CONNECTABLE` covers all 9 emitted statuses |
+  | D-091.5b list page surfaces the error | 🔴 **BUG → DEV-015** | `MyVpnsPage.tsx` renders only a `StatusBadge`; a customer sees no sentence for `SERVER_UNAVAILABLE` |
+  | Layout hierarchy (carried by this entry) | 🔴 **BUG → DEV-016** | `VPNDetailPage.tsx`: 3 `<h2>` sections + 3 `<Card>` titles in one column, `Connection` duplicated at both levels, 23 inline `style={{}}` after D-059 |
+
+- **Why the UI gaps matter more than they look.** A customer who cannot see their
+  panel identity cannot tell support which client they hold, so every support
+  conversation starts with an operator guessing. And a VPN whose panel client has
+  vanished is exactly the moment the customer needs a sentence they can act on — a
+  grey chip is not one. Both are the same failure the whole D-024 programme exists
+  to prevent: the screen quietly not saying what Veylix actually knows.
+
+- **What is deliberately NOT changed by this entry.**
+  - No new endpoint, no migration, no backend behaviour change.
+  - `vpnDisplayName` is **not** replaced by the panel email. A package name is the
+    friendlier primary label; the panel identity is added *beside* it, not instead
+    of it. Showing only `nimal@gmail.com_paid_1` to a customer would be worse.
+  - `panel_sub_id` stays `vyx-<id>` (D-034.3) — changing it would break D-012.
+  - FREE claim by a client is **unchanged**. The owner confirmed FREE and PREMIUM
+    are the same object sold two ways; nothing in this entry grants or removes a
+    claim right.
+
+- **Consequence for every future screen.** A list of VPNs is incomplete if it shows
+  a package name without the panel identity, or a status chip without a sentence for
+  a non-active state. That is now a defect, not a design preference.
+
+- **Tests owed:** a client-surface check that the panel email renders and is
+  copyable; a check that `SERVER_UNAVAILABLE` produces explanatory copy on the list;
+  a check that no screen renders a raw `server N` placeholder.
+
+- **Relates to** D-024, D-028, D-034, D-063, D-059 (inline styles), D-038 (Premium
+  VPN page), INV-1 (honest failure), `MASTER_SPEC.md` §3 rules 3, 9, 10, 11.
+  **Supersedes** nothing.
+
+
+---
+
+## D-094 · A VPN can be put to sleep without being deleted (client "Dormant")
+
+**Date:** 2026-11-08 · **Status:** owner-approved (option B, "Dormant") · **Owner:** platform owner
+
+### The problem the owner reported
+
+A VPN whose 3X-UI client has gone away becomes `SERVER_UNAVAILABLE` — correctly, and
+D-091.5/INV-1 require it to stay visible with a sentence rather than disappear. But
+that left a dead VPN **permanently in the customer's face**: it sorts first under
+`sort=newest`, it counts toward "Needs attention" on every visit, and the Usage screen
+spends two requests measuring a VPN that cannot change. The only tool the customer had
+was **Release**, which is deletion-shaped (a 3-day window, an undo the customer has to
+perform) and destroys the record of a VPN they may want back.
+
+"Not now" is a different intent from "get rid of this", and the product had no way to
+express it.
+
+### The decision
+
+A VPN gains a **local, per-VPN sleep flag**. Sleeping a VPN:
+
+1. moves it to the **bottom** of the list — under every sort key, never first;
+2. removes it from the **"Needs attention"** count;
+3. **stops its usage polling** on the Usage screen;
+4. **changes nothing else.**
+
+Specifically, and enforceable by review:
+
+- **No panel call.** No 3X-UI client is disabled, renamed or removed.
+- **No status change.** `status` keeps reporting exactly what the panel says. A
+  dormant VPN that is `SERVER_UNAVAILABLE` still reads `SERVER_UNAVAILABLE`.
+- **No deletion, and no release window.** There is nothing to undo, because nothing
+  was removed.
+- **Never hidden.** It stays in `GET /api/vpns`, on the list, and on the Usage screen,
+  with its panel identity, its real status and a Wake button. A VPN that vanished from
+  view would be indistinguishable from a deleted one, which is the exact fear this
+  feature must not create.
+
+### Why a timestamp, not a boolean
+
+`dormant_at` (migration `0025`) answers "asleep since when", which is what the card
+shows ("You put this VPN to sleep on 3 Nov") and what any future auto-archive rule
+would need to count from. `NULL` means awake, so the migration is additive and every
+existing row kept its exact old behaviour with no backfill.
+
+### The sync interaction (the non-obvious part)
+
+The sync pass must **not** promote a dormant VPN to `SERVER_UNAVAILABLE`. Otherwise a
+sleeping VPN is re-flagged every tick, and the switch silently does nothing.
+
+This is honest, not convenient: nothing is claimed to be working, and **waking the VPN
+lets the very next pass record the absence normally** — proved by
+`TestSyncLeavesDormantVPNStatusAlone`, which asserts both halves. Dormancy defers the
+alarm; it never erases it.
+
+Usage is still mirrored while a dormant client exists, so waking shows current numbers
+rather than week-old ones.
+
+### Auto-wake
+
+`SERVER_UNAVAILABLE → ACTIVE` is a legal transition, so a dead VPN can heal on its own.
+When that happens a sleeping VPN is actively misleading: it works, and nobody is told.
+So opening a dormant VPN's **detail page** (the one screen that just asked the server
+for a live status) wakes it. Scoped to `/vpn/:id` only — the staff console route
+`/vpns/:serverId/:email` is read-only and must not change a customer's preference as a
+side effect of being viewed.
+
+### API
+
+`POST /api/vpns/{id}/dormant` and `POST /api/vpns/{id}/wake`, both `204`, both
+ownership-scoped (`404` for a foreign id, so ids cannot be probed), both audited as
+`vpn.dormant` / `vpn.wake`. **Dormant is idempotent**: a second sleep keeps the original
+stamp, because the card shows that date.
+
+Neither action generates an **inbox notification**. Putting a VPN to sleep must not
+produce the very notification the customer was trying to escape.
+
+### Tests
+
+`TestDormantRoutePutsVPNToSleep` (stamp written, status NOT moved, row still listed with
+`dormant_at` on the wire), `TestWakeRouteClearsDormancy`, `TestDormantIsIdempotent`,
+`TestDormantRouteRefusesOtherOwnersVPN`, `TestDormantRouteRefusesAnonymous`,
+`TestSyncLeavesDormantVPNStatusAlone`.
+
+### Relates to
+
+D-091.5 (a non-active VPN is explained, not hidden), INV-1 (honest failure), D-027
+(Release is the deletion-shaped action, and this is deliberately not it), D-024.5
+(`SERVER_UNAVAILABLE`, never `REVOKED`). **Supersedes** nothing.
+
+---
+
+## D-095 · "Source" on Usage & History means WHICH VPN, not where its bytes came from
+
+**Date:** 2026-11-08 · **Status:** owner-approved ("Both A and B — build A now, investigate B separately")
+
+### What the owner asked for
+
+A way to filter Usage and History by "source" (`srot`).
+
+### The question that had to be answered first
+
+"Source" is ambiguous, and the honest answer decides whether a filter is real or
+decorative. So the panel contract and our own schema were audited **before** any code
+was written.
+
+**What 3X-UI actually exposes per client** (`docs/3XUI_API_CONTRACT.md` §4,
+`internal/panel/types.go` `ClientTraffic`):
+
+```
+id, inboundId, email, up, down, total, expiryTime, enable, resetCount, lastOnline
+```
+
+One **aggregate counter pair**. There is **no per-origin, per-device or per-protocol
+byte breakdown** anywhere in the contract.
+
+**The three candidates that looked promising, and why each fails:**
+
+| Candidate | Why it cannot apportion traffic |
+|---|---|
+| `/panel/api/clients/ips/{email}` | Returns **currently-connected IPs** — a presence list, not bytes. Cannot split a total. |
+| `inboundId` on the traffic record | Says which **inbound** the client sits on. For one VPN that is a constant, not a filter. |
+| `netIO{up,down}` on `/server/status` | Whole-server interface counters with **no attribution** to a client. |
+
+**Our own table** (`0003_observability.sql`) stores only `taken_at, up_bytes,
+down_bytes, lifetime_up_bytes, lifetime_down_bytes, remote_reset_count` — no origin
+column exists or can be derived.
+
+### So B is refused, and recorded as refused
+
+A per-origin / per-device filter **cannot be built honestly**. Every implementation
+would either show the same total under each option (a fake filter) or require
+inventing a split — forbidden by REQUIREMENTS §2.7 and INV-1. This is written down so
+
+---
+
+## D-096 · Usage history is served in BOUNDED TIME BUCKETS, and a chart may only claim the span its data covers
+
+**Status:** implemented · 2026-11-09 · owner-reported defect ("usage and data
+ekata records godak apu gaman user pissu wetenawa"; "VPN details page eke Usage
+eke niweradi nowana details pennanawada … fake ewa pennana epa").
+
+### The defect, measured
+
+The Usage screen labelled its chart **"Last 30 days"** and its axis
+**"30d ago … now"**. The data behind it was:
+
+| range the user picked | points returned | real span |
+|---|---|---|
+| 24h | 116 | 0.80 days |
+| 7d | 116 | 0.80 days |
+| 30d | 116 | 0.80 days |
+| 3m | 116 | 0.80 days |
+| 1y | 116 | 0.80 days |
+| all | 116 | 0.80 days |
+
+All six ranges were **identical**. Root cause was `usage_store.go`:
+
+```sql
+ORDER BY taken_at DESC LIMIT 240
+```
+
+That takes the **newest 240 raw rows regardless of the window**, so every range
+collapsed onto the same recent slice — and the UI then labelled that slice with
+the range that was *requested*. A range selector that returns one picture for six
+options, under six different names, is fake data. It is worse than a blank chart
+because it looks like evidence.
+
+A second, independent instance of the same class of bug lived in the dashboard
+and on the VPN details page: cards popped in one at a time because each block
+issued its own pair of requests, so "records arrive one by one" and the page
+re-rendered underneath them.
+
+### The decision
+
+1. **History is bucketed in SQL, by the window.** `bucketFor` chooses the width:
+   `24h → hour`, `7d → 6h`, `30d → day`, `3m → week`, `1y → month`, and `all` /
+   `custom` derive theirs from the real span once the first snapshot is read.
+   Every chart lands in roughly 24–40 points, so a 1 vCPU / 500 MB box renders
+   **fewer** points than the old 240-row read, not more.
+2. **The server reports the width it used** — `window.bucket_sec` and
+   `window.bucket`, plus a top-level copy for the span-derived case. A chart that
+   cannot name its own bucket cannot honestly label its own axis.
+3. **The UI states the REQUESTED window and the REAL span separately.** The
+   heading keeps the range the user chose (that is what the switch says); the
+   sub-line and the axis are derived from the points. The hard-coded
+   `labels={['30d ago','now']}` is gone. When the data covers less than the
+   window, the caption says so — *"2 readings · 24 hours of history · day per
+   point"* — rather than repeating the range name.
+4. **A missing figure is `—`, never `0`.** `limit_bytes`/`usage_pct` no longer
+   fall back to `0` through `?? 0`: "unreadable" and "zero" are different
+   statements and must not render the same way.
+5. **Blocks are read together and rendered together.** The Usage page loads every
+   awake VPN in one pass and commits one `setState`, so the list cannot pop in
+   row by row. A block that fails still fails alone.
+6. **One bucket is not a trend.** A single reading says so in a sentence; it is
+   never drawn as a dot or a zero line (REQUIREMENTS §2.7, the UI skill's
+   chart rule).
+
+### What this does NOT do
+
+- It does **not** invent history. A VPN with 24 hours of snapshots will show 24
+  hours, and say so, even when 30 days was requested. The honest answer to a
+  wider range is "we have this much", never a stretched axis.
+- It does **not** change the FREE/PREMIUM chart gate (`kind !== 'FREE'`). Charts
+  remain a Premium feature; the two `verify:vpn-details` SKIPs stay SKIP until a
+  genuinely PREMIUM VPN exists (DEV-024). The gate was not weakened to make the
+  numbers look better.
+
+### Relates to
+
+D-026.1/.2 (a chart names its source and its window), D-038 P-01 (the server does
+the arithmetic), D-092 (hourly/speed/ping history), D-095 (the source filter —
+that decides *which VPN*, this decides *which window*). **Supersedes** the
+newest-240-rows read that `usage_store.go` used before this entry.
+
+it is not re-explored by the next session.
+
+If per-device traffic is ever genuinely needed, it is a **3X-UI capability question**,
+not a Veylix one.
+
+### A — what "source" does mean, and was built
+
+Two dimensions, both backed by data that already exists:
+
+1. **Which VPN** a usage row belongs to (`vpn_instance_id`), and **which server**
+   (`vpn_instances.server_id`). On `/client/usage` this is the source picker:
+   *All VPNs · Server: X · a named VPN*, held in the URL through `useListQuery` so a
+   filtered view is shareable and Back undoes it.
+2. **Which measurement** produced a history point — `ping_samples.scope` (`0024`).
+   Today there is exactly one value, `server_reachability`, and the filter exists
+   because that distinction is already real: the product must never present the
+   server's probe as the customer's own device latency (D-026.2). When a client-side
+   probe is added it gets its own value instead of being merged into one line.
+
+### API
+
+`GET /api/vpns/{id}/ping/history` gains **`?source=server_reachability|all`**
+(default `all`), and the response **echoes the source actually applied** so no chart
+can claim a filtered read covers everything. An unknown value is **422
+`validation_failed`** — never a silent match-all, the same rule the `tag` filter
+already follows. The value is a **bound SQL parameter**, never concatenated.
+
+### Why the picker is VPN/server and not "device"
+
+Stated in the code so it cannot drift: the panel gives one counter pair per client, so
+a "device" option would have to invent the split. The filter changes **which VPN is
+measured**, never **where its bytes came from**.
+
+### A finding this investigation produced (DEV-024)
+
+Seeding a PREMIUM VPN to unblock the chart gates is blocked by two deliberate rules:
+`POST /api/vpns` answers **`403 plan_not_approved`** (D-030.3 — a platform plan needs a
+Super-Admin order confirmation), and assigning a free panel client answers
+**`409 panel_client_taken`** because it is already reserved. Both are correct. The
+`kind !== 'FREE'` chart gate is also correct ("Charts are part of Premium"), so it was
+**not** weakened to manufacture a green browser test.
+
+### Tests
+
+`TestPingScopeFromQuery` — 9 cases, including the refusals (`device`, a transposed
+typo, a `*` wildcard) that must never silently match everything.
+
+### Relates to
+
+D-026.1/.2/.3 (the server probes reachability, not the customer's device), D-092
+(hourly/speed/ping history), D-038 P-01 (the server does the arithmetic), D-030.3
+(platform plans need confirmation). **Supersedes** nothing.
+
+---
+
+## D-097 · Usage & History is searchable, and ONLY the rows on screen are fetched
+
+**Status:** implemented · 2026-11-09 · owner-reported: *"vpn godak buy kaloth
+adala vpn hoya ganna userta aberi wenawa filter fetuer eka denna"*, and — raised
+in the same breath — *"usage & history page eke ekawara godak vpn awoth user
+amaruwe wetnawa"*.
+
+### The two complaints, and why they are one defect
+
+The screen had one control: a `<select>` listing every owned VPN by **package
+name**. Two consequences, both reported:
+
+1. **Unfindable.** A customer with thirty VPNs scrolled a thirty-row menu, and
+   three VPNs bought off "Free 5GB Hysteria" appeared as three identical rows.
+   The list could not answer "which one is `free_2`".
+2. **Expensive.** `awakeKey` was built from **every owned VPN**, so the page
+   issued **two requests per VPN** regardless of what was on screen. Narrowing
+   the view changed what the customer SAW and nothing about what the page COST.
+   A hundred VPNs meant two hundred requests to look at one chart.
+
+The second is the one that hides: the filter *looked* like it worked, because the
+DOM narrowed. The cost did not.
+
+### The decision
+
+1. **A search box, in the URL, debounced** (`?q=`, 300 ms), built on the same
+   `useListQuery` hook My VPNs uses — so a filtered view is shareable, survives a
+   reload and Back undoes it.
+2. **The search matches the panel email.** The haystack is exactly what the card
+   shows — display name, **panel email**, server label, package — because the
+   panel email is the VPN's real name (D-091.4). `…_free_2` and `…_free_3` are
+   different VPNs holding the same package; a search over package names alone
+   could never separate them.
+3. **Filters run BEFORE requests.** `shown` is computed from the rows already in
+   the store, and `awakeKey` is built from `shown` — so a narrowed view issues
+   only the requests it will render. Filtering itself is free; narrowing is a
+   real saving rather than a cosmetic one.
+4. **The two controls cannot contradict each other.** The source select lists
+   only what the search left, and choosing a single VPN clears `q` — because
+   "`vpn:X` AND `q=nimal`" is a conjunction the customer never asked for, and it
+   would produce an empty screen with no visible cause.
+5. **The empty state names the cause.** "No VPN matches «term»" when a search did
+   it, "No usage to show for <source>" when the source did. "No usage for every
+   VPN" would be a false statement in the first case, and false emptiness reads
+   as "my VPN was deleted" (D-091.5, INV-1).
+
+### What this does NOT do
+
+- **No server-side search endpoint.** The rows are already in the store (the list
+  is capped at 200 by D-088), so a `GET /api/vpns?q=` would add a round trip to
+  answer a question the browser can answer locally. The saving comes from item 3,
+  not from the query being remote.
+- **No category/expiry filters on this screen.** Usage answers "how much was
+  used", not "what do I own"; My VPNs owns that job. Adding a second filter bar
+  here would make two screens with one purpose.
+- The ownership rule is untouched: filtering is by `vpn_instances` id on the
+  client, and the **server** still decides visibility (`requireVPNVisible`). A
+  client-side filter cannot reach a VPN the API would refuse.
+
+### Relates to
+
+D-095 (the source filter — which VPN), D-096 (bucketed history and its honest
+caption), D-091.4 (the panel identity is the VPN's name), D-088 (the 200-row list
+cap), D-094 (a dormant VPN is not fetched at all). **Supersedes** nothing.
+
+
+---
+
+## D-098 · A long-inactive VPN is SET ASIDE into the release path — it is never given a second deletion route
+
+**Status:** **Pass 1 implemented** — detect, record and preview. **Acting on it is
+off by default and requires an explicit operator switch.** · 2026-11-09 ·
+owner-reported: *"me suspend ha revoke wachchi vpn nn mara wadayak… kohe ara
+thenaka thiyala nischitha kalayakara passe system eken sampurnayenma ayi karanna
+patta wathayakne"*, with the constraint *"yam recode ekak me sambana thiya gannath
+one neththan client la hithunu hithunu widihata vpn hadanawa"* — keep the records,
+or customers simply mint new VPNs.
+
+### What already existed, and what was missing
+
+`RELEASED` (D-027) already owns the whole safe-removal mechanism: a **3-day undo
+window**, an **audit snapshot taken inside the delete transaction**, a rule that
+**the 3X-UI client is never deleted**, race protection (`ErrReleaseState`), and an
+hourly `PurgeDue`.
+
+What did **not** exist was the clock. `SUSPENDED`, `EXPIRED` and
+`TRAFFIC_DEPLETED` had **no `*_at` column at all** — so "suspended 90 days ago"
+was a question the schema could not answer, and no rule could count from it.
+`updated_at` is not a substitute: it moves on every unrelated edit.
+
+### The decision
+
+1. **One clock: `status_changed_at`** (migration 0026). Written on every legal
+   transition — sync, block/unblock, release, restore. The only column a lifecycle
+   rule may count from.
+2. **The backfill is the MIGRATION TIME, not history.** Deriving it from
+   `created_at`/`updated_at` would have invented an age for every pre-existing row
+   and let the very first tick sweep years of VPNs at once. Every row instead
+   starts its clock when the migration runs, so nothing can be swept sooner than
+   one full window after the upgrade.
+3. **A stale VPN goes to `RELEASED`, not to a new purge.** Release already carries
+   the undo window, the snapshot and the "panel client is kept" rule. A second
+   deletion route would duplicate all four and the two would eventually disagree
+   — so the sweep **moves a row into the existing path** and stops there. The
+   customer gets a warning and an undo before anything disappears.
+4. **`SERVER_UNAVAILABLE` is never a lifecycle input**, and the store **refuses**
+   it, not merely omits it. "Veylix cannot see this VPN" is an outage, not an
+   ending (D-091.5, INV-1). A rule that swept it would delete customers' VPNs
+   during a panel outage.
+5. **Three modes, and the default is `off`** (`VEYLIX_LIFECYCLE_MODE`):
+   - `off` — nothing runs.
+   - `report` — finds and **audits** exactly what would move, changes nothing.
+   - `enforce` — opens the 3-day undo window.
+   **Any unrecognised value resolves to `off`**, never to `enforce`: a typo must
+   not be able to retire a customer's VPN.
+6. **`status_changed_at = 0` means unknown and is skipped**, so a half-migrated
+   database reports nothing rather than treating every row as infinitely old.
+
+### Windows
+
+| status | window | why |
+|---|---|---|
+| `SUSPENDED` | **90 days** | a suspension is reversible by design; this is generous |
+| `TRAFFIC_DEPLETED` | **90 days** | the panel may still be reset |
+| `EXPIRED` | **30 days** | the customer can already re-buy; a lingering row reads as "still yours" |
+| `RELEASED` | 3 days (D-027) | unchanged — the existing undo window |
+
+### What Pass 1 does NOT do
+
+- **It does not purge anything itself.** It only ever moves a row to `RELEASED`.
+  The sole hard delete in the product remains `PurgeDue` (D-027).
+- **It does not free a reseller's quota.** `RemoveReleasedVPN` deletes the
+  `vpn_assignments` row, so a purged VPN stops counting against the seller while
+  its panel client still exists — a **panel asset leak** found while auditing
+  this change. **Deviation from a previous plan:** the `RELEASED` assignment is
+  deliberately left counted rather than retro-fitted to this decision; changing
+  quota semantics needs its **own** owner decision, not a side effect of a
+  tidy-up. Recorded as DEV-029 to be decided explicitly.
+- **It does not notify the customer.** The sweep audits and logs; a notification
+  belongs with the release notification work, and sending one from a background
+  tick before the notification surface is reviewed would be a new promise made in
+  the dark.
+
+### Why this satisfies the owner's second constraint
+
+Records survive: the VPN row stays (only `status` moves), `vpn_releases` keeps the
+handle, the audit entry carries the panel email and the owner, and the panel
+client is untouched. Customers cannot mint replacements silently either — a stale
+VPN lands in the release window, where restoring it is one click and re-creation
+is not free.
+
+### Relates to
+
+D-027 (release, 3-day undo, local-only removal), D-091.5 / INV-1
+(`SERVER_UNAVAILABLE` is never an ending), D-094 (dormant is a preference, not a
+status — it is **not** a lifecycle input), D-030.3. **Supersedes** nothing.
+
+
+---
+
+## D-099 · Instants are STORED as UTC and DISPLAYED in one server-chosen zone — never the device's
+
+**Status:** implemented and gated · 2026-11-09 · owner-reported: *"me data thiyenne
+utc time eken needa api srilankawe SLST Time eken needa enna one… kohoma hari oya
+ahriyata welawa hadala clientta niweradi out put eka dennako"*.
+
+### The question, and why "UTC or SLST?" is the wrong frame
+
+Storage was already UTC and that is **not** the defect. Every timestamp in this
+product is an **epoch second** — an absolute instant with no zone attached — which
+is the only form that survives a server moving datacentre, a zone redefining its
+offset, or a host with a wrong `TZ`. Converting stored values "to SLST" would mean
+storing a *wall clock* instead of a moment, and every one of those would then be
+wrong. **Nothing about storage changed in this decision.**
+
+The defect was in **display**, and it had four real consequences:
+
+1. **The same VPN read differently on different devices.** `toLocaleString()` with
+   no `timeZone` used the *device* zone. Measured on this workspace: 18:56 UTC
+   rendered as **00:26** in Colombo and **02:56** on the host (which runs +08:00).
+   A support call then starts with two people disputing a time neither got wrong.
+2. **Chart labels disagreed with the data underneath them.** Bucket boundaries are
+   built server-side in UTC; the axis labelled them in the device zone — up to
+   5h30 of error between the label and the bar.
+3. **A custom date range silently shifted.** `new Date('2026-11-01T00:00:00')`
+   reads the date in the *device* zone, so "1st → 3rd" sent a window that started
+   and ended 5h30 early: the wrong slice of traffic, and the end of the 3rd cut off.
+4. **The server log said UTC, the UI said something else**, so an operator and a
+   customer could not agree on when an event happened.
+
+### The decision
+
+1. **One zone, chosen by the server.** `VEYLIX_DISPLAY_TIMEZONE`, default
+   `Asia/Colombo`. Resolved once at startup into `cfg.DisplayZone` (`*time.Location`),
+   so no request pays for a tzdata lookup.
+2. **A zone NAME, never an offset.** `+05:30` would look correct today and be wrong
+   the moment the zone's rules changed; a name is resolved from tzdata.
+3. **Published through `GET /api/me`**, not a new endpoint. Every signed-in page
+   already calls it, so the fact arrives before any screen renders with no extra
+   request and no chance of a timestamp being drawn in one zone and then redrawn
+   in another (a visible jump the customer cannot explain).
+4. **It is NOT a per-user setting.** Two people looking at the same VPN must read
+   the same clock. A per-user zone (or a browser-detected one) reintroduces exactly
+   consequence 1.
+5. **An unloadable zone fails SAFE**: UTC, and the requested name is kept in the
+   config so the operator can see what they asked for. It never guesses an offset.
+6. **`zonedDayBounds` makes a date range mean what the customer said.** "1 Nov →
+   3 Nov" is midnight-to-midnight in the configured zone; the offset is derived
+   from `Intl` for *that date*, so a zone with DST resolves on either side of the
+   change.
+7. **A zone is named where a bare time would be ambiguous.** `formatDateTimeWithZone`
+   renders `9 Nov 2026, 23:59 (SLST)`. "SLST" is what a Sri Lankan customer calls
+   +05:30 and what an operator will say out loud.
+8. **CSV/audit exports stay UTC** (`toISOString()`). An export is machine-readable,
+   not a wall clock.
+
+### What was deliberately NOT done
+
+- **No migration, no schema change.** No column held a zone, so there was nothing
+  to backfill and no data was rewritten.
+- **No global `TZ` environment change on the server.** The host's zone must never
+  decide what a customer reads; that is precisely the coupling this removes.
+- **No client-selectable timezone** in this pass. It is a plausible future setting,
+  but it needs its own decision: a selector that changes display and not the range
+  semantics would create a new class of "changed the label, not the data" bug.
+
+### Where it lands
+
+`backend/internal/config` (resolve) → `httpapi.Deps.DisplayTimezone` →
+`GET /api/me` → `frontend/src/lib/time.ts` (`setActiveTimezone`, `activeTimeZone`,
+`zonedDayBounds`, `zoneLabel`) → adopted in `authStore.hydrate` → every formatter
+and every chart label.
+
+### Relates to
+
+D-096 (bucketed history — the bucket *labels* now match the bucket *data*),
+D-097, D-091 (a screen must state the truth it renders). **Supersedes** nothing;
+storage of every timestamp is unchanged.
+
+### Residual, stated rather than hidden
+
+A deployment that does not set `VEYLIX_DISPLAY_TIMEZONE` gets `Asia/Colombo`, which
+is right for this business but is a **default, not a detection**. An operator
+running for another region must set the variable.
+
+---
+
+## D-100 — A VPN that is not in service is shown in its own section, with the reason and the date it stopped
+
+**Date:** 2026-11-09
+**Status:** Implemented
+**Owner:** reported by the owner — "a suspended VPN comes to the top of My VPNs
+and I cannot use it anyway".
+
+### The complaint, and the defect behind it
+
+The owner was describing a real ordering bug, not a preference. `MyVpnsPage`'s
+sort applied exactly one outer comparison — dormancy — and left every other
+status in whatever position the chosen key gave it. Under the default **Newest
+first**, a recently-created VPN that had since been suspended or revoked sat at
+the very top of the list: the most prominent slot on the screen, given to the one
+row the customer can do nothing with, purely because of when it was created.
+
+**Deleting it was not an option**, and the temptation is worth naming. A
+suspended VPN is useless to the client, so it *looks* like dead weight. But
+removal is what D-091.5 and INV-1 forbid: the customer must always be able to see
+what happened to a VPN they held, and a list that silently stops listing a row
+answers "where did my VPN go?" with nothing. The record has to stay visible; it
+just must not compete with the working inventory.
+
+### The decision
+
+Two things, and both are needed:
+
+1. **Status outranks the chosen sort key.** ACTIVE first, then the states somebody
+   else must fix (`SERVER_UNAVAILABLE`, `REVOCATION_PENDING`), then the ones the
+   customer can fix (`TRAFFIC_DEPLETED`, `EXPIRED`), then the ones nothing can
+   fix (`SUSPENDED`, `REVOKED`, `RELEASED`, `REMOVED_FROM_CATALOG`), then dormant.
+   The chosen key still applies **in full inside each rank** — the customer's
+   sort is grouped, never replaced.
+2. **The last group moves into a section titled "Not in service"**, with a
+   sentence explaining that the rows are still theirs and still on file. Each row
+   keeps its status sentence and its panel identity (D-091.4 / D-091.5).
+
+### The second half: a date, from a column that must exist
+
+"Suspended" alone cannot answer the question the customer actually asks — *since
+when?* — and that gap is what a support call fills. So `GET /api/vpns` now
+publishes `status_changed_at`, reading D-098's column.
+
+The rule for rendering it is **silence over invention**. Nil, `0`, or a database
+that predates the backfill renders **nothing** at all. `0` is a real number, and a
+screen that printed it would show "1 January 1970" — a fabricated fact about the
+customer's account, and worse than no date.
+
+### The usage-history caption
+
+`GET /api/vpns/{id}/usage` has no status filter, so a suspended or revoked VPN's
+history already worked. The problem was the **chart's meaning**: snapshots are
+cumulative counters, so once readings stop the deltas become zero and the line
+goes flat. A flat line is indistinguishable from "connected but idle", and a
+customer will read it as the second one.
+
+`VpnUsageSection` now takes `status` + `statusChangedAt` and, when the newest
+point in the window **predates** the status change, states:
+
+> Counters stopped on ⟨date⟩ (⟨zone⟩) — this VPN became ⟨status⟩. The flat line
+> after that point is an absence of readings, not zero usage: traffic that
+> happened after it was never recorded here.
+
+The condition is two facts the server actually sent. No status, no clock, or a
+reading newer than the status change all leave the chart exactly as it was — no
+caption, no claim. **There is no backfill and no notification**: this labels a line
+that already exists, it does not invent data behind it.
+
+### What deliberately did NOT change
+
+- **The Overview counts still count every owned VPN** (D-088). "Total VPNs" is a
+  property of the account, not of one section. A count that quietly excluded
+  suspended rows would be smaller than the truth.
+- **No `REVOKED` → `ACTIVE` transition was added.** `domain.VPNRevoked` stays
+  terminal. A revoked VPN therefore cannot be resumed from any screen, which is
+  the correct reading of "revoked" — resuming is a new VPN, not a state change.
+- **No deletion, no purge, no notification** in this pass.
+
+### Where it lands
+
+`vpn_lister.go` (`status_changed_at` in the projection) → `VPNRow`
+(`StatusChangedAt`) → `vpnStore` (`statusChangedAt`) → `MyVpnsPage`
+(`STATUS_RANK`, `rankOf`, "Not in service" section, `sinceLabel`) →
+`VPNDetailPage` → `VpnUsageSection` (`readingsStopped`).
+
+### Relates to
+
+D-088 (counts), D-091.4/.5 (panel identity, explained states), D-094 (dormant
+sorts last), D-096 (honest axis labels), D-098 (`status_changed_at`).
+**Supersedes** nothing.
+
+### Residual, stated rather than hidden
+
+The "since" wording is relative within a week ("3 days ago") and absolute beyond
+it. A seeded account whose VPNs never changed status renders **no** `since` cell
+at all — which is why the browser gate asserts the *absence* of a 1970 date
+rather than the presence of a date.
+
+---
+
+## D-101 — The sidebar footer carries the running version and the source link
+
+**Date:** 2026-11-09
+**Status:** Implemented
+
+### The decision
+
+The foot of the sidebar shows **`v<version>`** and a link to the source
+repository. Nothing else — the account controls stay in the topbar.
+
+- **The version is read from the server** (`GET /api/system/version`, D-081), not
+  from the bundle. A version baked into the bundle describes the last
+  `npm run build`; the server reports the binary that is actually answering. Those
+  two are the pair a support conversation has to agree on, and this line must
+  describe the running build, not a file on disk.
+- **The repository URL is a build-time constant**, injected by `vite.config.ts`
+  as `__VEYLIX_REPO_URL__` (default `https://github.com/janith-15/Veylix-1`,
+  overridable with `VITE_REPO_URL`). It describes the build, is not a secret, and
+  must not need a request or a permission to display.
+
+### Why it is defined in `vite.config.ts` and not in `.env`
+
+`frontend/.env` is **git-ignored** in this repository. A value living only there
+reaches one developer's machine and silently vanishes in every deployment built
+from the repo — the footer would appear locally and disappear in production. A
+build-time default belongs in the build config, where it is committed and
+reviewed. A `.env.local` or a shell variable still wins, so a fork can point the
+link at itself without editing code.
+
+### Failure behaviour
+
+- Version unreadable → the line is simply **absent**. A build stamp is not worth
+  an error state or a retry button.
+- `VITE_REPO_URL` empty → the link is **not rendered**. Never a placeholder that
+  points nowhere.
+- Rail (collapsed) mode → the two facts become two tooltips and an icon, so the
+  icon grid above is not squeezed.
+- The link opens in a new tab with `rel="noopener noreferrer"` — the target page
+  gets no `window.opener` handle back into the app.
+
+### Relates to
+
+D-081 (`GET /api/system/version`), D-059 (layout lives in a class). **Supersedes**
+nothing.
+
+
+
+---
+
+## D-102 — The platform has exactly one Super Admin, enforced in the database
+
+**Date:** 2026-11-09
+**Status:** Implemented
+
+**Context.** `CreateUserByRole` documented itself as *"the only path that may mint
+… a second `super_admin`"* — the comment acknowledged the power and nothing
+constrained it. `SetUserRole` was a second door, promoting `admin → super_admin`.
+Two Super Admins is not cosmetic: the role is the platform owner, it holds the
+panel credential, it can demote every other account, and every self-modification
+guard is written on the assumption that there is one of them.
+
+**Decision.** At most one row may have `role = 'super_admin'`, enforced by a
+partial unique index (`0028_single_super_admin.sql`) rather than only by the
+service. A service-level rule is only as strong as the next code path somebody
+writes; the index is the layer that cannot be forgotten. The service checks first
+as well, so the operator reads *"the platform already has a Super Admin; demote them
+first"* instead of a raw UNIQUE-constraint error, and so a doomed request does not
+burn a 64 MB argon2id hash on a 1 vCPU box. The transport answers **409
+`super_admin_exists`** — 409, not 422, because the request is well-formed and it is
+the platform's state that refuses it.
+
+**Handing the seat over** is therefore a deliberate two-step act (demote, then
+promote), and if a deployment already holds two rows the migration **fails and
+aborts** rather than silently demoting someone — changing who owns the platform is
+not a migration's decision to make.
+
+**Consequences.** A migration can no longer create a second owner "for testing".
+`internal/auth`'s hand-built test schema mirrors the index, because a test database
+must never be more permissive than production. **Supersedes** nothing.
+
+---
+
+## D-103 — The Super Admin may release and purge any VPN, with a mandatory audited reason
+
+**Date:** 2026-11-09
+**Status:** Implemented
+
+**Context.** `release_routes.go` refused every non-client with **403** — *"only the
+VPN's owner can release it"*. The platform owner therefore had exactly one way to
+act on an abused account or a support request: the 3X-UI panel directly, where
+**nothing is audited and no undo window opens**. The "safe" refusal produced the
+less safe outcome.
+
+Separately, `RemoveAbsent` correctly refused to delete a record while the panel still
+held the client (`ErrVPNStillOnPanel`) — but that was the ONLY path, so a record
+could never be retired while **keeping** its panel client, which is exactly what
+D-027.3 obliges Veylix to do.
+
+**Decision.**
+
+1. **Release** — the Super Admin may release any VPN. `CreateReleaseAtAs` takes an
+   explicit `asSuperAdmin` parameter, so "this release was forced" is provable at
+   the call site and cannot silently become true. A forced release **requires a
+   reason** (`ErrReasonRequired` → 422 `reason_required`) and is audited as
+   **`vpn.force_release`**, not as `vpn.release`.
+2. **Purge** — `POST /api/vpns/{id}/purge` retires the local RECORD while
+   **never touching the panel**. Three guards: Super Admin only; `confirm_panel_email`
+   must repeat the VPN's identity back (422 `confirm_panel_email_required` naming the
+   value); the panel client is not deleted — asserted by counting `DeleteClient`
+   calls, not by reading the code. Audited as **`vpn.force_purge`**.
+
+**Why separate audit actions rather than a flag.** *"The owner set this aside"* and
+*"an operator set this aside on the owner's behalf"* are different events, and the
+difference is exactly what gets asked about months later.
+
+**Consequences.** Forced release still opens the same 3-day undo window and deletes
+nothing (D-027.2/.3 unchanged). A purge is bookkeeping, not revocation: revocation
+remains the only operation that talks to the panel. **Supersedes** nothing.
+
+
+---
+
+## D-104 — An offer can be archived or, when nothing depends on it, deleted
+
+**Date:** 2026-11-09
+**Status:** Implemented
+
+**Context.** `store/offers.go` had `CreateOffer` and `UpdateOffer` only. The
+comment on `UpdateOffer` — *"an offer is never deleted: existing VPN assignments
+reference it"* — is correct reasoning that was silently applied to offers that were
+**never sold**. The only way to retire a mis-created offer was `PATCH {active:false}`,
+which hid it but recorded no reason and left it in every listing labelled "inactive"
+forever, indistinguishable from a deliberately paused one. Meanwhile `plans` — the
+same `vpn_offers` table — already had `ArchivePlan` and `DeletePlan` (D-030.6).
+
+**Decision.** Two operations, mirroring the plan paths.
+
+- `POST /api/offers/{id}/archive` sets `archived_at` and `active = 0`. The row
+  survives for anything that references it, and the *when it was retired* fact is
+  recorded. **Idempotent**: the FIRST timestamp is kept.
+- `DELETE /api/offers/{id}` removes an offer nothing depends on.
+
+**The delete guard must be explicit.** `vpn_instances.offer_id` and
+`payment_records.offer_id` are both `ON DELETE SET NULL`, so a bare `DELETE` would
+**not fail** — it would quietly erase which product a customer paid for. The check
+names both tables and answers **409 `offer_in_use`**, advising archive.
+
+**Consequences.** New audit actions `offer.archive` and `offer.delete`, each carrying
+the offer's name by value, because a deleted row cannot be joined back. `OfferRow`
+gains `archived_at`. **Supersedes** nothing.
+
+---
+
+## D-105 — The audit log is append-only in the database, by trigger
+
+**Date:** 2026-11-09
+**Status:** Implemented
+
+**Context.** The Bible and DECISIONS both state the audit log is append-only, and
+nothing enforced it. `audit_routes_test.go` proved the point the wrong way round: it
+ran `UPDATE audit_logs` and the statement **succeeded**. A rule that lives only in a
+comment survives exactly as long as nobody writes the wrong query — and the wrong
+query can come from a future migration, an operator with `sqlite3` open, or a bug in
+this codebase.
+
+**Decision.** `0027_audit_append_only.sql` installs `BEFORE UPDATE` and `BEFORE
+DELETE` triggers. Triggers, not privileges: SQLite has no table-level privilege
+model, and a trigger fires for **every** writer, including ones this application does
+not own.
+
+**Deliberate consequence.** A migration can no longer "fix" history. That is the
+point — a correction is a NEW appended entry, which is what an audit trail means. The
+test that used to backdate a row by `UPDATE` now `INSERT`s it with an old
+`created_at`, which is also the more honest construction: the row claims that time
+from the moment it exists instead of changing its story afterwards.
+
+---
+
+## D-106 — Every value that reaches the DOM is a class or a custom property, including in shared components
+
+**Date:** 2026-11-09
+**Status:** Implemented
+
+**Context.** D-059 forbids inline styles. A source-level grep found 30 across the
+Super Admin pages. A browser probe (`verify-super-admin.mjs`) measured **373** —
+because thirteen SHARED components were emitting them internally, one per instance:
+`Table` put a `textAlign` style on **every cell of every table in the application**.
+
+**Decision.** The rule is applied at the component boundary, not only in pages:
+
+- a **static** value becomes a class in the owning stylesheet;
+- a **genuinely dynamic** value travels as an **inline CSS custom property** and the
+  stylesheet consumes it — `style={{ '--quota-pct': '82%' }}` with
+  `width: var(--quota-pct, 0%)`. One rule per concept stays in CSS; per-row data
+  still works.
+- `Table` uses **`data-align` / `data-width` attributes**, so a column definition
+  stays declarative and the DOM carries no style.
+
+**Enforcement.** `npm run verify:super-admin` fails on any non-custom-property
+`style` attribute in the console. A rule that is not measured drifts back.
+
+**Consequence found while doing it.** `StaffPage` used the `cl-quotabar` classes but
+imported `clients.css`, while those rules live in `admins.css`. The quota meter
+rendered **completely unstyled** — a reseller at 19/20 slots looked identical to one
+at 1/20. **Supersedes** nothing; it tightens D-059's scope to shared components.
+
+**A fourth shared component was found after the plan file was deleted.** `Dropdown`
+still passed `{ top, right, minWidth }` as a plain style prop. It did not show on the
+console gate because the menu is **portalled to `<body>`** and only exists while open,
+so a closed page never measured it. It now passes custom properties
+(`--dd-top` / `--dd-right` / `--dd-min-w`) and `.ui-dropdown__menu` consumes them.
+Recorded here rather than dropped: the gate was right about what it measured, and the
+lesson is that a portalled element needs its own assertion.
+
+---
+
+## D-107 · The Super Admin overview answers a business question, not an infrastructure one
+
+**Date:** 2026-11-10 · **Status:** Accepted · **Supersedes:** nothing · **Extends:** D-059, D-091
+
+### The finding
+
+The Super Admin dashboard was technically clean — `verify:super-admin` passed 112/0,
+zero inline styles, zero fabricated data — and it **answered no business question**.
+
+Measured, not assumed:
+
+| Fact | Evidence |
+|---|---|
+| The page called 5 endpoints, none of them money | `api.syncStatus`, `listClients`, `listPayments`, `adminVpns`, `serverMetrics` |
+| No revenue query existed anywhere | `grep 'SUM(amount_cents)' internal/store` → **0 matches** |
+| Two cards described the same number | "Panels" and "Healthy" both read `activeServers/totalServers` |
+| Two `delta` strings were developer notes | `'from /api/clients'`, `'N total records'` |
+| `deltaDirection` was hardcoded `'up'` | Zero clients still showed a green upward arrow |
+
+The **data** existed — `payment_records.amount_cents`, `.currency`, `.confirmed_at`,
+`users.quota_limit`, `vpn_assignments.seller_user_id` (with `idx_assign_seller`). Only
+the queries and the screen were missing. An owner opening this page could learn how
+many panels were healthy and **could not learn whether the business was alive**.
+
+### The decision
+
+The overview answers **"is the business alive, and what must I do today?"** — in that
+order. One new read-only route:
+
+```
+GET /api/super/overview/summary      Permission: PermAdminManage (Super Admin only)
+```
+
+Three sections in one response (`money`, `resellers`, `errors`), because a dashboard
+that resolves in three staggered flashes reads as slower than the same data arriving
+once.
+
+**Revenue is NET** — `CONFIRMED` minus `REFUNDED`. A refunded payment is money that
+came in and went back out; counting it inflates the single number an owner trusts most.
+
+**The month is a calendar month**, not a rolling 30 days. "How did this month go"
+means the month on the owner's calendar, and a rolling window silently changes
+meaning from one day to the next.
+
+**Currencies are never summed.** When more than one currency is present the route
+returns `mixed_currency: true`, `currencies: [...]`, and **`0` for every summed
+amount**. Counts stay true — a count of rows does not need a common currency. A caller
+that ignores the flag shows nothing rather than a plausible lie; a caller that sums
+anyway would be adding USD to LKR.
+
+**A missing section is not a zero.** A failed read leaves that section `null` and
+names it in `errors`, so the page renders what worked and says what did not. The old
+behaviour — one 500 for the whole page — threw away sections that had loaded fine.
+
+### Consequences
+
+- **`confirmed_at` is nullable.** A `CONFIRMED` row without a date counts in the
+  all-time total (it is real money) and is **excluded** from any month window (its
+  month is unknown). Inventing a date is not an option; `TestPaymentTotalsIgnoresUndatedConfirmations`
+  pins it.
+- **Quota utilisation is computed the same way `ListStaff` computes it**
+  (`vpn_assignments.seller_user_id`, status `ACTIVE`), so a reseller who reads 19/20
+  on the staff console reads 19/20 here. Two screens disagreeing about the same
+  number is the defect this avoids.
+- **A ceiling of 0 means unlimited** (REQUIREMENTS §2.2), so it is never "near" and
+  never "full": there is nothing to raise.
+- **Migration `0029`** adds `idx_pay_confirmed` on `payment_records (confirmed_at)
+  WHERE confirmed_at IS NOT NULL`. `EXPLAIN QUERY PLAN` showed the existing
+  `idx_pay_status` already serves today's queries, so this is a **read-ahead, not a
+  fix** — the migration says so in its own header rather than pretending otherwise.
+- **Eight P1 defects were fixed in the same pass** because they are the same class of
+  error: the UI making a claim the data does not support. `Healthy 0%` beside
+  `All synced`; a frozen chart labelled `Synced`; endpoint names where business facts
+  belonged; a hardcoded up-arrow; "Healthy" duplicating "Panels"; a badge counting
+  groups above rows counting items; a primary CTA for creating when the first job is
+  reading; and only `failures[0]` reported out of four failures.
+- **The browser gate gained 10 text assertions.** It can now fail if a section
+  disappears, if a zero stands in for a failed read, or if developer vocabulary
+  returns. Proven to bite: reverting the `Panel health` label produced
+  `FAIL … -> Panels, Clients, Active VPNs, Healthy` and a non-zero exit.
+
+
+
+## D-108 · The order carries the plan, or the confirmation builds nothing
+
+- **Decision.** A payment that names a plan is an ORDER and must produce a VPN on
+  confirmation. A payment that names no plan is a DEPOSIT: it settles as money,
+  releases no product, and every surface shows it as such (pn_instance_id stays
+  null, the audit entry records pn_id: 0). The two are never presented as the
+  same thing.
+- **Why this needed a decision, not just a fix.** The schema always supported
+  offer_id on a payment (store.CreatePaymentInput.OfferID, D-031.1), and
+  payments.Service.Confirm already refuses a plan-less order with ErrNoPlan.
+  The break was upstream: the buy page held the chosen plan in component state and
+  never put it on the wire, so POST /api/payments recorded a deposit.
+  payment_routes.go then took the settlement-only branch and marked it
+  CONFIRMED. Money in, no VPN, and every screen called it a success.
+- **Both directions are now enforced in code, not convention.**
+  - POST /api/payments accepts offer_id and the buy page always sends it.
+  - /api/payments/{id}/confirm routes a plan order through the settlement service
+    and returns **503 orders_unavailable** if that service is not wired. It never
+    falls through to settlement, because a plan that settles without a VPN is the
+    exact failure this decision exists to prevent.
+  - A deposit still settles normally, and its response carries no offer_id and no
+    pn_instance_id, so no reader can mistake cash for a delivered product.
+- **An offer must be buildable before it is offered.** POST /api/offers now
+  refuses an inbound_id that does not belong to the named server_id`n  (422 inbound_mismatch), closing the second door into an unprovisionable plan.
+  The inbound-required rule (D-075) already covered the first.
+- **Every disabled control states its reason.** The offer form no longer shows a
+  silent empty inbound dropdown: it distinguishes *panel unreadable* from *panel has
+  no inbound*, and names the 3X-UI step that fixes the second. The client offers page
+  states Claim unavailable here whenever the claim button is disabled, including at
+  the concurrent limit. A disabled control with no sentence is a defect (D-059).
+- **Evidence.** TestOrderWithPlanBuildsTheVpnOnConfirm (asserts the panel was
+  actually asked), TestConfirmingAPlanlessOrderSettlesCashOnly,
+  TestPlanOrderRefusedWhenSettlementServiceIsMissing,
+  TestOfferCreateRefusesAnInboundFromAnotherPanel, TestClientCannotConfirmPayments,
+  and the committed browser gate 
+pm run verify:order-chain, which reads the real
+  POST /api/payments body and fails if offer_id is missing or names no
+  catalogue plan.
+
+## D-109 · A gate that can never pass is a defect, and a stored preference is not a fixture
+
+- **Decision.** Two classes of test defect count as product defects, not "known
+  flaky": a gate that **cannot** pass because it asserts the wrong page, and a gate
+  whose result depends on **persisted state left by an earlier run**. Both are fixed
+  at the gate; neither is silenced, skipped, or marked known-failing.
+- **Why.** `verify:vpn-actions` signed in as the Super Admin and then opened
+  `/vpn/:id` — a route `App.tsx` declares inside the **client** block on purpose
+  ("one path, one owner"). The staff run matched no operator route and silently fell
+  through to `/dashboard`, so "staff sees a Suspend control" searched a dashboard
+  for a VPN control. It failed on every run, and had been red long enough to become
+  background noise. The operator route is `/vpns/:serverId/:panelEmail`, and that is
+  what the gate now opens.
+- **Why the second class matters just as much.** `verify:studio` assumed the Design
+  Studio opens in `compact`. It does not: it **persists `studioView` in
+  `localStorage`**, so it reopens in whatever state the previous run left. Clicking
+  "expand" while already `full` collapses it, and the assertion failed about one run
+  in three. A gate that fails at random is worse than no gate, because a real
+  failure becomes indistinguishable from noise.
+- **The rules this sets.**
+  1. A gate asserts the **observed** starting state and then the transition — never
+     an assumed start.
+  2. A gate never writes `if (el) el.click()`. A missing control is a failure, not a
+     silent no-op that the next assertion then blames on the product.
+  3. A gate polls for the **outcome**; a fixed `sleep` is a race, not a wait.
+  4. A stored user preference (`studioView`, theme, timezone) is state the app owns.
+     A test reads it; it never presumes it.
+- **A third rule, learned in the same session.** An absent value must be **stated**,
+  never rendered. `VPNDetailPage` printed `new Date(createdAt * 1000)` for every VPN,
+  so a panel client Veylix did not create (`created_at = 0`) read **"added
+  1/1/1970"** — a fabricated date. It now reads *"created outside Veylix, so its
+  start date is unknown"*. This is D-107's "a missing section is not a zero" applied
+  to dates.
+- **Evidence.** 18/18 browser gates pass; `verify:studio` 8/8 consecutive runs;
+  `verify:vpn-actions` all 8 checks; 17/17 backend packages; 0 FAIL. Both roles were
+  also driven by hand in a real browser (DEV-036).
+
+## D-110 · A list that hands out an id the write path cannot resolve is a defect
+
+**Status:** implemented · **Recorded:** 2026-11-10 · **Supersedes:** nothing.
+
+**The report.** The owner said plainly: *"owath prashna wenna athi thama offer
+create karannath ba. package hadanna th ba super adminta"* — Super Admin cannot
+create an offer. It was true.
+
+**Two defects, one symptom.** Creating an offer from `/offers` failed on **every**
+attempt. Reproduced live as Super Admin in a real browser:
+
+| Field | Value sent | Backend answer |
+|---|---|---|
+| default form | `inbound_id: 0` | `422 offer_incomplete` |
+| inbound picked in the dropdown | `inbound_id: 1` | `422 inbound_mismatch` |
+
+Both refusals were **correct**. The backend's guard is the thing that stops an
+unprovisionable offer being sold: `vpn_offers.inbound_id` is a foreign key to
+`inbounds(id)` — an AUTOINCREMENT row id **local to Veylix** — while 3X-UI numbers
+its own inbounds independently. On the development database the cached rows are
+`52/53/54` and the panel calls the same inbounds `1/2/3`, and
+`inbounds.remote_id` exists to hold the panel's number
+(`cacheInbounds` writes `ib.ID` there). `provisioning.panelInboundID` translates
+local → remote at the moment of the panel call and is the only place that does.
+
+**Defect 1 — the endpoint answered in the wrong id space.** `GET
+/api/servers/{id}/inbounds` returned `panel.InboundOption` verbatim, so its `id`
+was the **panel's** number. The offer form submitted that number; the FK check
+looked for a local row with that id; nothing matched; `inbound_mismatch`. The
+operator saw an inbound listed *for the server they had picked* and was told it
+belonged to another server. `integrations.Service.Inbounds` now maps each option
+onto the local `inbounds.id` it just cached (`localInbounds`, one query per
+server, not one per inbound) and skips anything the mirror does not hold, because
+an offer cannot reference a row that is not there.
+
+**Defect 2 — the form offered a choice the system does not implement.** The
+inbound dropdown's empty option read **"Let the panel decide…"**. Veylix does not
+decide: the client is created *inside* a named inbound. So the default value was
+the one value guaranteed to be refused, labelled as though it were a valid
+strategy. It now reads **"Choose an inbound…"**, and `saveForm` refuses locally —
+before any request — with *"Choose the inbound this offer creates its clients
+in."* This mirrors what `PackagesPage` already did and stops the operator reading
+a backend error about a field name they never saw.
+
+**A correction, recorded because it was wrong.** I first reported that the 422 was
+invisible in the dialog. It was not — the dialog rendered
+*"inbound_id is required — an offer with no inbound cannot create a client"* as a
+`role="alert"`. The claim is withdrawn. The real fault was the misleading default
+and the field name in the message, not a swallowed error.
+
+**Rules this sets.**
+
+1. **A list and the write that consumes it must speak the same id space.** When a
+   response feeds an id back into a foreign key, the id must be the one the key
+   accepts. A remote system's numbering is carried in its own column
+   (`remote_id`), and translation belongs in the layer that talks to that remote
+   system — never in the caller, never in the offer row.
+2. **A UI option must not name a capability the system does not have.**
+   "Let the panel decide" is a promise in the vocabulary of the implementation.
+   If there is no such behaviour, the option is a defect, however helpful it
+   sounds.
+3. **Validation belongs at the field and again at the boundary.** The frontend
+   refuses at the field with product words; the backend refuses at the API with a
+   named code. Both stay — the second is the guarantee, the first is the courtesy.
+
+**Evidence.** `TestInboundsReturnsLocalIDNotPanelID` (new) fails against the old
+`return inbounds, nil` — *"returned id 1 is not a local inbounds.id"* — and passes
+against the fix; it pins the divergence by seeding a row id that cannot collide.
+`GET /api/servers/11/inbounds` now answers `52/53/54` (was `1/2/3`). Live:
+`POST /api/offers {inbound_id: 52}` → **201 Created**, row rendered
+`QA Fix Proof 10GB · FREE · indian-1 · 10 GB · active`, probe offer deleted after
+the proof, catalogue back to its original 5 rows. **688 test functions in 15
+packages, `go build` / `go vet` clean, `npm run lint` 0 errors (3 pre-existing
+warnings in files not touched), `npm run build` OK, `npm run audit` OK,
+`npm run docs:verify` OK.**
+
+**Not claimed.** The panel still reports `CONNECTION_UNAVAILABLE` on
+`/api/servers` while `/api/sync/status` reports `ACTIVE` for the same panel, and
+every VPN detail page therefore reads `SERVER_UNAVAILABLE`. This decision does
+**not** fix that, and it is not evidence that provisioning works against the live
+panel (D12 remains open). It proves offer creation, which needs no panel write.
+
+
+## D-111 · A declared response shape the server does not send is a defect, not a type
+
+**Status:** implemented · **Recorded:** 2026-11-10 · **Follows:** D-110.
+
+**The report.** *"package create wenne na mokdda aththatama me package kiyanne"* —
+package creation does not work, and what is a "package" anyway? Both halves were
+fair questions, and both had real answers.
+
+**First, the vocabulary, because the product has two words for one thing.**
+
+- **Offer** (`/api/offers`, the "VPN offers" screen) is a **catalogue entry a
+  client claims or buys**: FREE (claim) or PREMIUM (sold by a reseller). Each
+  claim builds its own panel client.
+- **Package** (`/api/plans`, the "Packages" screen) is a **priced plan template**:
+  kind (FREE / PREMIUM / CUSTOM PREMIUM), traffic, duration, devices, price,
+  currency, slot inventory, and the **server + inbound it builds on**.
+
+They are stored in the same table (`vpn_offers`) and differ by `kind`,
+`price_cents` and `is_custom`. That shared storage is why the two screens can
+disagree about the same row — which is exactly what D-110 and this decision are.
+
+**The defect.** Creating a package **worked** — `POST /api/plans` answered
+`201 Created` and the row persisted. What did **not** work was the result: the
+new row, and every row before it, rendered **"no server"**.
+
+`GET /api/plans` serialised `store.Plan` **directly**. That struct has no
+`server_label`, `slots_remaining` or `purchasable` — they are *derived* — while
+`ApiPlan` in `lib/api.ts` declares all three as required. So:
+
+| Field | Declared | Actually sent | Rendered as |
+|---|---|---|---|
+| `server_label` | `string` | *(absent → `undefined`)* | **"no server"** on every row |
+| `slots_remaining` | `number \| null` | *(absent)* | `∞` |
+| `purchasable` | `boolean` | *(absent)* | `undefined` |
+
+The client branch of the same handler already mapped through `toPlanFact`; only
+the operator branch forgot. TypeScript could not catch it, because a declared
+interface is a promise the server simply was not keeping.
+
+**Fixed.** `GET /api/plans` now answers a **`planView`** — `planFact` (the derived,
+customer-safe fields) embedded, plus the operator-only `server_id`, `inbound_id`,
+`active`, `archived`, `owner_user_id`. `server_label` now arrives as `server 11`
+and the row reads `Premium 50GB Monthly · server 11 · PREMIUM · 500 GB · 30 d`.
+
+**Rules this sets.**
+
+1. **An endpoint answers with the shape its consumer declared**, or the consumer's
+   type is a lie. A handler that returns a storage row to a screen is the defect —
+   the screen's interface is the contract, and the server must satisfy it.
+2. **A derived field must be derived on the server.** `server_label`,
+   `slots_remaining` and `purchasable` are not columns; they are facts the operator
+   screen needs and that only the backend can compute correctly. Leaving them out
+   does not make them optional — it makes the screen invent a fallback, and a
+   fallback like "no server" is a wrong statement about correct data.
+3. **TypeScript validates the frontend against itself, never against the wire.**
+   A shared shape therefore needs a server-side test, not just a type. That is what
+   `TestPlanListCarriesTheRenderedFields` is for.
+
+**Evidence.** `TestPlanListCarriesTheRenderedFields` (new) fails against the old
+`WriteJSON(plans)` — *"server_label = <nil>, want a non-empty string — the Packages
+screen falls back to \"no server\""* — and passes against the fix; it also asserts
+`slots_remaining`/`purchasable`/`active`/`archived` are present and that no secret
+(`token_ciphertext`, `panel_url`, `password_hash`) leaks. Live: `POST /api/plans`
+→ 201; `GET /api/plans` → every row carries `server_label: "server 11"`; the row
+renders *server 11*. `verify:offer-create` now covers both screens in one gate
+(9 checks, **5/5 consecutive runs**), creates a probe package, asserts the rendered
+row names its server, then deletes it and asserts both catalogues are unchanged —
+verified afterwards with **zero residue**. **689 test functions in 15 packages,
+`gofmt`/`go build`/`go vet` clean, `npm run lint` 0 errors (3 pre-existing
+warnings in files not touched), `build` OK, `audit` OK, `docs:verify` OK.**
+
+**Not claimed.** Package *creation* is proven; package *selling and provisioning*
+is not — that still needs a live panel write, and the panel-health finding from
+D-110 (`CONNECTION_UNAVAILABLE` on `/api/servers` while `/api/sync/status` says
+`ACTIVE`) is untouched by this decision. D12 stays open.
+
+
+## D-112 · Replace is one action: build the new VPN first, release the old one second
+
+**Status:** implemented · **Recorded:** 2026-11-10 · **Depends on:** D-024, D-027,
+D-025.5 · **Owner-approved:** yes (Act-mode go-ahead on the plan below).
+
+**The request.** *"release eka thibbata ee release karana vpn eka neweyi ne
+hedenne. ekama vpn eka. release ekak thiyenne wenas wenas vpn hadala denna
+needа"* — release does not produce a new VPN, it only sets the same one aside;
+customers need to get *different* VPNs. Confirmed reading: the customer wants a
+**replace** action, not a redefinition of release.
+
+**What already existed, and what was actually missing.** `Release` sets
+`status = RELEASED`, **keeps the panel client**, and opens a 3-day undo window
+(`store.CreateReleaseAtAs`); `Restore` undoes it; `PurgeDue` later deletes the
+local row only. A *new* VPN already comes from a new claim —
+`nextPanelEmail` → `nimal@gmail.com_free_1`, `_free_2`, `_free_3`, allocated by
+`PanelFindNextFreeSlot`. So nothing about release was wrong: the missing thing
+was a **single action that does both**, because today the customer must release,
+then re-claim by hand, and is left unsure whether their old VPN died.
+
+**The design, and the one ordering that matters.**
+
+```
+POST /api/vpns/{id}/replace
+  { offer_id?, reason?, confirm: true }
+```
+
+1. **Authorise** — the owner, or a Super Admin who supplies a reason.
+2. **Resolve the target offer** — defaults to the VPN's own offer; must be
+   active and the same `kind`. A replace never silently upgrades a FREE VPN to a
+   paid plan or moves it to another server.
+3. **Check the claim allowance *before* spending it** (§17.18, D-025.5) and
+   refuse with the remaining count and the reset date, not a bare 409.
+4. **Create the new VPN first**, through `provisioning.Create` — panel create,
+   `GET /clients/get/{email}` confirmation, outbox reconciliation.
+5. **Only on `recorded && confirmed`** release the old one.
+6. **Answer with both rows** plus `restore_deadline`, so the customer can still
+   undo the release of the old VPN inside its window.
+
+**Why 4 before 5 is the whole safety argument.** Releasing first and then failing
+to create leaves the customer with **zero usable VPNs and no undo** — a worse
+outcome than doing nothing. Creating first means the worst case is "the new one
+was refused, and nothing else changed". The route therefore never calls
+`Release` unless it holds a confirmed panel client.
+
+**Money and quota.**
+
+- The claim allowance is **checked before**, never spent silently: §17.18 says
+  *"releasing a VPN does not refund a monthly claim"*, so a replace **consumes**
+  one and must say so up front. Owner chose option C — consume, but check first
+  and state it plainly.
+- A **PREMIUM** replace is routed through the same reseller-quota path as any
+  other premium issue; it is not a loophole around quota.
+
+**Rules this sets.**
+
+1. **A composite customer action is one request.** Release-then-create as two
+   calls can half-succeed; one endpoint with a fixed order cannot. The route owns
+   the order.
+2. **When two remote effects are ordered, the reversible one goes last.** Create
+   is confirmed by reading the panel back; release only opens a window. Do the
+   unrecoverable thing after the recoverable one is proven.
+3. **Never spend a scarce allowance before proving the action can succeed.**
+   Check the counter, then act — and name the remaining count in the refusal.
+4. **Replace does not redefine release.** The old VPN is released, not deleted,
+   and keeps its own 3-day undo. Two panel clients exist afterwards, each with
+   its own identity, which is exactly what "different VPNs" means here.
+
+**Not in scope.** The old panel client becomes an **orphan** after its purge
+window (D-027.3 forbids deleting it). That is a pre-existing consequence, tracked
+separately — replace neither fixes nor worsens it.
+
+**The defect the live run found — and why it is recorded here.** The first
+end-to-end attempt returned `502 "store: free concurrent limit reached"`. The
+client held **3 FREE VPNs (the concurrent cap)**, so "create first" could never
+succeed: the slot it needed was held by the very VPN it was replacing, and that
+slot is only freed by the release, which runs *after* the create.
+
+That is a genuine contradiction between two correct rules, so it is resolved
+here rather than by weakening either:
+
+- **Safety keeps its order.** Create is still confirmed before anything is
+  released. Reordering to release-first would reintroduce the "customer has zero
+  VPNs and no undo" failure this design exists to prevent.
+- **The concurrent cap is measured the right way.** It exists to stop a client
+  running more than 3 FREE VPNs **at once** — not to count create events. A
+  replace does not raise the number of live VPNs, so it takes over the replaced
+  claim's slot instead of taking a new one: `store.ReplaceFreeClaim` closes the
+  old claim and opens the new one **in the caller's transaction**, so the count
+
+## D-113 · An order names who placed it and what it buys
+
+**Status:** implemented · **Recorded:** 2026-11-10 · **Owner-approved:** yes
+(chose option A explicitly).
+
+**The report.** *"super admin ta oder ekak awama e oder eka wae kagenda ha oder
+apu kenagena sampura wistharayak ganna widihak na"* — when an order arrives, the
+Super Admin has **no way to see who placed it or get its full details**.
+
+**What was actually true.** The store had every fact; the **wire** did not carry
+them. `paymentColumns` shipped `payer_user_id` and `offer_id` — **numbers, not
+names** — and `ApiPayment` declared exactly those. So `OrdersPage` listed
+`Order # · Amount · Status · Reference · History`, and `OrderDetailPage` showed
+`Amount · Status · Reference · Created`. An operator holding a queue of orders
+could see the money but not whose money it was.
+
+**Rules this sets.**
+
+1. **A list an operator works from must answer "whose?" and "what?" on the row
+   itself.** An id that requires a second lookup is not information — it is a
+   pointer to information, and the queue is the screen where that matters most.
+2. **Name the payer AND the beneficiary when they differ.** An order bought by a
+   reseller for a customer has two people in it; showing only the payer would
+   mislead about who receives the VPN.
+3. **An absent value is stated, never blanked.** A manual record has no package
+   and a deleted account has no email. The row says *"no package (manual
+   record)"* / *"account no longer exists"* rather than rendering an empty cell,
+   because a blank reads as *"we lost it"* — a different, worse claim.
+4. **Widen the row, do not add a round trip.** The identity travels on the
+   payment row via scalar subqueries (the pattern this file already used for
+   `seller_user_id`), so the queue stays one request on a 1 vCPU host. Joins
+   were avoided on purpose: `vpn_offers` could multiply rows and silently change
+   the page size.
+
+**What this deliberately does NOT change.** The release path. `releases.Release`
+already lets a Super Admin release **any** VPN (`forced := p.IsSuperAdmin()`,
+ownership skipped, its own `vpn.force_release` audit action). Two limits stay,
+and both are correct:
+
+- **A reason is required** for a forced release. Removing it would let a working
+  VPN be set aside with no recorded justification — that guard is the reason the
+  trail is trustworthy months later.
+- **An order can only be given a release target while it is `PENDING` /
+  `AWAITING_CONFIRMATION`.** Acting on a `CONFIRMED` order is a separate,
+  money-bearing problem (refund? revoke? quota refund?), and it is **not**
+  something to smuggle in behind a display change.
+
+**Evidence.** `TestPaymentListNamesWhoPlacedIt` (payer, target and package name
+all present on the row) and `TestPaymentListStatesAnAbsentPackageAsEmpty` (a
+manual record returns `""`, never a zero id, and never fails the scan).
+**Live:** `GET /api/payments` → `payer_email: janith15dawan@gmail.com,
+offer_name: "Premium 50GB Monthly", offer_kind: PREMIUM`; `/#11` →
+`offer_name: ""`. UI: headers `Order · Placed by · Package · Amount · Status ·
+Reference · History`; detail facts `Placed by` and `Package`; the manual record
+rendered *"no package (manual record)"* on both screens. **698 test functions,
+143 routes, 17/17 packages.**
+
+  never dips (no other request can take the freed slot) and never rises.
+- **The monthly rule is unchanged.** §17.18 counts claims, not live VPNs, so a
+  replace still consumes one — checked before the panel is touched
+  (`ErrNoClaimRemaining`) and again inside the booking.
+
+A second, smaller defect surfaced in the same run: `ErrPlanArchived` fell
+through to `502`. It now answers **422 `plan_archived`** with the remedy — *"the
+package this VPN came from is no longer sold — pick a current package"* — because
+the VPN's own offer having left the catalogue is a normal situation, not a
+gateway failure.
+
+**Evidence.** Seven tests in `internal/provisioning/replace_test.go`:
+`TestReplaceCreatesTheNewVPNBeforeReleasingTheOld` (panel refuses ⇒ `release` is
+never called, the old VPN stays `ACTIVE`, no row is left behind),
+`TestReplaceBuildsADifferentVPNThenReleasesTheOld` (`_free_1` ⇒ `_free_2`, old
+row kept, undo window returned), `TestReplaceRefusesAnotherOwnersVPN`,
+`TestReplaceRefusesWhenNoClaimRemains` (asserts the panel was never touched),
+`TestReplaceRefusesAReleasedVPN`, `TestReplaceRefusesAKindChange`, and
+`TestReplaceWorksAtTheConcurrentCap` (holds the client at the cap and asserts the
+live count is unchanged afterwards). **Live:** `POST /api/vpns/42/replace` →
+`201` with `panel_email: client@veylix.test_free_4, confirmed: true`, old
+`free_1 → RELEASED`, `claim_consumed: true, claims_remaining: 1`; the UI rendered
+`client@veylix.test_free_4 · Free · #4`, the Replace button appeared on exactly
+the three in-service VPNs and not on the released one, and the confirmation named
+the old panel identity, the 3-day undo and the claim cost. The probe data was
+then removed through the app's own paths (the release was restored, the probe VPN
+revoked). **696 test functions, 143 routes, 17/17 packages, `gofmt`/`build`/`vet`
+clean, `lint` 0 errors, `audit` OK, `docs:verify` OK.**
+
+
+
+## D-114 · A panel write is confirmed by reading it back, never by its own reply
+
+**Status:** implemented · **Recorded:** 2026-11-10 · **Found by:** live D12
+verification against 3X-UI 3.11.0.
+
+**The defect.** `SetClientEnabled` (`panel/ops.go`) called
+`POST /panel/api/clients/bulkEnable` / `bulkDisable`, checked HTTP 200 and the
+envelope's `success` flag, and returned. It never read the client back.
+
+On the live panel a bulk call can answer **`200 {"success":true}` and change
+nothing**. So `Suspend` answered **204** and the local row became `SUSPENDED`
+while the panel kept the client `enable: true`. `Resume` mirrored it. A **false
+success** — the class of claim this project treats as a defect, not a warning.
+
+**Why it survived.** `SetClientEnabled` had **no test at all**. Nothing under
+`internal/panel/` referenced it. The whole enable/disable path — the most-used
+lifecycle operation an operator has — was unverified.
+
+**The rule this sets.**
+
+1. **A remote write is confirmed by reading the object back**, not by trusting
+   the write's own reply. HTTP 200 plus `success: true` is the *request* being
+   accepted, not the *state* changing. This is the same shape as the create path
+   (D-024.1a: panel write → fresh read → record); enable/disable was the one
+   write that skipped it.
+2. **Confirm against the single-object read, never the list.** The panel's paged
+   list and its single-client `get` can disagree immediately after a write —
+   observed live. Picking one authority (the single read) prevents a check that
+   flips with timing.
+3. **Absent and unchanged are different outcomes** and are reported apart: a
+   client that vanished is not a client that refused to change.
+4. **A write path with no test is a defect waiting to be found in production.**
+   The two tests added here were written before the fix, and the first one failed
+   against the old code — that failure *is* the reproduction.
+
+**What this does not change.** `bulkEnable`/`bulkDisable` remain the mechanism;
+they are what 3X-UI offers for a reversible suspend. The change is that their
+answer is now treated as a request, and the panel's state as the fact.
+
+**Evidence.** `TestSetClientEnabledConfirmsThePanelActuallyChanged` (success
+envelope + unchanged client ⇒ error) **failed before the fix, passes after**;
+`TestSetClientEnabledSucceedsWhenThePanelReallyDisabledIt` guards the other side.
+Live: `suspend` on a real client now either changes the panel or the caller gets
+an error — never a silent 204.
+
+
+## D-115 · A gate that is red for long tells you nothing — and may be wrong
+
+**Status:** implemented · **Recorded:** 2026-11-10 · **Found by:** the version-1
+readiness audit.
+
+**What was true.** Three of the browser gates were failing, and the working
+assumption had become "the gates are noisy". The audit found the opposite: the
+gates were **wrong**, and had been wrong long enough that nobody read them.
+
+- `verify:vpn` asserted against testids that a rebuild had deleted
+  (`vpn-capacity`, `vpn-live-traffic`, `vpn-protocol`, `.vpn-chip`). It scored
+  **4/13 on a perfectly healthy page**.
+- Two of its checks were not stale — they were **wrong in intent**. P-08 demanded
+  four chart types on a **FREE** VPN, when charts are Premium-only **by design**
+  (`VpnUsageSection.tsx:55`). P-03 demanded CPU/RAM cards on a page that has never
+  rendered them; they belong to the server and dashboard pages.
+- `verify:super-admin` used `await sleep(3500)` after every navigation — the
+  pattern D-109 had already removed elsewhere. It reported machine speed, passing
+  warm and failing cold.
+- D-112 ("Replace VPN") had **no browser gate at all**, so nothing proved the
+  screen worked — only that `Replace()` did.
+
+**The decisions this sets.**
+
+1. **A gate asserts a FACT the product must have, never a selector it happens to
+   have.** Where a fact moved, the check follows the fact. Where the fact is not
+   the product's, the check is deleted — not softened, and never faked to go
+   green.
+2. **A gate may encode a design rule** (FREE has no charts). It must then assert
+   the rule is *stated*, not demand the rule be broken.
+3. **A long-red gate is a defect report nobody read.** Fix it or delete it; never
+   leave it red and learn to ignore it. A red gate that stays red is
+   indistinguishable from a gate that is wrong.
+4. **Poll for readiness; never sleep a fixed time.** A fixed sleep measures the
+   machine. `verify:super-admin` now polls each page's own declared heading, and
+   asserts that it settled *without* a fixed sleep, so a regression back to
+   `sleep()` fails loudly. Proven by passing 136/136 on a cold start.
+5. **A browser gate refuses rather than passing vacuously.** `verify:vpn-replace`
+   exits **3** on an account that owns no VPN, because a green run there proves
+   nothing (same rule as `verify-client-vpns`).
+6. **A destructive flow is proven up to the point of acting.** `verify:vpn-replace`
+   drives the real Replace button, asserts the confirmation, and **cancels**.
+   Replacing a live customer VPN to satisfy a test is the write the data-safety
+   rules forbid (`VPN_FIX_LEDGER.md` records a script deleting live data, twice).
+7. **A harness must not be able to print `PASS false`.** The first draft of the
+   Replace gate called `check(msg, ok, …)` with the arguments reversed and did
+   exactly that. The signature is now documented at the definition.
+
+**What it found.** The Replace confirmation read *"This creates a new VPN … and
+releases the current one"* — which reads as simultaneous, and never stated
+D-112's whole safety property. It now says the new VPN is confirmed on the server
+**before** the current one is released. The gate asserts that sentence.
+
+**Evidence.** `verify:vpn` **13/13** ×3 · `verify:super-admin` **136/136** cold and
+×3 · `verify:vpn-replace` **7/7** · PREFLIGHT **33/33**.
+
+
+## D-116 · An order list an operator can actually interrogate
+
+**Status:** implemented · **Recorded:** 2026-11-10 · **Requested by:** the owner
+("super adminge order ha payment pages wayala sort karaganna ha filter karaganna
+widihaka na").
+
+**What was wrong — three separate defects, one screen.**
+
+1. **Three columns had no sort at all.** `Placed by`, `Package` and `Reference`
+   rendered unsortable. On a busy queue the operator could order by id, amount
+   and status, and by nothing a human cares about.
+2. **The sort that existed was broken.** `Table` sorted on
+   `row[column.key]`. A column keyed `placedBy` or `package` has no such field on
+   the row — the payer lives in `payerEmail`, the plan in `offerName`. Every row
+   compared `undefined`, so clicking the header moved the arrow and changed
+   nothing. `Amount` had the same shape (`amountCents`).
+3. **There was no filter and no search anywhere.** `Table` exposed only
+   `sortable`. With a 200-row cap, finding one order meant scrolling.
+
+**The rules this sets.**
+
+1. **A column is named by its HEADING; it sorts by a declared field.** `sortValue`
+   exists so a column may render one thing and sort by another. The table must
+   never infer the sort field from the display key — that is what made three
+   sorts silently no-ops.
+2. **Filtering and searching are different verbs, so they get different
+   fields.** `filter.getValue` is what a per-column box matches; `searchValue` is
+   everything one global box should find. Collapsing them into `sortValue` made
+   an order bought FOR a customer unfindable by that customer's address — the
+   column sorted on the payer (found live, `0 of 9`).
+3. **A filter must match DATA, never rendered text.** Matching what a cell
+   displays breaks the moment a badge or a formatted amount is restyled.
+4. **A narrowed table says how narrowed it is.** "Showing 6 of 9 orders" — the
+   count line is not decoration; without it a filtered table reads as the whole
+   truth.
+5. **A capped list says it is capped.** `LIMIT 200` was silent, so the screen
+   could not distinguish "200 orders" from "the newest 200 of 2,400". The count
+   and the list are built from the **same `paymentsScope`**, so a reseller is
+   never told about rows they cannot open.
+6. **A failed count is `-1`, never `0`.** "Could not read the total" and "there
+   are none" are different facts, and only one of them is safe to render as a
+   zero.
+7. **A gate asserts the ROW ORDER changed, not that a header is clickable.** The
+   broken version's headers were clickable. `verify:orders` compares the id
+   sequence between ascending and descending and fails when they are identical.
+
+**What was NOT changed.** The bare `GET /api/payments` array is untouched;
+`envelope=1` is opt-in, so every existing caller (badge counts, dashboards)
+keeps working. No order was written, edited or deleted by this work.
+
+**Evidence.** `verify:orders` — 23 checks pass (search by order number, status
+filter narrowing to 6 of 9, Clear restoring 9, four per-column filters present,
+six headers sorted with the order proven to change), 1 honest SKIP because this
+account holds 9 orders, below the 200 cap.
+`TestPaymentListIsCappedButTheCountIsNot` (201 rows → list 200, count 201),
+`TestPaymentCountMatchesTheListScope` (all three roles), `TestPaymentCountRespectsThePendingFilter`,
+`TestPaymentCountOnAnEmptyDatabase`, `TestPaymentsEnvelopeStatesTruncation`
+(the route: envelope numbers, legacy array, anonymous 401).
+
+
+---
+
+## D-117 · Every operator list answers the same three questions, not just Orders
+
+**Status:** implemented · **Recorded:** 2026-11-10 · **Requested by:** the owner
+(continuation of D-116)
+
+### The problem D-116 left behind
+
+D-116 gave `Table` a toolbar — `sortValue`, `searchValue`, `filter`, a stated
+count — and wired **only** `OrdersPage` to it. The operator's three busiest
+lists, `VpnsPage`, `ClientsPage` and `PaymentsPage`, stayed sort-only. Worse,
+several of their columns had no `sortValue`, so they fell back to
+`row[column.key]` and compared `undefined`: the arrow moved and the rows did
+not. That is the same defect D-116 fixed, still live on three screens.
+
+### The decision
+
+1. **Sort, search and filter are three separate verbs, and a list owes the
+   operator all three.** Sorting answers "show me biggest/oldest"; search
+   answers "find THIS one"; filter answers "show me only the ones in this
+   state". A list that offers one and calls itself complete is how an operator
+   ends up scrolling 200 rows at 2am.
+2. **`''` never means a real value.** An empty `<select>` value is the toolbar's
+   word for "no filter", so a genuine bucket that is *also* empty — an untagged
+   VPN, a panel client with no Veylix row — gets a sentinel (`(none)`). Without
+   this, filtering for untagged VPNs silently does nothing.
+3. **A state that matters gets its own option.** "No Veylix record" and
+   "unassigned" are not the absence of a value, they are findings. Both are
+   selectable, and both sort to the top where the eye lands first.
+4. **Unknown sorts last, never first.** A VPN with no expiry, a client who has
+   never signed in, a row the panel could not be read for — `MAX_SAFE_INTEGER`
+   or `0` behind it, never a value that pretends to be the smallest real one.
+   Sorting ascending must not put "unknown" at the top and read as "urgent".
+5. **A searchable term is a word a human types.** `searchValue` is per-column
+   and covers the words on screen: the email *and* the username, `ACTIVE` as
+   well as `no record`. Searching for `SERVER_UNAVAILABLE` must find the row
+   whose badge reads "Server unavailable".
+
+### The gate, and the two ways it lied before it worked
+
+`verify:tables` (`npm run verify:tables`) walks all four tables and asserts
+**behaviour**, not presence: a term narrows the rows, Clear restores the exact
+count, and a header click *reorders the rows*. 28 checks, all green.
+
+Writing it surfaced two harness defects worth recording, because both would
+have been reported as product bugs:
+
+- **The search term was welded from a whole cell.** `textContent` concatenates
+  sibling spans, so `owner@veylix.test` + `for client@veylix.test` became
+  `owner@veylix.testfor client@veylix.test` — a string nobody types. The gate
+  then "failed" on every screen. The term now comes from one **text node**.
+- **The sort probe clicked the same header three times.** `toggleSort` cycles
+  asc → desc → null, so clicks 1 and 3 compared *asc with asc* and the gate
+  reported "no column reordered" for four tables that sort correctly. The probe
+  now clicks different columns and waits a frame between clicks, because React
+  re-renders asynchronously and reading in the same tick returns the old order.
+
+The gate was then **proven not vacuous**: forcing the comparator to return `0`
+turned all four sort checks red, and reverting turned them green. A gate that
+has never been observed failing is a claim, not a check (D-115).
+
+### Scope note
+
+`AdminsPage`, `OffersPage`, `PackagesPage` and the audit/retail tables are
+**not** covered here. They are smaller, lower-traffic lists and were left
+untouched rather than widened silently; they follow the same pattern when
+touched (D-116).
+

@@ -96,6 +96,84 @@ run. The refusal was executed and observed, not assumed.
 
 ---
 
+## 7. Section 03 - Offers & Orders (implementation run, 2026-11-08)
+
+Executed after the Section 03 implementation. Every row states the command and the
+result that was actually observed. Anything not run is marked `NOT RUN` with a
+reason; nothing is rounded up to `PASS`.
+
+| # | Check | Command | Result | Evidence |
+|---|---|---|---|---|
+| 1 | Backend compiles | `go build ./...` | **PASS** | exit 0, no output |
+| 2 | Backend static analysis | `go vet ./...` | **PASS** | exit 0, no output |
+| 3 | Go formatting | `gofmt -l .` | **PASS** | 0 files listed |
+| 4 | Backend unit + integration tests | `go test ./... -count=1` | **PASS** | 617 test functions, 15 packages, **zero failures** (`httpapi` 64.3s, `store` 18.8s, `provisioning` 14.3s) |
+| 5 | `go test -race` | `go test -race ./...` | **BLOCKED** | no C compiler on this machine - unchanged from the pre-existing entry |
+| 6 | TypeScript compile | `npx tsc -b --noEmit` | **PASS** | exit 0 |
+| 7 | Lint | `npm run lint` | **PASS** | 0 errors. 2 warnings, **both pre-existing** in `SuperSettingsPage.tsx:66` and `Sidebar.tsx:77`. `ClientOffersPage.tsx` contributes **zero**. |
+| 8 | Bundle | `npm run build` | **PASS** | `ClientOffersPage-*.js` **6.70 kB gzip**, its own route-split chunk |
+| 9 | UI truth gate | `npm run audit` | **PASS** | "no unwired/demo claims and no invented money literals in src/" |
+| 10 | UI truth self-test | `npm run audit:selftest` | **PASS** | 8 positive + 6 negative cases |
+| 11 | Documentation drift | `npm run docs:verify` | **PASS** | 23 migrations / 133 routes / 617 tests / 15 packages - **unchanged** |
+| 12 | **Section 03 browser gate** | `npm run verify:client-offers` | **PASS** | **40/40** against the real catalogue (4 packages, 1 purchasable Premium) |
+| 13 | Navigation regression | `npm run verify:nav` | **PASS** | **74/74** - unchanged; a client is still refused `/offers` |
+| 14 | My VPNs regression | `npm run verify:client-vpns` | **PASS** | **19/19** - unchanged |
+| 15 | Free claim actually executed | - | **NOT RUN** | deliberately. Clicking "Confirm claim" creates a real VPN; the gate asserts the button's enabled/disabled contract and its stated reason instead |
+| 16 | Premium purchase executed | - | **NOT RUN** | deliberately. §11 forbids performing a real purchase during QA; the flow to `/buy` is asserted as reachable |
+| 17 | Payment confirmed | - | **NOT RUN** | deliberately - would mutate real payment state |
+| 18 | Synthetic VPN written to 3X-UI | - | **NOT RUN** | deliberately - would write to a real panel |
+| 19 | Visual check across all 6 presets | - | **NOT RUN** | the stylesheet uses only the token set `vpns.css` already proves, but no per-preset screenshot pass was taken for this page |
+
+### What `verify:client-offers` actually asserts (40 checks)
+
+**Route and role.** The h1 is `Offers & Orders`; the path is `/client/offers`, not
+the super-admin `/offers`.
+
+**Catalogue source.** The request went to `/api/packages` (counted from
+`performance.getEntriesByType('resource')`), and it is **not** made per card. The
+threshold is 3 because `main.tsx` mounts inside `React.StrictMode`, which
+double-invokes effects in development; a per-card implementation would have shown 4+.
+
+**Classification.** The All chip equals the catalogue size; the Free chip equals the
+FREE rows; the Premium chip equals PREMIUM **plus** CUSTOM. There is **no** Custom
+chip. Each CUSTOM row keeps a "Custom specifications" indicator.
+
+**Featured Premium.** Renders when a purchasable Premium exists and shows those
+offers. With one comparable Premium offer there is **no** Best Value badge - the badge
+only appears when the page's own GB-per-currency comparison had something to compare.
+
+**The price rule.** No card displays `0` as a price. Every FREE card reads `Free`. A
+Premium package with an empty currency or a non-positive price reads `Price not set`.
+
+**No leaks.** The literal `server N` placeholder is absent from the DOM; no panel URL
+or inbound identifier appears; no `Bearer <token>` appears.
+
+**Filtering.** The Free and Premium chips each show only their own kind; search
+narrows the set and every remaining card matches the text; a query matching nothing
+shows the no-match copy rather than a blank list; Clear Filters appears only once a
+filter is active and restores the full set.
+
+**Views.** Cards and List show the same number of offers; the List exposes Package /
+Category / Price / Traffic / Duration / Devices / Server.
+
+**Compare.** The "Select at least two packages to compare" empty state is present
+before selection, is replaced at two selections with a table covering traffic /
+duration / devices, and returns to the empty state when cleared.
+
+**Confirmation.** Selecting a package opens an explicit review step whose action
+requires a deliberate click. A disabled Free claim must state why it is disabled. The
+gate **never** clicks Confirm claim.
+
+**My Orders.** The section is present, shows the empty copy when the account has no
+orders, uses a non-empty label per row, identifies orders by number, and contains
+**no** payment amount, deposit or balance - those belong to Section 04.
+
+**Theming.** The Section 03 stylesheet is loaded (24 `.of-` rules) and cards paint a
+non-transparent themed surface (`rgb(241, 241, 249)` under the active preset).
+
+
+---
+
 ## 5. Data-safety verification
 
 | Check | Result |

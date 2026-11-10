@@ -24,6 +24,15 @@ type VPNService interface {
 	// RemoveAbsent erases Veylix's record of a VPN the panel no longer holds.
 	// The panel client itself is never deleted (D-027.3).
 	RemoveAbsent(ctx context.Context, id int64, p auth.Principal) error
+	// ForcePurgeRecord retires a local VPN record while deliberately KEEPING the
+	// panel client (P-3, D-027.3). Super Admin only; the panel email must be
+	// repeated back so a mis-clicked row cannot destroy the wrong record.
+	ForcePurgeRecord(ctx context.Context, id int64, p auth.Principal, confirmPanelEmail string) error
+	// Dormant and Wake are the customer's "not now" switch (D-094). Neither
+	// touches the panel and neither deletes anything: Dormant only records when
+	// the VPN was put to sleep, and Wake clears it.
+	Dormant(ctx context.Context, id int64, p auth.Principal) error
+	Wake(ctx context.Context, id int64, p auth.Principal) error
 }
 
 // VPNRow is the safe projection of a VPN for the API.
@@ -42,6 +51,26 @@ type VPNRow struct {
 	SellerID   int64  `json:"seller_user_id"`
 	ExpiresAt  *int64 `json:"expires_at"`
 	CreatedAt  int64  `json:"created_at"`
+	// DormantAt is when the customer put this VPN to sleep (D-094), or nil when
+	// it is awake. It is a LOCAL preference, not a status: `Status` still reports
+	// whatever the panel says, so a dormant VPN cannot pretend to be healthy.
+	//
+	// It is on the wire so the list can sort a sleeping VPN last and leave it out
+	// of "Needs attention" without the client guessing, and so the Usage screen
+	// can stop polling it.
+	DormantAt *int64 `json:"dormant_at"`
+	// StatusChangedAt is WHEN the row entered its current status (D-098's
+	// `status_changed_at`). Nil when it has never moved, or on a database that
+	// predates the column's backfill.
+	//
+	// It is published because "SUSPENDED" alone leaves the customer asking the
+	// one question the answer exists to settle — since when? A screen that can
+	// only say "suspended" invites a support call to establish whether it
+	// happened today or three months ago.
+	//
+	// It is a fact about the RECORD, not a promise: it never implies the VPN
+	// will be removed at any particular time.
+	StatusChangedAt *int64 `json:"status_changed_at"`
 	// Tag is the Super Admin's FREE/PREMIUM classification (I-3). Nil means
 	// untagged: still a VPN, but visible only to the Super Admin.
 	Tag *string `json:"tag"`
@@ -307,6 +336,24 @@ func VPNRoutes(mux *http.ServeMux, svc VPNService, lister, superLister VPNLister
 		return svc.Resume(r.Context(), id, p)
 	})))
 
+	// POST /api/vpns/{id}/dormant — put a VPN to sleep for THIS customer (D-094).
+	//
+	// It is not a lifecycle change: no panel client is disabled or removed and the
+	// status keeps reporting the panel. What changes is the customer's own view —
+	// the VPN sorts last, stops counting toward "Needs attention", and its Usage
+	// block stops polling — so a dead VPN stops being a standing chore without
+	// anyone deleting anything.
+	mux.Handle("POST /api/vpns/{id}/dormant", authed(vpnAction(func(w http.ResponseWriter, r *http.Request, p auth.Principal, id int64) error {
+		return svc.Dormant(r.Context(), id, p)
+	})))
+
+	// POST /api/vpns/{id}/wake — the inverse. It does NOT make the VPN work again;
+	// if the panel still cannot see the client, the status stays SERVER_UNAVAILABLE
+	// and the customer is told so.
+	mux.Handle("POST /api/vpns/{id}/wake", authed(vpnAction(func(w http.ResponseWriter, r *http.Request, p auth.Principal, id int64) error {
+		return svc.Wake(r.Context(), id, p)
+	})))
+
 	mux.Handle("POST /api/vpns/{id}/revoke", authed(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		p, _ := PrincipalFrom(r.Context())
 		id, err := pathID(r)
@@ -369,6 +416,49 @@ func VPNRoutes(mux *http.ServeMux, svc VPNService, lister, superLister VPNLister
 		}
 		w.WriteHeader(http.StatusNoContent)
 	})))
+
+	/*
+	 * POST /api/vpns/{id}/purge — SUPER ADMIN ONLY (P-3).
+	 *
+	 * The problem this solves: a VPN record whose panel client still exists could
+	 * not be removed at all. `DELETE` correctly refuses that case, but the refusal
+	 * was also the ONLY path, so an operator had no way to retire a record while
+	 * keeping its panel client (D-027.3 forbids Veylix from deleting a panel
+	 * client, ever).
+	 *
+	 * Three guards, because this deletes a row a customer can see:
+	 *   1. Super Admin only — a reseller cannot purge somebody else's record;
+	 *   2. `confirm_panel_email` must repeat the VPN's identity back, so a
+	 *      mis-clicked row cannot destroy the wrong record;
+	 *   3. the panel client is left alone. A purge retires the BOOKKEEPING; it is
+	 *      not a revocation and it never reaches the panel.
+	 */
+	mux.Handle("POST /api/vpns/{id}/purge", authed(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		p, _ := PrincipalFrom(r.Context())
+		if !p.IsSuperAdmin() {
+			WriteError(w, http.StatusForbidden, "forbidden", "only the platform owner can purge a VPN record")
+			return
+		}
+		id, err := pathID(r)
+		if err != nil {
+			WriteError(w, http.StatusBadRequest, "invalid_id", "invalid vpn id")
+			return
+		}
+		var in struct {
+			ConfirmPanelEmail string `json:"confirm_panel_email"`
+		}
+		if r.ContentLength > 0 {
+			if err := DecodeJSON(r, &in); err != nil {
+				WriteError(w, http.StatusBadRequest, "invalid_body", "request body is not valid JSON")
+				return
+			}
+		}
+		if err := svc.ForcePurgeRecord(r.Context(), id, p, in.ConfirmPanelEmail); err != nil {
+			writeVPNError(w, err)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	})))
 }
 
 // vpnAction adapts a simple lifecycle mutation to a handler.
@@ -389,6 +479,17 @@ func vpnAction(fn func(w http.ResponseWriter, r *http.Request, p auth.Principal,
 }
 
 // writeVPNError maps provisioning errors to safe responses.
+// isPurgeConfirmError reports whether err wraps a *provisioning.PurgeConfirmError.
+//
+// A named helper rather than an inline `errors.As(err, new(*T))` in the switch: that
+// form looks like it works but the matched value is discarded, so the message could
+// never name the string the operator has to type. Found by
+// `TestPurgeRouteRefusesResellersAndAnonymous`, which got a 500 instead of a 422.
+func isPurgeConfirmError(err error) bool {
+	var pc *provisioning.PurgeConfirmError
+	return errors.As(err, &pc)
+}
+
 func writeVPNError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, provisioning.ErrNotFound):
@@ -433,9 +534,26 @@ func writeVPNError(w http.ResponseWriter, err error) {
 		WriteError(w, http.StatusUnprocessableEntity, "offer_incomplete",
 			"this offer has no inbound selected, so no VPN can be created from it")
 	case errors.Is(err, provisioning.ErrVPNStillOnPanel):
-		// The VPN works: erasing the record would hide a live client.
+		// The VPN works: erasing the record would hide a live client. A Super Admin
+		// can still retire it with POST /vpns/{id}/purge, which keeps the client.
 		WriteError(w, http.StatusConflict, "vpn_still_on_panel",
-			"the panel still holds this client, so the record cannot be removed — revoke it instead")
+			"the panel still holds this client, so the record cannot be removed — revoke it, or purge the record and keep the client")
+	case isPurgeConfirmError(err):
+		// P-3: the operator did not repeat the VPN's identity back. 422 because the
+		// request is well-formed and the missing piece is a field the UI must ask
+		// for, not a permission the caller lacks.
+		//
+		// NOTE: `errors.As(err, new(*T))` in a `switch` CASE does not work the way it
+		// looks — it allocates a fresh pointer, matches, and then the value is
+		// discarded, so the branch below could not read `Want`. Hence the helper.
+		var pc *provisioning.PurgeConfirmError
+		_ = errors.As(err, &pc)
+		want := ""
+		if pc != nil {
+			want = pc.Want
+		}
+		WriteError(w, http.StatusUnprocessableEntity, "confirm_panel_email_required",
+			"type the VPN's panel email ("+want+") to confirm the purge")
 	case errors.Is(err, provisioning.ErrPanelFailed):
 		WriteError(w, http.StatusBadGateway, "panel_error",
 			"the panel could not be reached, so nothing was changed")

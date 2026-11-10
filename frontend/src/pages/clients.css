@@ -326,3 +326,42 @@
   color: var(--text-muted);
 }
 .cl-pick.is-active .cl-pick__icon { color: var(--c-primary); }
+
+/* ---------- D-059: rules moved out of components ---------------------------
+ * Each of these replaces a `style={{ … }}` prop that was copied onto the DOM of
+ * every element it appeared on. The values are unchanged; only their home is.
+ */
+.cl-head-actions {
+  gap: 8px;
+}
+.cl-dialog-actions {
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* Staff console (StaffPage imports this file and admins.css). */
+.st-dialog-note {
+  margin-top: 0;
+}
+.st-scope-list {
+  gap: 6px;
+}
+.st-scope-row {
+  gap: 8px;
+  align-items: center;
+}
+.st-dialog-warn {
+  margin-bottom: 0;
+}
+
+/* VPN console (VpnsPage imports this file). */
+.vp-row-actions {
+  gap: 6px;
+  justify-content: flex-end;
+}
+.vp-toolbar {
+  gap: 8px;
+}
+.vp-footnote {
+  margin-top: 8px;
+}

@@ -5,6 +5,8 @@ import { Button, EmptyState } from '../../components/ui'
 import { ClientPage, ClientSection } from '../../components/client/ClientPage'
 import { useNotifStore } from '../../stores/notifStore'
 import '../../components/client/client.css'
+import './notifications.css'
+import { activeTimeZone } from '../../lib/time'
 
 /**
  * Notifications — client shell (S11 outer layer).
@@ -41,12 +43,12 @@ import '../../components/client/client.css'
  */
 function relativeTime(unixSeconds: number): string {
   const diff = Math.floor(Date.now() / 1000) - unixSeconds
-  if (diff < 0) return new Date(unixSeconds * 1000).toLocaleDateString()
+  if (diff < 0) return new Date(unixSeconds * 1000).toLocaleDateString(undefined, { timeZone: activeTimeZone() })
   if (diff < 60) return 'just now'
   if (diff < 3600) return `${Math.floor(diff / 60)}m ago`
   if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`
   if (diff < 604800) return `${Math.floor(diff / 86400)}d ago`
-  return new Date(unixSeconds * 1000).toLocaleDateString()
+  return new Date(unixSeconds * 1000).toLocaleDateString(undefined, { timeZone: activeTimeZone() })
 }
 
 export function ClientNotificationsPage() {
@@ -113,26 +115,14 @@ export function ClientNotificationsPage() {
             }
           />
         ) : (
-          <div className="ui-col" style={{ gap: 6 }}>
+          <div className="ui-col ntf__stack">
             {items.map((n) => (
-              <div
-                key={n.id}
-                className="ui-row"
-                style={{
-                  gap: 10,
-                  alignItems: 'flex-start',
-                  justifyContent: 'space-between',
-                  padding: '10px 12px',
-                  border: '1px solid var(--border)',
-                  borderRadius: 'var(--radius)',
-                  background: n.read ? 'transparent' : 'var(--bg-surface)',
-                }}
-              >
-                <div className="ui-col" style={{ gap: 2, minWidth: 0 }}>
+              <div key={n.id} className={`ntf__item${n.read ? '' : ' ntf__item--unread'}`}>
+                <div className="ui-col ntf__body">
                   <span className="ui-strong">{n.title}</span>
                   {n.body && <span className="ui-muted t-sm2">{n.body}</span>}
                 </div>
-                <div className="ui-row" style={{ gap: 8, alignItems: 'center', flexShrink: 0 }}>
+                <div className="ui-row ntf__meta">
                   <span className="ui-muted t-sm2">{relativeTime(n.at)}</span>
                   {!n.read && (
                     <Button size="sm" variant="ghost" onClick={() => void markRead(n.id)}>

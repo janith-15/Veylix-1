@@ -285,6 +285,11 @@ func WriteAuthError(w http.ResponseWriter, err error) {
 		WriteError(w, http.StatusNotFound, "not_found", "account not found")
 	case errors.Is(err, auth.ErrCannotModifySelf):
 		WriteError(w, http.StatusUnprocessableEntity, "cannot_modify_self", err.Error())
+	case errors.Is(err, auth.ErrSuperAdminExists):
+		// P-1: the seat is taken. 409 rather than 422 because the request itself
+		// is well-formed — the platform's state is what refuses it, and the
+		// operator must change that state (demote the current owner) first.
+		WriteError(w, http.StatusConflict, "super_admin_exists", err.Error())
 	default:
 		WriteError(w, http.StatusInternalServerError, "internal_error", "unexpected server error")
 	}

@@ -66,6 +66,14 @@ type StaffDetail struct {
 // ErrStaffNotFound means the id is not an administrator or super admin.
 
 // ListStaff returns a page of staff accounts plus the total that matched.
+// Page-size bounds for the staff console. Exported for the same reason the client
+// console's are: the transport must validate a caller's `limit` before deriving an
+// offset from it, instead of guessing the store's ceiling.
+const (
+	StaffDefaultLimit = 50
+	StaffMaxLimit     = 200
+)
+
 func (s *Store) ListStaff(ctx context.Context, f StaffFilter) ([]StaffRow, int, error) {
 	where := []string{"u.role IN ('admin', 'super_admin')"}
 	args := []any{}
@@ -118,13 +126,17 @@ func (s *Store) ListStaff(ctx context.Context, f StaffFilter) ([]StaffRow, int, 
 		order = "u.quota_limit DESC"
 	}
 
+	// Same clamp-then-snap as the client console (B-2): the transport derives the
+	// offset from a limit it already clamped, and this ensures the two can never
+	// describe different windows even if a future caller gets it wrong.
 	limit := f.Limit
-	if limit <= 0 || limit > 200 {
-		limit = 50
+	if limit <= 0 || limit > StaffMaxLimit {
+		limit = StaffDefaultLimit
 	}
 	if f.Offset < 0 {
 		f.Offset = 0
 	}
+	f.Offset = (f.Offset / limit) * limit
 
 	const usedExpr = `(SELECT COUNT(*) FROM vpn_assignments va WHERE va.seller_user_id = u.id)`
 

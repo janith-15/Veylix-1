@@ -1663,6 +1663,103 @@ fails loudly instead of passing vacuously.
 ### Files changed
 
 | File | Change |
+
+---
+
+## Section 03 - Offers & Orders (implemented 2026-11-08)
+
+**Scope executed.** The nine-block client Offers & Orders page at `/client/offers`,
+per the owner-approved plan with its six corrections. Authorised file allowlist of
+ten files; all ten were touched and nothing outside them was modified.
+
+### What was built
+
+1. **Featured Premium** - only purchasable Premium offers. A "Best value per GB"
+   badge appears **only** when the page's own GB-per-currency comparison had two or
+   more comparable offers to rank; with one offer there is no badge.
+2. **Free vs Premium** - a table of the best traffic / duration / devices / price
+   each column actually offers, taken from the rows themselves. No adjectives.
+3. **Browse offers** - one catalogue request, then everything client-side.
+4. **Price range filter** - currency-aware. One currency: a min/max pair. More than
+   one: the user picks the currency first, and no rate is ever applied across
+   currencies. Free packages are never removed by a price filter.
+5. **Advanced filters** - minimum traffic / duration / devices, plus four sorts.
+6. **Cards and Compact List** - two views over the same fetched rows, shared page
+   size of 9, pagination for large catalogues.
+7. **Compare Plans** - two or three offers over shared specifications; below two it
+   shows "Select at least two packages to compare." as a valid state.
+8. **Package summary / confirmation** - an explicit review step. The Free claim and
+   the Premium purchase both require a deliberate click; nothing fires on load or on
+   selection. For Custom / priced-per-order packages the amount reads "Price shown at
+   review" and is never invented.
+9. **My Orders** - order number, date, status and the honest `Premium order` label.
+   **No money** - amounts belong to Section 04.
+
+### The three honesty rules this page is built around
+
+- **A missing price is not zero.** `payable` is `null` unless there is a positive
+  amount *and* a non-empty currency. `null` renders "Price not set" and disables Buy.
+- **A placeholder is not a server name.** `server_label` is the literal `server 11`.
+  It is never rendered. The real name comes from the client's own VPN rows; when it
+  cannot be resolved the name is omitted (`n/a`), never invented.
+- **An unprovable claim is disabled, not guessed.** A Free offer the client has never
+  held has no `offer_id -> server_id` mapping, so the claim is disabled with a stated
+  reason and a link to the Dashboard.
+
+### Two defects found and fixed (recorded in full as DEV-012 / DEV-013)
+
+- **DEV-012.** `listPackages()` was typed `ApiPlan[]`, but `/api/packages` sends
+  neither `active`, `archived` nor `slots_remaining`. A false type. A new `ApiPackage`
+  describes the real eleven-key payload; `listPackages()` itself was left alone
+  because `packagesStore` consumes it, and my first attempt to repoint it failed
+  `tsc` at `packagesStore.ts:93` - which is the evidence the old signature is
+  load-bearing elsewhere.
+- **DEV-013.** `server_label` (`server 11`) is an internal placeholder. Rendering it
+  would have shown a customer an identifier as a display name, and `/api/servers` is
+  403 for a client, so the name is read from `GET /api/vpns` instead.
+
+### A process failure, recorded rather than hidden
+
+I corrupted `ClientOffersPage.tsx` twice through PowerShell string surgery: a
+`WriteAllLines` round-trip re-encoded the em dashes into 266 double-encoded sequences,
+and a later `Set-Content` attempt compounded it. I chose to **delete and rewrite the
+file cleanly** rather than keep patching corrupted text, and the rewrite is
+deliberately **ASCII-only** so that class of corruption cannot recur. Two
+self-inflicted wrong turns on the way to the fix are also recorded: an inline
+`setLastSignature` during render (an anti-pattern) and a `Split()` based counting call
+that reported impossible numbers. The final file is 1,449 lines, 0 non-ASCII, and
+passes `tsc`, `oxlint` and `vite build`.
+
+### Gates
+
+All run, all `PASS`, none assumed:
+
+`go build` · `go vet` · `gofmt -l` (0) · `go test ./... -count=1` (617, zero
+failures) · `tsc -b --noEmit` · `npm run lint` (0 errors; my file adds 0 warnings) ·
+`npm run build` (6.70 kB gzip chunk) · `npm run audit` · `npm run audit:selftest` ·
+`npm run docs:verify` · **`npm run verify:client-offers` 40/40** ·
+`npm run verify:nav` **74/74 unchanged** · `npm run verify:client-vpns` **19/19
+unchanged**.
+
+`go test -race` remains **BLOCKED** (no C compiler) - unchanged.
+
+### Strict-scope confirmation
+
+- Super Admin `/offers`, `OffersPage`, `App.tsx`, `navModel.ts`: **NOT MODIFIED.**
+- Backend production Go files, migrations, schema, API, provisioning, panel:
+  **NOT MODIFIED.** Migration and route counts unchanged (23 / 133).
+- Section 04 onwards: **NOT STARTED.**
+- No Free claim performed. No purchase made. No payment confirmed.
+- No synthetic VPN written to the 3X-UI panel.
+- No new API endpoint, no migration, no backend change.
+
+### Open limitation carried forward
+
+A **Free** offer the client has never held cannot have its `server_id` established
+from the entitled sources, so Claim is disabled with a stated reason. A real fix
+needs `server_id` on `/api/packages`, which is a backend change outside this
+allowlist. Recorded, not worked around.
+
 |---|---|
 | `frontend/scripts/verify-client-vpns.mjs` | **New** — 19-check committed gate with a refusal path |
 | `frontend/package.json` | `verify:client-vpns` added (a two-line collapse during editing was repaired and JSON-validated) |
@@ -1770,6 +1867,109 @@ and contains **no** hex literal. No `./var` or `.veylix-secrets` access; the two
 temporary probes lived outside the repo and were deleted (0 remaining).
 
 ### Next
+
+
+---
+
+## 2026-11-08 · Client side rebuild — Phases 6 and 7 finished, chart units added
+
+**Owner instruction:** finish everything left unfinished, give the charts GB/MB/TB
+units, and add a unit filter because the usage page re-renders too much.
+
+### The finding that changed the plan
+
+`frontend/scripts/verify-vpn-details.mjs` was **14,510 bytes of NUL** — a
+registered `npm run verify:vpn-details` script containing **zero** lines of code.
+The previous session's summary said the file did not exist; `git status` said it
+did; the truth was that it existed and was empty. Every claim about the Quick
+View, the three detail sections and the reveal gate was unbacked by a browser.
+
+The file was deleted and rewritten from `verify-client-offers.mjs`'s pattern
+(headless Chrome over raw CDP, `exit(1)` on failure, read-only against the app).
+
+**Result: 18 PASS · 0 FAIL · 5 SKIP**, each skip naming its reason.
+
+| Proved in a browser | Detail |
+|---|---|
+| panel identity beside the package | 3 / 3 cards, each with a copy control |
+| Quick View carries both facts | `Free 5GB Hysteria` + `client@veylix.test` |
+| Quick View is connect-first | primary label **`Connect now`**, plus `Full details` |
+| three sections, one hierarchy | `Overview` / `Usage` / `Connection & Help`, one `<h2>` each |
+| no false "connected" claim | account status never drawn as device connectivity |
+| reveal gate | URI **absent** before, `hysteria2://…@difanx4f3.difan` **present** after |
+
+**Skipped, with reasons:** clipboard read is blocked in headless Chrome; the
+seeded client holds only FREE VPNs so no chart or range-switch behaviour was
+exercised; the list view was not rendered on that route.
+
+### What was built
+
+| Area | Change |
+|---|---|
+| `lib/format.ts` | `ByteUnit`, `BYTE_UNITS`, `formatBytesIn()`, `unitLabel()`, `plainValue()` |
+| `charts/LineChart.tsx` | `valueFormat`, `yAxis`, `zeroBased`; value-axis ticks; 46 px gutter |
+| `charts/BarChart.tsx` | same three props; `base` honoured in height **and** tooltip |
+| `charts/charts.css` | `.ui-chart-axis` (token-driven, no inline style) |
+| `VpnUsageSection.tsx` | unit picker; **7×24 heatmap**; **daily bars**; **peak-hour sentence**; **exhaustion estimate** |
+| `ClientUsagePage.tsx` | page-level unit picker; both charts get `yAxis` at 120 px |
+| `VpnQuickView.tsx` | **`Connect now`** primary, `Full details` secondary |
+| `VPNDetailPage.tsx` | reads `?section=` so the Quick View deep-link lands correctly |
+
+### Two mistakes I made, and what caught them
+
+1. **An `insert_line` landed inside `.vui-muted`**, leaving the rule unclosed and
+   orphaning its `font-size` declaration 75 lines later. `npm run audit:css`
+   failed with `unclosed-block-before-selector` ×6 and then
+   `stray-closing-brace`. Repaired; the original declaration restored. This is the
+   third time insert/shell corruption has hit this codebase, and the gate is the
+   only reason it was survivable.
+2. **The verify script's first version tested the wrong things** and reported six
+   failures that were not defects: it read `VpnKindBadge` ("FREE") where it meant
+   `StatusBadge`, expected three `<h2>` simultaneously on a page that renders one
+   section at a time, and treated a FREE VPN's correctly-absent charts as
+   failures. Each was corrected against the real DOM, not by loosening the
+   assertion — the FREE cases became **SKIP with a reason**, never PASS.
+
+A third: the script's URI regex omitted `hysteria2`, so a working reveal was
+reported as a failure. Root cause found by dumping the live DOM rather than
+guessing.
+
+### Gates actually run (all from a real shell, output seen)
+
+| Gate | Result |
+|---|---|
+| `npx tsc -b` | **PASS** — 0 errors |
+| `npm run build` | **PASS** — built in 1.87 s |
+| `npm run lint` | **PASS** — 0 errors, **3** pre-existing warnings (baseline held; two intermediate regressions were fixed rather than accepted) |
+| `npm run audit` | **PASS** — no unwired/demo claims |
+| `npm run audit:css` | **PASS** — 55 stylesheets, 0 findings |
+| `npm run docs:verify` | **PASS** — 24 migrations · 136 routes · 626 tests |
+| `go build ./...` | **PASS** — rc 0 |
+| `go vet ./...` | **PASS** — rc 0 |
+| `go test ./... -count=1` | **PASS** — 17/17 packages ok |
+| `npm run verify:vpn-details` | **PASS** — 18 PASS · 0 FAIL · 5 SKIP |
+| `go test -race` | **BLOCKED** — no C compiler (pre-existing) |
+
+### Browser evidence for the unit work
+
+| Assertion | Result |
+|---|---|
+| picker offers all six choices | `auto, GB, MB, TB, KB, B` |
+| auto reading | `0 B of 5.0 GB` |
+| MB converts live, no request | `0.0 MB of 5120 MB` |
+| value axis drawn | **18** `.ui-chart-axis` ticks at `10px/600` |
+| tooltip formatted | `0 B`, not a raw byte count |
+
+### Not done, and said plainly
+
+- **The range-switch assertion is still a SKIP.** It needs a PREMIUM VPN on the
+  client seed; the account holds three FREE VPNs, whose charts are deliberately
+  absent. The 24h-vs-30d comparison has therefore **not** been proven in a
+  browser this session.
+- The heatmap, daily bars, peak-hour sentence and estimate have **no committed
+  browser gate** — their evidence is a manual CDP probe, not a `verify-*.mjs`.
+  That is the next gate to write.
+- Nothing was tested against a real 3X-UI panel with live snapshots.
 
 **Owner review of this S3 report.** S4 (Dashboard) requires **D-090**; S5 (My
 VPNs) requires **D-088**; S6 requires **D-089** plus a decision on the `/offers`
@@ -2118,3 +2318,1480 @@ it present.
 - No synthetic VPN record was written to the 3X-UI panel. The one write attempted
   was the seed-data `assign` call, which the server refused.
 - Advanced QA infrastructure / H1-H2 fixtures / Vitest: **NOT ADDED.**
+
+
+---
+
+## The VPN identity rules were missing, and are now recorded (2026-11-08, doc-only)
+
+**Why this pass happened.** The owner read the code and said the project could not
+be built correctly without a rule that was only ever implied:
+
+> *"3x ui eke client kenek = meke vpn ekak. 3x ui client kenek neththan ekko e vpn
+> eke weda karanne na, neththan eka fake ekak — me de amathaka karala me project eka
+> hadanna ba."*
+>
+> *"free premium kiyala nam kalata ee dekama 3x ui eke client la deke wenasak na.
+> api business perpus ekata thama deka wen karala thiyenne — premium sell karanna
+> salli hoyanna, free clienta alla ganna."*
+>
+> *"free premium wenas karanna puluwan ekama kena super admin. yamkisi hethuwa kin
+> 3x ui client eke vpn eka nethi unoth ee error eka vpn eke pennana one. eewagema
+> vpn detail page eke getaluwa pehediliwa sadahan wenna one."*
+>
+> *"vpn details page eke design eka front end design eka kethayi upset."*
+
+**What the audit then established — the rules were already true in code, and
+invisible in docs and screens.** Four of the owner's points were implemented and
+verified (`provisioning.discardProvisional`, `domain.PanelBase`,
+`RenameAssignmentName`, `RequirePermission(PermOfferManage)` on the tag route, the
+detail page's nine-status `NOT_CONNECTABLE` map). Three were **not**:
+
+1. **The client VPN list never shows the panel identity** — `MyVpnsPage.tsx` has
+   **zero** `panelEmail` references and titles each card with the package name.
+   Every other VPN surface already showed it. → `DEV-014`.
+2. **A vanished panel client is not explained on the client list** — only the detail
+   page explains `SERVER_UNAVAILABLE`; the list shows a bare `StatusBadge`. → `DEV-015`.
+3. **The VPN detail page has no single layout hierarchy** — `Connection` is a heading
+   *and* a card title in the same column, `Usage`/`Devices` are bare `<h2>`s while
+   `Setup guide`/`Support` are bare `<Card>`s, and 23 inline styles remain after
+   D-059. → `DEV-016`.
+
+**Also found and corrected in my own earlier reading.** I first took "free vpn
+hadanna puluwan super adminta witharayi" to mean *only a Super Admin may create a
+FREE VPN*, which would have contradicted Bible §2.3 and the live `POST /api/vpns`
+path. The owner clarified it means **FREE and PREMIUM are the same 3X-UI object**,
+and only the Super Admin may decide which label an object carries. No claim right
+was changed, and no rule now contradicts the code.
+
+### What was written (6 files, documentation only)
+
+| File | Change |
+|---|---|
+| `docs/new/MASTER_SPEC.md` §3 | "eight rules" → **eleven**; rule 3 gained the business-vs-technical distinction and the Super-Admin-only, locks-on-issue wording; rules **9, 10, 11** added (identity shown, panic surfaced, layout hierarchy) |
+| `docs/DECISIONS.md` | **D-091** — five sub-rules, the evidence table, and an explicit "what this does NOT change" list |
+| `.clinerules/01-project-core.md` | Glossary gained **Panel email** and **Gone**; non-negotiables 5 → **9** |
+| `skills/veylix-3xui-integration/SKILL.md` | new sections: panel email is the name (D-034), FREE ≡ PREMIUM on the panel, missing client surfaced; 5 checklist items |
+| `skills/veylix-ui-ux/SKILL.md` | new sections: identity beside the package, the nine statuses and their sentences, layout discipline; 4 checklist items |
+| `skills/veylix-testing-review/SKILL.md` | new table of the identity/status cases that are easy to miss; 3 checklist items |
+
+Plus `DEV-014`, `DEV-015`, `DEV-016` appended to `docs/new/DEVELOPMENT_LEDGER.md`.
+
+### Gates
+
+- `npm run docs:verify` → **PASS** (23 migrations / 133 routes / 617 tests / 15
+  packages — unchanged).
+- All six edited files re-read byte-level: **0** U+FFFD, no BOM.
+- No code, schema, migration, route or test was changed in this pass, so the code
+  gates were not re-run and are not claimed.
+
+### Honest status
+
+The **rules** are now recorded in the one place that governs (`MASTER_SPEC.md`),
+with a decision entry, an always-loaded glossary and three skills that carry them
+into the layer where the work happens. The **three defects they describe are still
+open** — `DEV-014`, `DEV-015`, `DEV-016` — because fixing them touches
+`MyVpnsPage.tsx` and `VPNDetailPage.tsx`, which were outside this pass's scope.
+
+---
+
+## 2026-11-08 · D-092 implemented — usage history became a real chart source (Phase 1–5)
+
+**Mode:** Act. **Scope stated before editing:** backend usage/latency reads, the
+frontend API client, the My VPNs list, the VPN detail page, and the docs that
+must move with a new route surface.
+
+### Why
+
+The owner's report was that the VPN details page had *"patttama wikarayak"*
+usage: several charts that looked impressive and one range switch that changed
+nothing visible. The audit found four charts answering the same question, a bar
+chart with only two bars (so 7d/30d/90d/1y were identical), a pie of those same
+two numbers, and a server CPU/RAM chart on a **customer's** screen.
+
+### Backend (Phase 1)
+
+| File | Change |
+|---|---|
+| `store/migrations/0024_ping_samples.sql` | **new** — `ping_samples(id, vpn_instance_id FK CASCADE, taken_at, reachable, latency_ms, scope)` + index `(vpn_instance_id, taken_at)`. Additive only. |
+| `httpapi/usage_routes.go` | `24h` added; new `ResolveWindow` (since/until/custom, one clock read); new `GET /usage/hourly` and `GET /speed-history`; `UsageStore` gained two methods; new `PingSampleStore` interface |
+| `httpapi/usage_store.go` | `requireVPNVisible` (the **same** ownership predicate as `/usage`), `VPNUsageHourly` (LAG deltas, `MAX(0, …)`), `VPNSpeedHistory` (derived bps, `unavailable` not `0`), `RecordPing`, `PingHistory` |
+| `httpapi/vpn_connection_routes.go` | ping result stored best-effort; new `GET /ping/history` |
+| `httpapi/router.go` | `PingSamples` dep; connection routes pass it through |
+| `cmd/veylixd/main.go` | wires `PingSamples` |
+
+**Two corrections during the work, both recorded because they were my errors:**
+
+1. A `ResolveWindow` guard first demanded **both** bounds for any custom window,
+   which rejected `?since=` alone — a perfectly well-defined request. The unit
+   test caught it (`half specified refused` failed). The rule is now: both bounds
+   → `custom`; one bound → the **named range with one edge moved**; `range=custom`
+   with no bounds → 422.
+2. A route insert landed **inside** another handler and produced a
+   self-conflicting ServeMux pattern. `TestServerMetricsRoleScoping` failed with
+   `500 want 403` and the panic named the duplicate registration. Fixed by
+   relocating the block to the end of `UsageRoutes`.
+
+### Frontend (Phases 2–4)
+
+| File | Change |
+|---|---|
+| `lib/api.ts` | `'24h' \| 'custom'` on `ApiUsageRange`; `ApiHourlyBucket`, `ApiSpeedPoint`, `ApiPingPoint` + responses; `vpnUsage` gained `bounds`; new `vpnUsageHourly`, `vpnSpeedHistory`, `vpnPingHistory` |
+| `stores/vpnStore.ts` | `panelIdentity()` and `statusNote()` — the **single** home for the nine status sentences |
+| `components/vpn/PanelIdentityRow.tsx` | readable + copyable identity (D-091.4) |
+| `components/vpn/VpnUsageCards.tsx` | Download/Upload/Total, count-up that respects `prefers-reduced-motion`, honest `showDirections={false}` for the summary read |
+| `components/vpn/VpnQuickView.tsx` | the sheet: status + sentence + identity + totals + "View full details" |
+| `components/vpn/VpnUsageSection.tsx` | trend (deltas), package bar, four parts of the day, performance (bps). Range switch genuinely changes bucket density |
+| `components/vpn/VpnConnectSection.tsx` | QR/link **hidden until asked**, copy without revealing, protocol-driven setup steps, troubleshooting, seller contacts |
+| `pages/VPNDetailPage.tsx` | rewritten 943 → 365 lines, three `<h2>` sections, 0 inline styles |
+| `pages/client/MyVpnsPage.tsx` | identity in card **and** row, real per-status sentence, Quick view |
+| CSS | `vpn-detail.css`, `vpn-usage-insights.css`, `vpn-connect.css`, `vpn-usage-cards.css`, `panel-identity.css` — all token-based, mobile stacking |
+| deleted | `components/vpn/PremiumInsights.tsx` + `vpn-insights.css` (superseded; nothing imported them) |
+
+`VPNDetailPage.bak` still exists beside the page — it is the pre-rewrite copy and
+should be deleted once the owner has reviewed the new screen.
+
+### Gates actually run (all from a real shell, output seen)
+
+| Gate | Result |
+|---|---|
+| `go build ./...` | **PASS** |
+| `go vet ./...` | **PASS** |
+| `go test ./... -count=1` | **PASS** — 17/17 packages |
+| `npm run lint` | **PASS** — 0 errors, 3 pre-existing warnings |
+| `npx tsc -b` | **PASS** |
+| `npm run build` | **PASS** — VPDDetailPage 41.86 → 33.15 kB |
+| `npm run audit` | **PASS** |
+| `npm run audit:selftest` | **PASS** — 8 positive + 6 negative |
+| `npm run docs:verify` | **PASS** — 24 migrations · 136 routes · 626 tests |
+| `go test -race` | **BLOCKED** — no C compiler (pre-existing, unchanged) |
+
+### Not done, and said plainly
+
+- **`frontend/scripts/verify-vpn-details.mjs` was NOT written.** The plan named
+  it, and its absence means the browser-test row (QA area 7) is **NOT RUN** for
+  these screens. The charts, the sheet and the reveal gate are verified by
+  typecheck, lint, the truth audit and reading the code — **not** by a browser.
+  That gap is the single most important follow-up.
+- The `24h` range has not been exercised against a panel with real snapshots;
+  the hourly/speed shapes are proven by Go tests over seeded rows only.
+- `ClientUsagePage` / `ClientBillingPage` / guides / support / notifications
+  remain data-less shells; out of scope here.
+
+
+---
+
+## 2026-11-08 · D-094 — a VPN can be put to sleep without being deleted
+
+**Scope approved:** option **B**, "Dormant". A per-VPN switch that stops a dead or
+unwanted VPN demanding attention, **without deleting anything**.
+
+### What was built
+
+- **Migration `0025_vpn_dormant.sql`** — `ALTER TABLE vpn_instances ADD COLUMN
+  dormant_at INTEGER` (NULL = awake) plus `idx_vpn_owner_dormant`. Additive only; no
+  backfill, so every existing row behaved exactly as before.
+- **`internal/provisioning`** — `Service.Dormant` and `Service.Wake`. **No panel call,
+  no status change, no deletion.** `Dormant` is idempotent (`WHERE dormant_at IS NULL`)
+  so a double-click cannot reset the "asleep since" date the card displays.
+- **`internal/httpapi`** — `POST /api/vpns/{id}/dormant` and `/wake` via the existing
+  `vpnAction` wrapper (`204`); `VPNRow.DormantAt`; both SQL listers select and scan
+  `dormant_at`.
+- **`internal/sync`** — `markAbsent` now returns `(changed bool, err)`, skips a dormant
+  VPN, and the caller only increments `res.Absent` when the row really moved.
+- **`internal/audit`** — `vpn.dormant` / `vpn.wake`, deliberately **not** notified.
+- **Frontend** — `ClientVpn.dormantAt`; `ApiVpn.dormant_at`; store `dormant`/`wake`;
+  `MyVpnsPage` sorts dormant **last under every sort key** (outer stable comparison,
+  not inside each `case`), excludes them from `attentionCount`, renders a muted
+  sentence with a Wake button; `ClientUsagePage` **skips the fetch entirely** for a
+  dormant VPN and says so; `VPNDetailPage` auto-wakes on `/vpn/:id` when the panel
+  reports `ACTIVE` again.
+
+### Evidence
+
+| Gate | Result |
+|---|---|
+| `go build ./...` | **PASS** |
+| `go vet ./...` | **PASS** |
+| `go test ./... -count=1` | **PASS** (17 packages, 0 failures) |
+| `npm run verify:client-dormant` | **PASS** — 15 PASS · 0 FAIL, `RESTORED VPN 44 is awake again` |
+| `npx tsc -b` | **PASS** |
+| `npm run lint` | **PASS** — 3 warnings, 0 errors (baseline unchanged) |
+| `npm run audit` | **PASS** |
+| `npm run audit:css` | **PASS** — 55 stylesheets |
+| `npm run docs:verify` | **PASS** — README matches the tree |
+| `go test -race` | **BLOCKED** — no C compiler (pre-existing) |
+
+### Three defects found and fixed on the way
+
+1. **`markAbsent` re-flagged a dormant VPN every tick** — caught by my own first test
+   run (`reported absent = 1, want 0`). The switch would have done nothing.
+2. **`vpn_lister_panel.go` had a NUL-corrupted comment** (`\x07ssigned: false`) with a
+   duplicated line, making the D-063 rationale unreadable. No gate catches this — it
+   still compiles.
+3. **`MyVpnsPage.tsx`** had a stray `/**` inside `needsAttention`'s doc block.
+
+The new browser gate also caught a **real behaviour of the product, not a bug**: the
+restore step answered `403 csrf_blocked` because a node `fetch` sends `Sec-Fetch-*` and
+is therefore treated as a browser whose `Origin` must match the host it arrived on. The
+server was right; the script now sends `origin: API`.
+
+### Decisions taken while implementing
+
+- **D-094 was already taken** (install/upgrade CLI-only) and the highest existing
+  decision was D-093, so dormancy is **D-094**. All 29 in-code references were corrected
+  from D-093 → D-094; none dangles.
+- **The card sentence is muted, not red.** Reusing `.vpn-warn` would tell the customer
+  something is wrong with a VPN they deliberately turned down.
+
+### Not done, and said plainly
+
+- **The range-switch assertion** in `verify-vpn-details.mjs` is still `SKIP`: it needs a
+  **PREMIUM** VPN on the client seed, and the account owns three FREE ones.
+- **No committed gate for the heatmap / daily bars / peak hour / projection** yet —
+  `verify-client-usage.mjs` is still unwritten; that evidence remains a manual probe.
+- **`vpnPingHistory`** still has zero UI callers (dead surface, B-1).
+- `go test -race` remains **BLOCKED** on this machine.
+
+### Data safety
+
+`verify-client-dormant.mjs` writes exactly one thing: it sleeps **one** VPN owned by
+the signed-in client and **always** wakes it in a `finally` block. After two full runs
+the seeded account was re-read from the API as `44, 43, 42` — all `ACTIVE`, all
+`dormant_at: null`. No row was deleted, released or provisioned.
+
+
+---
+
+## 2026-11-08 · D-095 — a "source" filter on Usage & History, and why option B was refused
+
+**Scope approved:** "Both A and B — build A now, investigate B separately."
+
+### B was investigated first, and refused on evidence
+
+"Source" is ambiguous, so the panel contract and our schema were audited **before any
+code**. `ClientTraffic` (`panel/types.go`, contract §4) exposes exactly
+`id, inboundId, email, up, down, total, expiryTime, enable, resetCount, lastOnline` —
+**one aggregate counter pair, no per-origin split**. Our own `usage_snapshots` stores
+no origin column either. The three promising candidates all fail:
+
+| Candidate | Why it cannot apportion traffic |
+|---|---|
+| `/clients/ips/{email}` | currently-connected IPs — a presence list, not bytes |
+| `inboundId` | which inbound the client sits on; a constant per VPN |
+| `netIO{up,down}` | whole-server counters with no client attribution |
+
+A per-device/per-origin filter would therefore either show the same total under every
+option or require inventing a split (REQUIREMENTS §2.7, INV-1). **Not built**, and
+written into D-095 so it is not re-explored.
+
+### A was built
+
+- **Usage page:** a **source picker** — *All VPNs · Server: X · a named VPN* — held in
+  the URL through `useListQuery` (the My VPNs pattern), so a filtered view is
+  shareable and Back undoes it. The count reads "N of M VPNs". A filter matching
+  nothing renders an explicit empty state with **Show all VPNs**, never a bare empty
+  list that would read as "no traffic".
+- **History:** `GET /api/vpns/{id}/ping/history` gained
+  `?source=server_reachability|all`, the one measurement distinction that already
+  exists (`ping_samples.scope`, D-026.2). The response **echoes the source actually
+  applied**; an unknown value is **`422`**, never a silent match-all; the value is a
+  **bound parameter**.
+
+### Step 1 (the PREMIUM seed) is BLOCKED — and I stopped rather than fake it
+
+`cmd/seedpremium` was written (`--dry-run` first, idempotent) and did create
+`client@veylix.test_paid_1` — but `GET /api/vpns/48/usage` answered
+`history: NONE, points: 0`, because `sync` only writes a snapshot when the **panel**
+returns the client. A local-only row can never accumulate history, so the fixture was
+**deleted again** (1 row, no snapshots, no panel client existed).
+
+Two product-native attempts then hit **correct** refusals:
+
+1. `POST /api/vpns {offer_id:20}` → **`403 plan_not_approved`** (D-030.3: a platform
+   plan needs a Super-Admin order confirmation).
+2. `POST /api/panel-clients/11/athoof/assign` → **`409 panel_client_taken`**
+   (`panel_assignments` row 5 reserves `athoof` to another customer).
+
+I did **not** weaken the `kind !== 'FREE'` chart gate (a real product rule: "Charts are
+part of Premium"), invent snapshot rows, or take a reserved client. Recorded as
+**DEV-024**, with the two exact remedies.
+
+### Evidence
+
+| Gate | Result |
+|---|---|
+| `go build ./...` · `go vet ./...` | **PASS** |
+| `go test ./... -count=1` | **PASS** — 0 failures |
+| `npm run verify:client-usage-source` | **PASS** — 9 PASS · 0 FAIL |
+| `npm run verify:client-dormant` | **PASS** — 0 failures, data restored |
+| `npm run verify:vpn-details` | **PASS** — 2 SKIP (the blocked PREMIUM rows) |
+| `npx tsc -b` · `build` · `lint` · `audit` · `audit:css` · `docs:verify` | **PASS** (lint at the 3-warning baseline) |
+| `go test -race` | **BLOCKED** — no C compiler |
+
+Live filter proof: `?source=all` → `200 source=all`; `?source=server_reachability` →
+`200`; `?source=device` / `?source=typo` → **`422 validation_failed`**.
+
+### Data safety
+
+The fixture row was deleted, the temporary inspection tool removed, the tag set on
+`athoof` reverted to `FREE`, and the account re-read afterwards as **42/43/44, all
+FREE, `dormant_at: null`** — exactly as found.
+
+### Not done, and said plainly
+
+- **The PREMIUM VPN seed (Step 1) and `verify-client-usage.mjs` (Step 2)** remain
+  **BLOCKED** on a real PREMIUM VPN, which needs a confirmed order or a free panel
+  client. The charts stay unproven in a browser.
+- **`vpnPingHistory` still has no UI caller**: the server side is now filtered,
+  validated and tested, but no screen renders a latency chart yet.
+
+---
+
+## 2026-11-09 · D-096 — Usage charts stopped showing fake data (range selector was a lie)
+
+**Owner report:** *"usage and data ekata records godak apu gaman user pissu
+wetenawa"* and *"vpn details page eke Usage eke niweradi nowana details
+pennanawada … fake ewa pennana epa"*.
+
+### Found and measured before touching code
+
+All six ranges returned the **identical** series — 116 points over 0.80 days —
+while the UI labelled them "Last 24 hours" / "Last 30 days" / "Last year". Root
+cause was `ORDER BY taken_at DESC LIMIT 240` in `usage_store.go`: the newest 240
+raw rows regardless of the window, then labelled with the requested range.
+
+### Changed
+
+- `usage_routes.go` — `UsageWindow` gained `BucketSec`/`Bucket`; new `bucketFor`
+  (`24h→hour`, `7d→6h`, `30d→day`, `3m→week`, `1y→month`, span-derived for
+  `all`/`custom`); `ResolveWindow` re-derives the width after the edges are final.
+- `usage_store.go` — `points()` aggregates into SQL time buckets (`LAG` + `GROUP
+  BY bucket_start`), reports the width it used. `VPNUsageHistory` gained
+  `until`/`bucket`/`bucketFromSpan`.
+- `ClientUsagePage.tsx` — one batched read for every awake VPN committed in a
+  single `setState` (kills the row-by-row pop-in); caption states the REAL span
+  and bucket; `labels={['30d ago','now']}` removed; `limit` no longer renders as
+  `0 B` when unread; one reading gets a sentence, not a dot.
+- `VpnUsageSection.tsx` — `Last {windowLabel}` now carries the real span and
+  bucket width beside it.
+- `api.ts` — `window.bucket_sec`/`window.bucket` + top-level copies.
+- New gate `verify-client-usage-range.mjs` (**8 PASS · 0 FAIL**).
+- Tests: `TestUsageRangesDifferFromEachOther` (**new**), plus three existing
+  usage tests corrected to the bucket reality (they asserted raw-snapshot row
+  counts that bucketing legitimately changes).
+
+### Gates
+
+`go build` / `go vet` / `go test ./... -count=1` **PASS** (634 test functions) ·
+`tsc -b` **PASS** · `npm run build` **PASS** · `lint` **3 warnings, 0 errors**
+(baseline held) · `audit` **PASS** · `audit:css` **PASS** · `docs:verify` **PASS**
+· `verify:client-usage-range` **8 PASS** · `verify:client-usage-source` **PASS**
+· `verify:client-dormant` **PASS** · `verify:vpn-details` **PASS** (2 stated
+SKIPs, unchanged) · `go test -race` **BLOCKED** (no C compiler, pre-existing).
+
+### Deliberately not done
+
+The `kind !== 'FREE'` chart gate was **not** weakened to turn the two
+`verify:vpn-details` SKIPs green. They stay SKIP until a genuinely PREMIUM VPN
+exists (DEV-024 — needs an owner/ops action: a confirmed payment order for offer
+20, or a free panel client on server 11).
+
+
+---
+
+## 2026-11-09 · D-097 — Usage & History search, and filters that actually reduce cost
+
+**Owner report:** *"vpn godak buy kaloth adala vpn hoya ganna userta aberi
+wenawa filter fetuer eka denna"* + *"ekawara godak vpn awoth user amaruwe
+wetnawa"*.
+
+### Two complaints, one defect
+
+The screen had a single `<select>` of every VPN keyed by **package name**:
+three VPNs off one package were three identical options (unfindable), and
+`awakeKey` was built from **every** owned VPN (two requests each, whether or not
+it was on screen). Measured before the fix: 3 VPNs = 6 requests, still 6 after
+filtering to one — the filter changed the DOM and nothing about the cost.
+
+### Changed
+
+- `ClientUsagePage.tsx` — `?q=` search (URL-backed, 300 ms debounce via
+  `useListQuery`); haystack = display name + **panel email** + server + package;
+  **`shown` computed before `awakeKey`**, so the fetch follows the filter; the
+  source select lists only what the search left; picking a VPN clears `q`; the
+  empty state names the cause and keeps "Show all VPNs"; the select options now
+  read `<package> · <panel email>`.
+- `usage.css` — only two rules: the search width inside the tighter control row,
+  and room for the identity in the select. The search reuses the shared
+  `.client-filters__*` classes rather than inventing a second look.
+- New gate `verify-client-usage-search.mjs` (**12 PASS · 0 FAIL**), including
+  *"a filtered view reads ONLY the filtered VPN"* (**2 requests / 3 VPNs**).
+
+### Gates
+
+`tsc -b` / `build` / `audit` / `audit:css` / `docs:verify` **PASS** · `lint`
+**3 warnings, 0 errors** (baseline) · `verify:client-usage-search` **12 PASS** ·
+`verify:client-usage-source` **PASS** · `verify:client-usage-range` **PASS** ·
+`verify:client-dormant` **PASS** · `verify:vpn-details` **PASS** (2 SKIP, DEV-024)
+· backend untouched this change.
+
+### Hazard
+
+`insert_line` bit again: appending the gate's shared helpers put `awake` **after**
+the `process.exit` at EOF, and `until()` referenced it before initialisation —
+`ReferenceError: Cannot access 'awake' before initialization`. Repaired by moving
+the declaration next to `rows`. The lesson is the same as before: after a
+multi-part write, run `node --check` **and** read the tail of the file.
+
+
+---
+
+## 2026-11-09 · D-098 Pass 1 — stale-VPN lifecycle: detect, record, preview (acting is OFF by default)
+
+**Owner request:** *"me suspend ha revoke wachchi vpn nn mara wadayak… kohe ara
+thenaka thiyala nischitha kalayakara passe system eken sampurnayenma ayi karanna
+patta wathayakne"* · constraint: *"yam recode ekak me sambana thiya gannath one
+neththan client la hithunu hithunu widihata vpn hadanawa"*.
+
+### What was missing
+
+`RELEASED` (D-027) already owned the whole safe-removal mechanism — 3-day undo,
+audit snapshot, panel client kept, hourly purge. What did **not** exist was a
+**clock**: `SUSPENDED`/`EXPIRED`/`TRAFFIC_DEPLETED` had no `*_at` column, so
+"suspended 90 days ago" was unanswerable. `updated_at` moves on unrelated edits.
+
+### Built
+
+- `migrations/0026_vpn_lifecycle.sql` — `status_changed_at` (default 0 =
+  unknown) + `idx_vpn_status_changed`. **Backfill = migration time**, so no
+  existing VPN can be swept until one full window after the upgrade.
+- `status_changed_at` written on every legal transition: `store/events.go`
+  (block/unblock), `store/releases.go` (release/restore), `sync/service.go`
+  (status change, mark-absent).
+- `store.StaleVPNs` — refuses `SERVER_UNAVAILABLE` and `RELEASED` outright.
+- `releases.ExpireStale(ctx, dryRun)` — **one query per status with its own
+  cutoff**, moves due rows to `RELEASED`. Never deletes.
+- `config.LifecycleMode` — `off` (default) / `report` / `enforce`; anything
+  unrecognised → `off`.
+- `cmd/veylixd` — hourly sweep wired next to `PurgeDue`, gated by the mode.
+- Audit actions `vpn.stale_released` / `vpn.stale_failed`, with `dry_run` and an
+  explicit scope sentence in the record.
+
+### Two real bugs found while building this
+
+1. **Bind order:** `? - i.status_changed_at` sits in the SELECT list, **before**
+   the WHERE, so `now` had to be the FIRST SQL argument — not the last. Caught by
+   a probe that printed the actual count (`0 candidates`) instead of guessing.
+2. **Per-status windows:** a single query built from the longest window silently
+   dropped `EXPIRED` (30 days) because the global cutoff was 90 days. Fixed by
+   querying once per status with its own cutoff.
+
+### Verified
+
+`gofmt` **clean** · `go build` / `go vet` / `go test ./... -count=1` **PASS**
+(649 test functions, 17/17 packages) · `docs:verify` **PASS** (26 migrations).
+12 new tests, including the ones that matter: `SERVER_UNAVAILABLE` never swept,
+report mode changes nothing, the row is never deleted, window boundaries hold,
+`status_changed_at = 0` skipped, unknown mode fails safe.
+
+**Live safety:** migration applied to the dev database with
+`VEYLIX_LIFECYCLE_MODE` **unset (= off)**; VPNs 42/43/44 re-read afterwards as
+`ACTIVE` — untouched.
+
+### Found, not fixed
+
+**DEV-029** — `RemoveReleasedVPN` deletes the `vpn_assignments` row, so a purged
+VPN frees a reseller slot while its panel client still exists (**quota reopens,
+panel asset leak**). Pre-existing in D-027; deliberately **not** retro-fitted to
+this decision because changing quota semantics is a commercial call.
+
+
+---
+
+## 2026-11-09 · D-099 — times were UTC but READ in the device's zone
+
+**Owner report:** *"me data thiyenne utc time eken needa api srilankawe SLST Time
+eken needa enna one… kohoma hari oyā hariyata welāwa hadala clientṭa niwaradi
+output eka dennako"*.
+
+### The first finding: storage was never the problem
+
+Every timestamp is an **epoch second** — an absolute instant, no zone attached.
+Converting stored values "to SLST" would store a *wall clock* instead of a moment,
+which is wrong the instant the server moves or a rule changes. **No migration, no
+schema change, no data rewritten.**
+
+### The real defect: four consequences of rendering in the DEVICE's zone
+
+1. The same VPN read differently per device. Measured here: 18:56 UTC rendered as
+   **00:26** in Colombo and **02:56** on this host (+08:00).
+2. Chart labels disagreed with the bars under them — bucket boundaries are built
+   server-side, the axis was labelled client-side. Up to **5h30** of error.
+3. A custom date range shifted 5h30: `new Date('…T00:00:00')` reads the date in the
+   device zone, so "1st → 3rd" included the wrong slice and cut the 3rd short.
+4. Server logs said UTC while the UI said something else, so operator and customer
+   could not agree on when anything happened.
+
+### Built
+
+- `config.DisplayTimezone` + `DisplayZone` (`*time.Location`, resolved once at
+  startup). `VEYLIX_DISPLAY_TIMEZONE`, default `Asia/Colombo`. An unloadable zone
+  falls back to **UTC** and keeps the requested name for diagnosis — it never
+  guesses an offset.
+- `httpapi.Deps.DisplayTimezone` → published on **`GET /api/me`** (the call every
+  signed-in page already makes), as a zone *name*, never an offset.
+- `frontend/src/lib/time.ts`: `setActiveTimezone` / `activeTimeZone` (module-level,
+  so formatters work outside React too), `zoneLabel` ("SLST"), `formatDateTimeWithZone`,
+  and **`zonedDayBounds`** — midnight/end-of-day in a *named* zone, offset derived
+  from `Intl` for that specific date.
+- `authStore.hydrate` adopts the zone before any screen renders.
+- 20 screens/components switched off the device clock: every `toLocale*` that
+  renders a stored instant now passes `timeZone`, including the two usage-chart
+  axis labellers and the custom-range parser.
+
+### Verified
+
+- `gofmt` **clean** · `go build` / `go vet` **PASS** · `go test ./... -count=1`
+  **PASS** — **654** test functions, 17/17 packages.
+- New Go tests: default zone is Colombo, offset is **+05:30** and independent of the
+  host, unloadable zone → UTC, `/api/me` publishes a loadable IANA name.
+- `npm run lint` **3 warnings (baseline)** · `npm run build` **PASS** ·
+  `audit` **OK** · `docs:verify` **OK** (26 migrations, 654 tests).
+- `verify:client-usage-range` **0 failures** · `verify:client-usage-search` **0** ·
+  `verify:client-dormant` **0** · `verify:vpn-details` **all passed**.
+- **Live:** `/api/me` now answers `display_timezone: "Asia/Colombo"`. Measured
+  offset **330 min = +05:30**. At 18:56 UTC the UI reads **09/11 00:26** where the
+  device previously read **02:56**.
+- The `/api/me` test **failed first** because `meHarness` did not set the zone —
+  a real gap, fixed in the harness rather than by weakening the assertion.
+- **A second bug was caught by browser verification, not by the type checker:**
+  `zonedDayBounds` measured the zone offset by parsing `toLocaleString('en-US')`
+  with `new Date(...)`. That string is locale-shaped, so `new Date` re-read it in
+  the DEVICE's locale and applied the offset **twice** — "1 Nov" resolved to
+  **08:00** and "3 Nov" to **07:59 on the 4th**. Rewritten with
+  `Intl.DateTimeFormat.formatToParts`, which is locale-independent. New regression
+  gate **`verify:display-timezone`**: **13 PASS, 0 failures**, covering both sides
+  of a US DST transition plus UTC / Tokyo / Colombo.
+- `verify:client-vpns` was already failing before this work for an unrelated reason
+  (it searched the COPY control's `aria-label` instead of the card's visible name);
+  fixed, now **OK**.
+
+### Still open (unchanged)
+
+`go test -race` **BLOCKED** (no C compiler). DEV-029 (reseller quota reopens on
+purge) still needs an owner decision.
+
+---
+
+## 2026-11-09 — session 27: "a suspended VPN sits at the top of My VPNs" → D-100 / DEV-032, and the sidebar build stamp → D-101
+
+### What the owner said
+
+> "when a VPN is suspended or revoked it appears at the top, and I cannot use it
+> anyway" — plus "add the version and GitHub repo link to the sidebar bottom".
+
+### What was actually wrong
+
+A real ordering bug, not a preference. `MyVpnsPage` sorted with exactly one outer
+comparison — dormancy — so every other status kept the chosen key's position.
+Under the default **Newest first**, a recently-created SUSPENDED/REVOKED row
+sorted to the very top: the loudest slot on the screen, given to the row the
+customer can do least with.
+
+Deleting it was not allowed and not the answer: D-091.5 / INV-1 require the record
+to stay visible, because "where did my VPN go?" must be answered by seeing it.
+
+### What was built
+
+- **`STATUS_RANK` + `rankOf`** — status now outranks the chosen sort key:
+  ACTIVE → needs-attention → customer-recoverable → not-in-service → dormant. The
+  customer's sort still applies in full **inside** each rank (stable sort), so it
+  is grouped, never replaced.
+- **A "Not in service" section** holding SUSPENDED / REVOKED / RELEASED /
+  REMOVED_FROM_CATALOG, with a sentence saying the rows are still theirs and still
+  on file. Each row keeps its status sentence and its panel identity.
+- **`status_changed_at` on `GET /api/vpns`** (D-098's column, until now internal),
+  so a row can say *since when*. Nil/`0` renders **nothing** — printing `0` would
+  show "1 January 1970", a fabricated fact.
+- **An honest usage caption** in `VpnUsageSection`: snapshots are cumulative
+  counters, so a suspended VPN's chart goes flat, and a flat line reads as "you
+  used nothing". The caption fires only when the newest reading predates the
+  status change, and says the flat line is *an absence of readings, not zero
+  usage*. No backfill, no notification.
+- **The sidebar footer** carries `v<version>` (from `GET /api/system/version` — the
+  RUNNING binary, not the bundle) and a source link. The repo URL is a build-time
+  constant in `vite.config.ts` (`__VEYLIX_REPO_URL__`), **not** a `.env` value,
+  because `frontend/.env` is git-ignored and a value living only there would vanish
+  in every deployment built from the repo.
+
+### Two answers that shaped the above
+
+- **`REVOKED` stays terminal.** No `REVOKED → ACTIVE` transition was added.
+  Resuming a revoked VPN is a new VPN, not a state change, so no transition was
+  invented to make a button possible.
+- **Overview counts still count every VPN** (D-088). "Total VPNs" describes the
+  account, not a section; excluding suspended rows would make it smaller than the
+  truth.
+
+### Gates — real results, not rounded
+
+`gofmt -l .` clean · `go build ./...` clean · `go vet ./...` clean ·
+`go test ./... -count=1` **17/17 packages ok, 655 tests** · new
+`TestVpnListPublishesStatusChangedAt` **PASS** · `tsc -b` clean · `build` ok ·
+`lint` **3 warnings / 0 errors** (baseline) · `audit` OK · `audit:selftest` OK ·
+`audit:css` OK · `docs:verify` **FAILED first** (README said 654, tree had 655) →
+fixed → **PASS** · `dev.ps1 -Preflight` **33 checks passed** ·
+`verify:client-vpns` **25 PASS** (8 of them new) · `verify:vpn-details`,
+`-dormant`, `display-timezone`, `usage-range`, `-search`, `-source` all **PASS**.
+
+### What is NOT proven, and why
+
+The seeded client owns three VPNs that **never changed status**, so the "Not in
+service" section and the `since` label have **no live row to render**. Their paths
+are proven by the backend test and by the gate's negative assertions — not by a
+screenshot. Creating a live suspended row would mean mutating the seeded panel
+client, which the data-safety rule forbids. Recorded as `PARTIAL` in DEV-032
+rather than claimed as verified.
+
+### Still open (unchanged)
+
+`go test -race` **BLOCKED** (no C compiler). DEV-029 (reseller quota reopens on
+purge) still needs an owner decision. DEV-024 blocked (no PREMIUM VPN can be
+seeded).
+
+
+
+
+---
+
+## Session 28 — Super Admin perfection (D-102 … D-106)
+
+**Date:** 2026-11-09
+**Instruction:** *"super admin side ekath full audit karanna … hema page ekakma wage
+redesing wenna one … super adminta hema deyakma controle karanna puluwan wenna one …
+kisima adupaduwak thiyanna epa … 100% perfect"*
+
+Worked through a phase-gated plan (`docs/new/SUPER_ADMIN_PERFECTION_PLAN.md`, a
+temporary file **deleted after every phase was proven**; this entry is the permanent
+record), one QA gate per phase, **a phase never starting while the previous one was
+red**.
+
+### Phases
+
+| Phase | Outcome |
+|---|---|
+| 0 | Plan file created; every gate run once to lock the baseline (17/17 ok, 3 lint warnings, 26 migrations, 138 routes, 655 tests) |
+| 1 | Staff console's first tests; `verify:clients` registered; **`verify-super-admin.mjs` created** — it immediately measured **373** inline styles, not the 30 a grep had found |
+| 2 | B-1 … B-6 fixed, each behind a failing test |
+| 3 | D-102 — one Super Admin, enforced by a partial unique index |
+| 4 | D-103 — forced release (mandatory reason) + purge (panel client never touched) |
+| 5 | D-104 — offer archive + guarded delete |
+| 6 | D-106 — 373 → **0** inline styles, including inside shared components; the new powers wired to controls |
+| 7 | Purge-route refusals tested (401 / 403 / 403 / 422) |
+| 8 | Full QA sweep — 11 areas, BLOCKED and NOT RUN stated as such |
+| 9 | Decisions D-102…D-106, API contract, ledger DEV-033, this entry, activeContext |
+| 10 | Plan file deleted |
+
+### The ten defects
+
+P-1 second Super Admin · P-2 no release for the owner · P-3 no record retirement ·
+P-4 no offer archive/delete · B-1 pager divided by page NUMBER · B-2 offset from the
+unclamped limit · B-3 CSV formula injection · B-4 DNS-rebinding TOCTOU · B-5 audit
+log not append-only · B-6 a gate failing on correct code.
+
+### Found by building the gate, not by the audit
+
+- `Table` emitted an inline style **per cell** — the true source of most of the 373.
+- `StaffPage` imported `clients.css` while its quota-bar rules live in `admins.css`,
+  so the meter rendered **completely unstyled**.
+- `errors.As(err, new(*T))` in a `switch` case **discards the match**: the purge
+  route answered **500** instead of **422**.
+
+### Found while fixing B-4
+
+- `allowPrivate` did not lift loopback → every SSH-tunnelled panel would have failed.
+- `169.254.169.254` was reachable under `allowPrivate` → relaxing the policy silently
+  opened cloud IMDS. The metadata list is now explicit and checked first.
+
+### Final gates
+
+`gofmt` clean · `go build` 0 · `go vet` 0 · `go test ./...` **17/17 ok** ·
+671 test functions (+16) · 28 migrations · 141 routes ·
+`lint` 3 warnings/0 errors · `build` ok · `audit` OK · `audit:selftest` OK ·
+`audit:css` OK · `audit:csv-selftest` **14/14** ·
+`verify:super-admin` **112/0** · `verify:nav` **74/0** · `verify:clients` PASS ·
+`verify:client-vpns` OK · `docs:verify` OK · `.\dev.ps1 -Check` **33 checks passed**.
+
+**BLOCKED:** `go test -race` (no C compiler).
+**BLOCKED:** `.\dev.ps1 -Preflight` (port 8080 already serving; `-Check` used instead).
+**NOT RUN:** performance (QA area 9) — no benchmark moved.
+
+---
+
+## Session 29 · 2026-11-10 · The Super Admin overview now answers a business question
+
+Asked to redesign the dashboard. The answer was not a redesign: the page was already
+clean (112/0, zero inline styles, zero fabricated data) and it **could not tell the
+owner whether the business was alive**. No revenue appeared anywhere in the product — the
+data was in `payment_records` all along; no query had ever asked for it.
+
+Shipped **D-107**: `GET /api/super/overview/summary` (Super Admin only, read-only) —
+money and the reseller book in one response, plus **eight P1 fixes** to claims the UI was
+making that the data did not support.
+
+**Recorded decisions.** Revenue is **NET** (confirmed − refunded). Month is a **calendar
+month**. Currencies are **never summed** — `mixed_currency` zeroes the totals and the UI
+shows counts plus the currency list instead of a number that describes nothing.
+
+**Three things found by building it, not by reading it:**
+1. `payment totals by status` performs a **full SCAN** — unavoidable for an all-time
+   aggregate, so it is documented and the windowed queries are indexed instead.
+2. `EXPLAIN QUERY PLAN` proved the month queries **already used `idx_pay_status`**, so
+   `0029` is a **read-ahead, not a fix** — and its own header says so.
+3. The reseller test expectation was wrong (5 admin rows, not 4): the **test** was
+   corrected, the code was left alone.
+
+**Gates:** gofmt clean · build 0 · vet 0 · **17/17 packages, 0 FAIL** · **682** tests
+(+11) · **29** migrations · **142** routes · lint 3w/0e (unchanged) · build ✓ · audit OK ·
+audit:css 55 sheets · csv 14/14 · `verify:super-admin` **122/0** (was 112, +10) ·
+`verify:nav` 74/0 · `verify:clients` PASS · `docs:verify` OK · `.\dev.ps1 -Check`
+**33 checks passed**.
+
+**The gate was proven to bite:** reverting `Panel health` → `Healthy` produced
+`FAIL … -> Panels, Clients, Active VPNs, Healthy` and exit 1. Restored, 122/0 returned.
+
+**Verified end to end in the browser** with live data: `LKR 2,500 · 1 sale`,
+`8 items in 2 groups`, `synced 3m ago`.
+
+**PARTIAL:** performance — query plans verified, **no timings measured**.
+**BLOCKED:** `go test -race` (no C compiler).
+**Not covered:** component-level unit tests for the new sections (D10 — no test runner);
+the page-level browser gate is the proof.
+
+
+
+## 2026-11-10 — session 30 — D-108: the fulfilment chain delivered money without a product
+
+**Reported:** offers could not be created usefully, and after confirming a client order
+no VPN appeared. Three complaints, one broken chain.
+
+**Root cause (traced to lines, then proven by a test).** `BuyPremiumPage.tsx` kept the
+chosen plan in component state and called `createPayment` with
+`{amountCents, methodId, reference}` only. `POST /api/payments` therefore recorded
+`offer_id = NULL`, so `payment_routes.go` evaluated `planAttached = false`, skipped
+`payments.Service.Confirm` — the only path that provisions — and settled the money with
+`st.ConfirmPayment`. The payment became `CONFIRMED` and no VPN existed.
+`payments.Service.Confirm` already refused this with `ErrNoPlan` → 422, but the route
+never called it, so the guard was unreachable.
+
+**Proven, not assumed.** `TestOrderWithPlanBuildsTheVpnOnConfirm` (with `offer_id` →
+the buyer owns one VPN and the panel stub was asked) versus
+`TestConfirmingAPlanlessOrderSettlesCashOnly` (without it → `vpn_instance_id` stays
+null). Same route, same store, one field different.
+
+**Fixed.**
+- `offer_id` and `quantity` threaded through `api.ts` → `paymentsStore` →
+  `BuyPremiumPage`, which now refuses to submit without a plan.
+- `payment_routes.go` sends every plan order through the settlement service and answers
+  `503 orders_unavailable` when that service is not wired, instead of settling.
+- `POST /api/offers` refuses an inbound belonging to another panel
+  (`422 inbound_mismatch`, via the new `store.InboundBelongsToServer`).
+- The offer form names *panel unreadable* versus *panel has no inbound* and states the
+  3X-UI step, instead of swallowing the error into an empty dropdown.
+- Client offer cards state why they are disabled, beside the control.
+
+**Pre-existing failures found (not caused by this work) and fixed.**
+- `verify-client-offers.mjs` counted `.of-grid .of-card` while the page renders its
+  featured card outside `.of-grid`, so the gate under-counted by one whenever a package
+  was featured. It now counts `.of-card`.
+- `ClientOffersPage` disabled the claim at the concurrent limit without the sentence the
+  same gate asserts. Fixed in the component, not by weakening the gate.
+
+**Gates actually run.** Backend `go build ./...`, `go vet ./...`,
+`go test ./... -count=1` → 17/17 packages ok. Frontend `npm run lint` → 3 warnings,
+0 errors (unchanged baseline); `npm run build` → built; `audit`, `audit:selftest`,
+`audit:css`, `audit:css-selftest`, `docs:verify` → OK. Browser:
+`verify:super-admin` 122/0, `verify:nav` 74/0, `verify:client-offers`, `verify:ui`,
+`verify:clients`, `verify:client-vpns` pass; new `npm run verify:order-chain` passes.
+
+**Proven to bite.** Reverting the `offerId` line makes `verify:order-chain` report
+`FAIL … {"offer_id":0}` and exit non-zero. Removing the 503 guard fails
+`TestPlanOrderRefusedWhenSettlementServiceIsMissing`.
+
+**Left failing, and not mine.** `npm run verify:vpn` exits 1 (3/13). It asserts
+`PremiumInsights` / `vpn-insights.css` blocks that are **deleted in the working tree**
+by an unfinished VPN-detail refactor predating this session (`VPNDetailPage.tsx`,
+`DeviceList.tsx`, `VpnHeroCard.tsx` are modified by that same work). This change
+touches none of those files. `go test -race` remains **BLOCKED** (no C compiler).
+
+**Note for the owner.** A `.git` directory **exists** at the repo root, contrary to the
+standing instruction that this workspace has no Git repository. It was read only, to
+prove which files were already dirty before this session. No Git state was changed.
+
+
+## 2026-11-10 — session 31 — D-109: full end-to-end verification of both roles
+
+**Asked for:** test the whole app, Super Admin side and client side, one gate at a
+time, and fix anything broken.
+
+**Result: 18/18 browser gates pass, 17/17 backend packages pass, 0 FAIL.**
+Both roles were also driven by hand in a real browser.
+
+**Super Admin, verified live:** staff login (correct portal split), `/dashboard`
+(LKR 2,500 · 1 sale · 1/1 panels · 6 clients · 8/10 VPNs · 100% health · "8 items in
+2 groups"), `/vpns` (10 rows, tags, Assign, Actions), VPN detail `ravi`
+(Suspend/Revoke/Release + Copy identity + real date), `/payments` (3 records, 2
+awaiting, Confirm/Reject/Cancel).
+
+**Client, verified live:** login, `/client/vpns` (3 VPNs with panel identity +
+Copy), `/client/offers` (Claim correctly disabled: "Claim unavailable here" +
+"Concurrent limit: 3 — you have reached it"), `/buy` (price fixed by the plan),
+`/client/billing` (honest empty state), `/client/usage`, `/vpn/42` (detail, and
+**no** lifecycle controls). Zero console errors.
+
+**Fixed, four defects.**
+
+1. **A fabricated date.** `VPNDetailPage` rendered `new Date(createdAt * 1000)`
+   unconditionally, so a panel client Veylix did not create (`created_at = 0`) read
+   **"added 1/1/1970"**. Now: *"created outside Veylix, so its start date is
+   unknown"*. Real rows keep their date (`ravi` still shows 11/3/2026).
+2. **A gate asserting the wrong page.** `verify:vpn-actions` signs in as Super
+   Admin then opened `/vpn/:id`, which `App.tsx` declares in the **client** block on
+   purpose. The staff run fell through to `/dashboard`, so "staff sees Suspend"
+   searched a dashboard for a VPN control. It now opens
+   `/vpns/:serverId/:panelEmail`; all 8 checks pass.
+3. **A permanently red gate.** Same gate exited 1 on every run because of (2).
+4. **A gate that failed one run in three.** `verify:studio` assumed the Design
+   Studio opens `compact`, but it **persists `studioView` in localStorage**, so it
+   reopens in the previous state; clicking "expand" while already `full` collapses
+   it. It also clicked blind and slept a fixed 600 ms. Now asserts the toggle
+   relative to the observed state, fails loudly when the control is absent, and polls
+   for the outcome. **8/8 consecutive runs pass.**
+
+**My own error, corrected by the code.** I first reported `/vpn/:id` as a "dead
+route". `App.tsx:357-367` documents the opposite: it is client-only by design
+("one path, one owner"). A client opening `/vpn/42` gets the full detail screen.
+The route was never broken — the gate was. `id: 0` on a panel client with no local
+row is likewise correct, because the UI navigates by server + panel email.
+
+**Gates run.** Backend `gofmt -l` clean, `go build ./...`, `go vet ./...`,
+`go test ./... -count=1` → 17/17 ok, 0 FAIL. Frontend `lint` 3 warnings / 0
+errors, `build` built, `audit`, `audit:css`, `docs:verify` OK. All 18
+`verify:*` scripts PASS.
+
+**Still open.** `go test -race` is BLOCKED (no C compiler). No provisioning write
+has been exercised against a real 3X-UI panel — **D12 remains ⛔ BLOCKED and is
+still the single biggest gap.**
+
+---
+
+## Session 32 — 2026-11-10 · D-110: Super Admin could not create an offer
+
+**The owner's report, in full:** *"owath prashna wenna athi thama offer create
+karannath ba. package hadanna th ba super adminta"* — offers and packages still
+cannot be created by a Super Admin. **It was true, and it was worse than stated:
+every single offer create failed.**
+
+### How it was found
+
+Not by reading code. Signed in as `owner@veylix.test` in a real browser, opened
+`/offers`, clicked **New offer**, submitted, and read the network tab. Two
+attempts, both refused, both *correctly*:
+
+| Attempt | Body sent | Answer |
+|---|---|---|
+| default (dropdown untouched) | `inbound_id: 0` | `422 offer_incomplete` |
+| inbound picked from the list | `inbound_id: 1` | `422 inbound_mismatch` |
+
+### Root cause — two id spaces behind one foreign key
+
+`vpn_offers.inbound_id` is a FK to `inbounds(id)`, a **local AUTOINCREMENT row
+id**. `provisioning/service.go:196-235` already documents this and translates it:
+
+```
+inbounds.id          = 52 / 53 / 54   ← local, what the FK wants
+inbounds.remote_id   =  1 /  2 /  3   ← what 3X-UI calls them
+```
+
+`GET /api/servers/{id}/inbounds` returned `panel.InboundOption` **verbatim**, so
+its `id` was the *panel's* number. The form submitted `1`; the FK looked for local
+row `1`; nothing matched; `InboundBelongsToServer` correctly refused. The operator
+saw an inbound listed for the server they had named and was told it belonged to
+another server. That is the whole defect: **the list spoke one id space and the
+write path spoke another.**
+
+### Fixed
+
+1. **`integrations.Service.Inbounds`** now returns the **local** `inbounds.id` it
+   just cached (`localInbounds`: one query per server, not one per inbound; skips
+   rows the mirror does not hold, because an offer cannot reference a row that is
+   not there). `GET /api/servers/11/inbounds` → `52/53/54` (was `1/2/3`).
+2. **The dropdown's empty option** read **"Let the panel decide…"** — naming a
+   capability Veylix does not have; the client is created *inside* a named
+   inbound. It now reads **"Choose an inbound…"**, and `saveForm` refuses locally
+   with *"Choose the inbound this offer creates its clients in."*, as
+   `PackagesPage` already did.
+
+### A claim I made and withdrew
+
+I first reported the 422 as **invisible** in the dialog. It was not —
+`role="alert"` rendered *"inbound_id is required — an offer with no inbound cannot
+create a client"*. The real fault was the misleading default and the field name in
+the message, not a swallowed error. Recorded in D-110 so the wrong claim is not
+inherited.
+
+
+
+### Evidence
+
+- **`TestInboundsReturnsLocalIDNotPanelID`** (new). Proven to bite: against the old
+  `return inbounds, nil` it fails *"returned id 1 is not a local inbounds.id for
+  server 1"*; against the fix it passes. It seeds a row id that cannot collide with
+  the panel's numbering, then asserts the id the list hands out satisfies the exact
+  predicate `POST /api/offers` runs.
+- **`verify:offer-create`** (new gate). Real UI + real backend, no stubs. Creates a
+  probe offer, asserts `201`, asserts the dropdown prompt, **deletes the probe**,
+  and asserts the catalogue is back to its starting size. **5/5 consecutive
+  passes** — after replacing its fixed `sleep(1200)` with a poll, because run 2 of
+  the first batch failed on `emptyOptionIsPrompt` while the dropdown still read
+  "Reading the panel…" (D-109 re-learned: a gate that fails at random is worse than
+  no gate).
+- **Live:** `POST /api/offers {inbound_id: 52}` → **201 Created**; row rendered
+  `QA Fix Proof 10GB · FREE · indian-1 · 10 GB · active`; probe deleted; catalogue
+  verified back at its original 5 rows.
+- **Gates:** `go build ./...` clean · `go vet ./...` clean · `go test ./... -count=1`
+  **17/17 packages pass** · `npm run lint` **0 errors** (3 pre-existing warnings in
+  `Sidebar.tsx`, `SuperSettingsPage.tsx`, `VpnQuickView.tsx` — files not touched) ·
+  `npm run build` OK · `npm run audit` OK · `npm run docs:verify` OK (README
+  corrected from a stale **687** to the tree's **688**, which already counted the
+  new test).
+
+### Files touched
+
+`backend/internal/integrations/service.go` (+ `localInbounds`, and the `Inbounds`
+return) · `backend/internal/integrations/service_test.go` (+1 test) ·
+`frontend/src/pages/OffersPage.tsx` (dropdown prompt + local inbound validation) ·
+`frontend/scripts/verify-offer-create.mjs` (new) · `frontend/package.json`
+(`verify:offer-create`) · `README.md` (count + attribution) · `docs/DECISIONS.md`
+(D-110) · `docs/new/DEVELOPMENT_LEDGER.md` (DEV-037) · `docs/API_CONTRACT.md`
+(inbounds `id` meaning) · `docs/cline/activeContext.md`. A temporary read-only
+`backend/cmd/inboundprobe` was used to inspect the mirror and then **deleted**.
+
+### Still open — stated, not buried
+
+1. **`/api/servers` says `CONNECTION_UNAVAILABLE` while `/api/sync/status` says
+   `ACTIVE`** (sync 59 s old) for the same panel. Every VPN detail page reads
+   `SERVER_UNAVAILABLE` and hides its links. The panel serves its login page
+   (HTTP 200) but every `/panel/api/...` path answers **404** from this machine.
+   The health classification is **suspect** — but a failed read must never be made
+   to look healthy, so this needs the probe path and the token checked, not a
+   weakened rule.
+2. **`verify:vpn` is still red (0/13 in spirit).** Its script waits on
+   `vpn-capacity`, `vpn-live-traffic`, `vpn-metrics` — none exist after the detail
+   page was rebuilt into tabs. The *data* is present (Download 49 GB / Upload
+   1.4 GB / Total 51 GB; "449 GB left of 500 GB"). The script needs rewriting
+   against `vd-*` / `vuc-*` / `vui-*` / `usage-window-truth` / `vpn-connect-section`.
+3. **D12 — real-panel provisioning — remains the single biggest gap.** Nothing in
+   this session proves a VPN can be built on the live panel. Offer creation needs
+   no panel write, which is exactly why it now works and provisioning still is not
+   proven.
+4. **`go test -race` is BLOCKED** (no C compiler). Never report it PASS.
+
+---
+
+## Session 32 (cont.) — D-111: package creation worked; the package list lied
+
+**The report:** *"package create wenne na mokdda aththatama me package kiyanne."*
+
+**Vocabulary, answered.** **Offer** (`/api/offers`, "VPN offers") is a catalogue
+entry a client **claims** (FREE) or **buys** (PREMIUM); each claim builds its own
+panel client. **Package** (`/api/plans`, "Packages") is a **priced plan
+template** — kind, traffic, duration, devices, price, currency, slots, and the
+server + inbound it builds on. Both live in `vpn_offers`, told apart by
+`kind` / `price_cents` / `is_custom`. That shared storage is why two screens can
+disagree about one row.
+
+**Creation actually worked.** `POST /api/plans` → **201 Created**, persisted with
+`server_id: 11, inbound_id: 52`. The *result* was wrong: the new row — and all
+four rows that already existed — rendered **"no server"**.
+
+**Root cause.** `GET /api/plans` serialised `store.Plan` **directly**. That struct
+has no `server_label`, `slots_remaining` or `purchasable` — they are derived —
+while `ApiPlan` in `lib/api.ts` declares all three as required:
+
+| Field | Declared | Sent | Rendered |
+|---|---|---|---|
+| `server_label` | `string` | absent → `undefined` | **"no server"** |
+| `slots_remaining` | `number \| null` | absent | `∞` |
+| `purchasable` | `boolean` | absent | `undefined` |
+
+The **client** branch of the same handler already mapped through `toPlanFact`.
+Only the operator branch forgot. TypeScript cannot catch it — an interface is a
+promise, and nothing checks the wire keeps it.
+
+**Fixed.** New `planView` = `planFact` embedded (derived, customer-safe fields) +
+operator-only `server_id`, `inbound_id`, `active`, `archived`, `owner_user_id`.
+`GET /api/plans` answers `[]planView`. Rows now read
+`Premium 50GB Monthly · server 11 · PREMIUM · 500 GB · 30 d`.
+
+**Evidence.**
+
+- `TestPlanListCarriesTheRenderedFields` (new). Proven to bite: against the old
+  `WriteJSON(w, http.StatusOK, plans)` it fails *"server_label = \<nil\>, want a
+  non-empty string — the Packages screen falls back to \"no server\""*; against the
+  fix it passes. Also asserts the four `ApiPlan` fields are present and that no
+  secret (`token_ciphertext`, `panel_url`, `password_hash`) leaks.
+- `verify:offer-create` extended to cover **both** screens in one gate: creates a
+  probe offer and a probe package, asserts both `201`, asserts the rendered package
+  row names its server and is **not** "no server", asserts the dropdown prompt,
+  deletes both, asserts both catalogues are back to their starting size.
+  **9 checks, 5/5 consecutive runs, zero residue** (verified afterwards:
+  plans `Free 2GB Standard, Free 5GB Hysteria, Platform assignment, Premium 50GB
+  Monthly`; offers back to their original 5; no `QA …` row anywhere).
+- Live before/after: `GET /api/plans` went from `server_label: undefined` on every
+  row to `"server 11"`; the Packages table went from **"no server"** to
+  **"server 11"**.
+- Gates: `gofmt`/`go build`/`go vet` clean · `go test ./... -count=1` **17/17
+  packages** · `npm run lint` **0 errors** (3 pre-existing warnings in
+  `Sidebar.tsx`, `SuperSettingsPage.tsx`, `VpnQuickView.tsx` — not touched) ·
+  `npm run build` OK · `npm run audit` OK · `npm run docs:verify` OK
+  (**689** test functions; README updated 688 → 689).
+
+### Files touched
+
+`backend/internal/httpapi/plan_routes.go` (`planView`, `toPlanView`, operator
+branch) · `backend/internal/httpapi/packages_routes_test.go` (+1 test, `fmt`
+import) · `frontend/scripts/verify-offer-create.mjs` (package coverage, 3 new
+checks) · `README.md` (count + attribution) · `docs/DECISIONS.md` (D-111) ·
+`docs/new/DEVELOPMENT_LEDGER.md` (DEV-038) · `docs/API_CONTRACT.md`
+(`GET`/`POST /api/plans` documented — they were missing entirely) ·
+`docs/cline/activeContext.md`.
+
+### Still open — unchanged and stated
+
+1. **`/api/servers` says `CONNECTION_UNAVAILABLE` while `/api/sync/status` says
+   `ACTIVE`** for the same panel; every VPN detail page reads
+   `SERVER_UNAVAILABLE`. Panel login page answers 200, `/panel/api/...` answers
+   **404**. Suspect classification — but a failed read must never be made to look
+   healthy.
+2. **`verify:vpn` still red** — stale selectors (`vpn-capacity`,
+   `vpn-live-traffic`, `vpn-metrics`) after the tab rebuild.
+3. **D12 — real-panel provisioning — still the single biggest gap.** Creating a
+   package needs no panel write, which is why it works. Selling one and building
+   the VPN is **not** proven.
+4. **`go test -race` BLOCKED** (no C compiler). Never report PASS.
+
+### Status
+
+`FIXED-VERIFIED` for offer creation (D-110) and package creation + the operator
+package list (D-111). `OPEN` for panel-health classification and `verify:vpn`.
+
+
+---
+
+## Session 35 — D-116: orders can finally be sorted, filtered and searched
+
+You said: *"super adminge order ha payment pages wayala sort karaganna ha filter
+karaganna widihaka na. eeka hodatama hadanna hema akarayenna filter karanna
+puluwan wenna one."* You were exactly right. Three defects on one screen.
+
+### 1. Three columns had no sort at all
+`Placed by`, `Package` and `Reference` were not sortable. Now all six are.
+
+### 2. The sorts that existed were broken — this is the real bug
+`Table` sorted on `row[column.key]`. A column keyed `placedBy` has no
+`placedBy` field (the payer is `payerEmail`), so **every row compared
+`undefined`**: the header arrow moved and the order never changed. `Amount` had
+the same shape. Added **`sortValue`** so a column may render one thing and sort
+by another.
+
+Proof — asc vs desc now differ on every column:
+
+| Column | asc first | desc first |
+|---|---|---|
+| Placed by | `#9` | `#17` |
+| Package | `#9` | `#17` |
+| Amount | `#9` | `#17` |
+| Reference | `#17` | `#9` |
+
+### 3. No filter, no search
+`Table` now has a toolbar: global search, per-column filters (text or select),
+Clear, and a stated count.
+
+```
+status=CONFIRMED → "Showing 6 of 9 orders"
+search "client@veylix.test" → 1 of 9
+search "confirmed" → 6 of 9     search "premium" → 6 of 9
+filter Placed by "janith14" → 3 of 9
+```
+
+### A bug I introduced and then found
+My first wiring made search read `sortValue`, so an order bought FOR somebody
+was unfindable by their address — **0 of 9**. Filtering and searching are
+different verbs, so they now get different fields (`filter.getValue` vs
+`searchValue`). The gate caught it.
+
+### 4. The 200-row cap was silent
+`GET /api/payments?envelope=1` → `{payments, shown, total, truncated}`. Count
+and list share one **`paymentsScope`**, so a reseller never sees a total for rows
+they cannot open. `total: -1` = "could not count", never `0`. The bare array is
+untouched — badges and dashboards keep working.
+
+### Correction I owe you
+I briefly wrote a **D-117 "duplicate test ID"** entry into the ledger. **It never
+happened** — there was only ever one test, no duplicate, no rename. I checked the
+file, found no such thing, and removed the claim. Recording it here rather than
+quietly deleting it.
+
+### Gates — all green
+```
+gofmt/build/vet clean · go test ./... 17/17 packages
+lint 0 errors · build · audit · audit:selftest · docs:verify OK (705 · 143)
+PREFLIGHT OK — 33 checks passed
+verify:orders — 23 PASS + 1 honest SKIP (9 orders, below the 200 cap)
+```
+
+### Files
+`components/ui/Table.tsx` · `ui.css` · `OrdersPage.tsx` · `paymentsStore.ts` ·
+`lib/api.ts` · `store/payments.go` · `payment_record_routes.go` ·
+`payment_routes.go` · `payments_cap_test.go` + `payments_envelope_test.go`
+(new, 6 tests) · `scripts/verify-orders.mjs` (new) · `docs/API_CONTRACT.md` ·
+`README.md` (700 → 705).
+
+
+
+The v1 audit reported the product worked but the gates did not. I fixed the
+gates. Each one was hiding a real answer.
+
+### `verify:vpn` — 4/13 → **13/13** (×3 consecutive runs)
+
+Every failing assertion pointed at testids a rebuild had deleted: `vpn-capacity`,
+`vpn-live-traffic`, `vpn-protocol`, `.vpn-chip`. The gate had been red so long
+that red was the expected state.
+
+Two of those were not stale selectors but **wrong assertions**:
+
+- **P-08** demanded four chart types on a **FREE** VPN — charts are Premium-only
+  **by design** (`VpnUsageSection.tsx:55`). The gate was demanding a product
+  change.
+- **P-03** demanded CPU/RAM cards on the VPN detail page. Those live on the
+  server and dashboard pages; this page has never rendered them.
+
+Both were **deleted / re-scoped**, not softened. The rest now assert facts:
+
+```
+P-09 credential masked by default   no link rendered before the customer asks
+P-10 QR + link                      drives vcn-reveal → vcn-toggle-0, 468-byte link
+P-02 capacity                       .ui-progress__fill via getComputedStyle
+P-01 up / down / total              the rendered Download / Upload / Total text
+P-04 live rate                      a /s rate, or an honest "not measured" / stopped
+P-06 range switch                   5 ranges exist AND switching re-reads the body
+P-08 charts                         FREE must SAY Premium-only; PREMIUM must render
+P-09 protocol                       read from the revealed link's scheme
+```
+
+### `verify:super-admin` — flaky by construction, fixed
+
+`await sleep(3500)` after every navigation — the pattern D-109 already removed
+elsewhere. It reported the machine's speed, not the product. Replaced with a
+bounded poll keyed on **each page's own declared heading**, plus an explicit wait
+for the dashboard's business row. Added a `settled without a fixed sleep`
+assertion so a regression back to `sleep()` fails loudly.
+
+**136/136 on a cold start** (straight after `-Restart`) — the case that used to
+fail — and 3/3 after.
+
+### `verify:vpn-replace` — did not exist, now 7/7
+
+D-112 shipped with 7 Go tests and one curl but **no proof the screen worked**.
+New gate, read-only: it drives the real Replace button, asserts the confirmation,
+then **cancels** — replacing a live customer VPN to satisfy a test is the write
+the data-safety rules forbid. It **refuses with exit 3** on an account owning no
+VPN, because a green run there proves nothing.
+
+**It found a real defect on its first run.** The confirmation said *"This creates
+a new VPN … and releases the current one"* — simultaneous phrasing that never
+stated D-112's actual safety property. Fixed in `MyVpnsPage.tsx`; the gate asserts:
+
+> *"…confirms it on the server **before** the current one is released — so you are
+> never left without a working VPN."*
+
+It also names the old panel identity (`D-091.4`) and reuses the claim note.
+
+### A mistake I have to record
+
+My first draft called `check(msg, ok, …)` with the arguments reversed and printed
+`PASS false`. A harness that can print that is worse than none. The signature is
+now documented at the definition.
+
+**Gates:** gofmt/build/vet clean · `go test ./...` 17/17 · lint 0 errors ·
+build/audit/audit:selftest/docs:verify OK · **PREFLIGHT 33/33** · `verify:vpn`
+13/13 · `verify:super-admin` 136/136 · `verify:vpn-replace` 7/7.
+
+### Files
+
+`frontend/scripts/verify-vpn-detail.mjs` (rewritten checks) ·
+`verify-super-admin.mjs` (`waitFor` poll) · `verify-vpn-replace.mjs` (new) ·
+`package.json` (`verify:vpn-replace`) · `MyVpnsPage.tsx` (dialog copy) ·
+`docs/DECISIONS.md` (D-115) · `docs/new/DEVELOPMENT_LEDGER.md` (DEV-042).
+
+
+
+**Question asked:** *"den balanna apita version 1 eka iwara karanna puluwanda kiyala."*
+Answer requires knowing whether the real panel works — so I went and proved it.
+
+**D12 is CLOSED.** Against the live panel (3X-UI **3.11.0**, Xray 26.10.21):
+
+```
+POST /api/servers/11/test          → 200 ACTIVE (versions read)
+GET  /api/servers/11/panel-clients → 200, 13 real clients
+GET  /api/servers/11/inbounds      → 200, 3 inbounds
+order #17 → POST /api/payments/17/confirm → 200, vpn_instance_id 55
+panel now holds  client@veylix.test_paid_1  sub_id vyx-55  enable true
+                  total_gb 536870912000  limit_ip 5  limit_hwid 5
+GET  /api/vpns/55/links            → 200, source "panel", real vless:// URI
+POST /api/vpns/55/suspend          → 204, panel reported enable: false
+POST /api/vpns/55/revoke           → 200 confirmed:true (panel client deleted)
+```
+
+The create went through the **legitimate order → confirm path** because the direct
+route is correctly locked: FREE answered `409 free_concurrent_limit`, a
+platform-owned PREMIUM plan answered `403 plan_not_approved`. **Both guards firing
+is itself live proof the security model works.**
+
+**D-114 — the defect the run found.** `SetClientEnabled` checked HTTP 200 and the
+envelope's `success`, then returned **without reading the client back**. On the
+live panel a bulk call can answer `200 {"success":true}` and change nothing. So
+`suspend` answered **204** and the local row became `SUSPENDED` while the panel
+kept `enable: true` — a **false success**.
+
+**Why it survived:** `SetClientEnabled` had **zero tests**. Nothing in
+`internal/panel/` referenced it.
+
+**Fix:** every enable/disable is now confirmed with a fresh single-client read
+(`GetClient`); absent and unchanged are reported apart. Confirmation uses the
+single read, **never the paged list** — the two panel views can disagree for a
+moment after a write, and picking one authority stops the check flipping.
+
+**Tests written before the fix** (`internal/panel/enable_confirm_test.go`):
+`TestSetClientEnabledConfirmsThePanelActuallyChanged` **failed against the old
+code and passes now** — that failure is the reproduction.
+`TestSetClientEnabledSucceedsWhenThePanelReallyDisabledIt` guards the other side.
+
+### Two corrections I have to record
+
+While verifying I twice read a stale panel list and nearly reported *"resume is
+broken"* and *"the panel create did nothing"*. **Both were my mis-reading**, not
+product defects — the create had worked (12 → 13 once the read settled) and
+resume had worked. I corrected both in the transcript rather than leaving a wrong
+claim standing. Same lesson as D-109: **poll for the outcome, never read once and
+conclude.**
+
+### Cleanup
+
+Probe VPN removed through the app's own paths — revoke (panel client deleted,
+`confirmed: true`) then purge (`204`). Panel back to **12 clients**; the client's
+three FREE VPNs untouched. No database edits.
+
+**Gates:** `gofmt`/`build`/`vet` clean · `go test ./...` **17/17** · `docs:verify`
+OK (**700** tests · **143** routes).
+
+### Files
+
+`backend/internal/panel/ops.go` (confirmation) · `enable_confirm_test.go` (new, 2
+tests) · `docs/DECISIONS.md` (D-114) · `docs/new/DEVELOPMENT_LEDGER.md` (DEV-041)
+· `README.md` (698 → 700).
+
+
+
+**The report:** *"super admin ta oder ekak awama e oder eka wae kagenda ha oder
+apu kenagena sampura wistharayak ganna widihak na."* Owner chose **option A** —
+show the identity, leave the release path alone.
+
+**Cause:** the data was in the database the whole time; the **wire** dropped it.
+`paymentColumns` shipped `payer_user_id` and `offer_id` — numbers, not names.
+
+**Shipped.** `paymentColumns` +4 scalar subqueries (`payer_email`,
+`target_email`, `offer_name`, `offer_kind`); `PaymentRow` +4 fields; `scanPayment`
+reads them as `NullString`; `ApiPayment`/`Payment` mirror them; **Placed by** and
+**Package** columns on `/orders`; `Placed by` / `For` / `Package` facts on
+`/orders/{id}`; `.ord-who`/`.ord-package` in `orders.css` (no inline styles).
+
+**Two judgement calls.**
+
+- **Scalar subqueries, not joins** — `vpn_offers` joined in could multiply rows
+  and silently change the page size. The file already used this pattern.
+- **Absence is stated in words**, never blanked: a manual record reads
+  *"no package (manual record)"*, a vanished account *"account no longer exists"*.
+  A blank cell reads as "we lost it", which is a worse claim than the truth.
+
+**One UI defect I found and fixed during verification.** My first column order put
+**Placed by** before **Order**, so a row started with an email and the order
+number came later. Reordered to `Order → Placed by → Package` so the row reads
+left to right: this order, placed by whom, for what.
+
+**Release is unchanged, on purpose.** The Super Admin can already release any VPN
+(`forced := p.IsSuperAdmin()`, ownership skipped, own `vpn.force_release` action).
+The required reason **stays** — removing it would let a working VPN be set aside
+with no recorded justification. The real remaining limit is that an order can only
+be given a release target while `PENDING`/`AWAITING_CONFIRMATION`; acting on a
+`CONFIRMED` order means refunds and quota, so it is left as its own decision
+rather than smuggled in behind a display change.
+
+**Live proof.** `GET /api/payments` → `payer_email: janith15dawan@gmail.com`,
+`offer_name: "Premium 50GB Monthly"`, `offer_kind: PREMIUM`; `#11` →
+`offer_name: ""`. UI headers `Order · Placed by · Package · Amount · Status ·
+Reference · History`; `/orders/16` showed `Placed by` + `Package`; `/orders/11`
+showed **"no package (manual record)"** on both screens.
+
+**Gates.** `gofmt`/`build`/`vet` clean · `go test ./...` **17/17** · `lint`
+0 errors · `build` OK · `audit` OK · `audit:selftest` OK · `docs:verify` OK
+(**698** tests · **143** routes).
+
+### Files
+
+`backend/internal/store/payments.go` · `payments_identity_test.go` (new, 2 tests)
+· `frontend/src/lib/api.ts` · `frontend/src/stores/paymentsStore.ts` ·
+`frontend/src/pages/OrdersPage.tsx` · `OrderDetailPage.tsx` · `orders.css` ·
+`README.md` · `docs/DECISIONS.md` (D-113) · `docs/new/DEVELOPMENT_LEDGER.md`
+(DEV-040).
+
+
+
+**The owner's request:** *"release eka thibbata ee release karana vpn eka neweyi
+ne hedenne. ekama vpn eka. release ekak thiyenne wenas wenas vpn hadala denna
+needа."* Confirmed as a **replace** feature (build a different VPN), not a
+redefinition of release. Owner approved the plan and chose the claim policy:
+consume a monthly claim, but check first and state it.
+
+**Shipped.** `POST /api/vpns/{id}/replace` → `provisioning.Replace` →
+`store.ReplaceFreeClaim`; UI action + confirmation + outcome dialog on
+`/client/vpns`; `replaceVpn()` in `lib/api.ts`; 7 tests.
+
+**The safety order is the design.** Create the new panel client first, confirm it,
+and only then release the old VPN. Proven by
+`TestReplaceCreatesTheNewVPNBeforeReleasingTheOld`: when the panel refuses, the
+release function is called **zero** times and the old VPN stays `ACTIVE`.
+
+**Three defects found by running it, not by reading it.**
+
+1. **`502 store: free concurrent limit reached`** — the client held 3 FREE VPNs,
+   so "create first" could never succeed: the slot it needed was held by the VPN
+   being replaced. Fixed without weakening either rule — the ordering stays, and
+   `ReplaceFreeClaim` **swaps** the claim's concurrent slot inside the caller's
+   transaction. The monthly cap still applies (§17.18).
+2. **`ErrPlanArchived` → `502`** — a VPN whose own package left the catalogue is
+   normal; now **422 `plan_archived`** with the remedy named.
+3. **`SQLITE_BUSY` deadlock** — my first `ReplaceFreeClaim` opened its own
+   transaction while `Create` already held one. It now takes the caller's
+   `*sql.Tx`, which is exactly why `RecordFreeClaim` has that parameter. Caught by
+   the test suite before it could reach a user.
+
+**Live proof.** `POST /api/vpns/42/replace` → **201**:
+
+```
+new:  client@veylix.test_free_4   confirmed: true
+old:  client@veylix.test_free_1 → RELEASED (release_id 1, 3-day window)
+claim_consumed: true, claims_remaining: 1
+```
+
+UI: `client@veylix.test_free_4 · Free · #4` rendered with a copyable panel
+identity (D-091.4); the Replace button appeared on exactly the three in-service
+VPNs and **not** on the released one; the confirmation named the old panel
+identity, the 3-day undo and the one-claim cost before anything happened.
+
+**Test data removed through the app's own paths** — the release was restored via
+`POST /api/vpn-releases/1/restore` (200, `free_1` back to `ACTIVE`) and the probe
+VPN revoked. No database edit, no truncation.
+
+**Gates:** `gofmt`/`go build`/`go vet` clean · `go test ./... -count=1` **17/17
+packages** · `npm run lint` **0 errors** (4 pre-existing warnings in
+`Sidebar.tsx`, `SuperSettingsPage.tsx`, `VpnQuickView.tsx` — files not touched) ·
+`npm run build` OK · `npm run audit` OK · `npm run docs:verify` OK
+(**696** tests, **143** routes; README updated 689→696 and 142→143).
+
+### Files
+
+`backend/internal/provisioning/replace.go` (new) · `replace_test.go` (new, 7
+tests) · `service.go` (`ReplacesPanelEmail` on `CreateInput`; claim booking swaps
+or records) · `backend/internal/store/claims.go` (`ReplaceFreeClaim`) ·
+`backend/internal/httpapi/replace_routes.go` (new) · `router.go` (wiring +
+compile-time assertion) · `frontend/src/lib/api.ts` (`replaceVpn`,
+`ApiVpnReplace`) · `frontend/src/pages/client/MyVpnsPage.tsx` (button, confirm,
+outcome) · `README.md` · `docs/DECISIONS.md` (D-112) ·
+`docs/new/DEVELOPMENT_LEDGER.md` (DEV-039) · `docs/API_CONTRACT.md`.
+
+### Still open — unchanged
+
+1. **D12 — real-panel provisioning.** Replace's *logic* is proven; its *remote
+   side* still rides on the same unproven panel write. Neither fixes nor worsens it.
+2. **Panel health** — `/api/servers` says `CONNECTION_UNAVAILABLE` while
+   `/api/sync/status` says `ACTIVE`.
+3. **`verify:vpn`** — stale selectors after the tab rebuild.
+4. **`go test -race`** — BLOCKED (no C compiler).
+
+
+
+---
+
+## S36 — D-117: the other three operator lists (2026-11-10)
+
+**Asked:** "ee tikath ekin eka hadanna" — do the next item. D-116 left the
+toolbar wired to Orders only, so I finished the job on VPNs, Clients, Payments.
+
+**What was actually wrong.** Not "missing feature" again. `Table` falls back to
+`row[column.key]`, and these columns are keyed `panel_email`, `display_name`,
+`tag`, `owner_name` — none of which exist on the row object. Every comparison
+was `undefined`, so the arrow moved and the rows did not. Identical root cause
+to D-116, still live on three screens because D-116 stopped at Orders.
+
+**Fixed.** `sortValue` / `searchValue` / per-column `filter` on all three;
+`searchable` turned on. No change to `Table.tsx` — the component was already
+right.
+
+**Two `''` traps, both real:**
+- An empty `<select>` value is the toolbar's "no filter", so "Untagged" and "No
+  Veylix record" could not be expressed at all — the filter would silently do
+  nothing. They use a `(none)` sentinel.
+- Unknown values (no expiry, never signed in, panel unreadable) now sort to
+  `MAX_SAFE_INTEGER`/`0`. Ascending order must not put "unknown" first and read
+  as "urgent".
+
+**New gate `verify:tables` — 28 checks, OK ×2.** Asserts behaviour: a term
+narrows the rows, Clear restores the exact count, a header click *reorders the
+rows*.
+
+**Three harness bugs found the hard way, all mine, all now documented in the
+script:**
+1. The first draft **hung silently with no output** — a missing `}` kept the
+   whole file inside `sleepFor`, so it parsed as a function body. Fixed, and the
+   script now uses `profileDirUnique` + `assertPortFree` + `waitForExit` from
+   `chrome-profile.mjs` — the module that exists precisely for this.
+2. The search term was **welded from a whole cell**: `textContent` concatenates
+   sibling spans, so `owner@veylix.test` + `for client@veylix.test` became
+   `owner@veylix.testfor client@veylix.test`, a string nobody types. The gate
+   then "failed" on every screen. Term now comes from one **text node**.
+3. The sort probe **clicked one header three times**. `toggleSort` cycles
+   asc→desc→null, so it compared asc with asc and reported "no column
+   reordered" on four tables that sort perfectly. Now clicks different columns,
+   one frame apart — React renders asynchronously, and reading in the same tick
+   returns the old order.
+
+**Negative control passed (D-115 standard).** Forcing the comparator to
+`return 0` turned all four sort checks FAIL; reverting turned them PASS. The
+gate has been observed failing, so a green run means something.
+
+**Two environment lessons for the next session:**
+- `:5173` serves **raw `src/`** (Vite dev), not `dist/`. A `VITE_*` env var set
+  in PowerShell does not reach it — sabotage must be in the source.
+- Killing all `node` processes also kills the dev server, and the gate then
+  fails with `ERR_CONNECTION_REFUSED` (a browser error page) rather than a
+  product failure. Always `.\dev.ps1 -Restart` after cleanup.
+
+**Gates:** `go build`/`go vet` clean · `go test ./...` 17/17 · lint 0 errors ·
+`build` ok · `audit` OK · `audit:selftest` OK (8+6) · `docs:verify` OK ·
+`verify:orders` OK · `verify:tables` 28/28 ×2.
+**NOT covered, stated openly:** `AdminsPage`, `OffersPage`, `PackagesPage`,
+audit and retail lists — smaller lists, left alone rather than widened
+silently. `go test -race` remains **BLOCKED** (no C compiler).

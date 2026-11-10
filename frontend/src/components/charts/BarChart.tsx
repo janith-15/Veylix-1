@@ -1,4 +1,5 @@
 ﻿import { useState, type PointerEvent as ReactPointerEvent } from 'react'
+import { plainValue } from '../../lib/format'
 import { seriesColor } from './LineChart'
 
 export interface BarDatum {
@@ -13,28 +14,55 @@ export function BarChart({
   showGrid = true,
   showValues = false,
   ariaLabel,
+  valueFormat = plainValue,
+  yAxis = false,
+  zeroBased = true,
 }: {
   data: BarDatum[]
   height?: number
   showGrid?: boolean
   showValues?: boolean
   ariaLabel?: string
+  /**
+   * Turns a raw bar value into its label and tooltip text.
+   *
+   * Defaulted to a grouped number so existing callers are unchanged. A caller
+   * plotting BYTES must pass `formatBytes`, otherwise the bar labels read
+   * `33,327,637,690` — a number nobody can compare at a glance.
+   */
+  valueFormat?: (value: number) => string
+  /** Draw a labelled value axis. Off by default, like `LineChart`. */
+  yAxis?: boolean
+  /**
+   * Bars are zero-based because a bar's LENGTH is its value; starting anywhere
+   * else makes a short bar look tall. Kept as a prop only so a caller can be
+   * explicit, not because a non-zero baseline is ever a good idea here.
+   */
+  zeroBased?: boolean
 }) {
   const [hover, setHover] = useState<number | null>(null)
 
   const W = 600
   const H = height
-  const padX = 8
+  const padX = yAxis ? 46 : 8
   const padY = 12
-  const innerW = W - padX * 2
-  const innerH = H - padY * 2 - 16
+  const innerW = W - padX - (yAxis ? 8 : padX)
+  const innerH = H - padY * 2 - (yAxis ? 12 : 0)
   const max = Math.max(1, ...data.map((d) => d.value))
+  const base = zeroBased ? 0 : Math.min(...data.map((d) => d.value))
   const slot = innerW / Math.max(1, data.length)
   const barW = Math.min(46, slot * 0.58)
 
+  /* A zero-based axis puts every tick in the same unit. When a caller passes
+     `zeroBased: false` the ticks start at the smallest bar, so the axis still
+     states where the visible bars actually begin. */
+  const ticks = [0, 0.5, 1].map((f) => ({ f, value: max - (max - base) * f }))
+
+
   const hovered = hover !== null ? data[hover] : null
   const tipX = hover === null ? 0 : ((padX + slot * hover + slot / 2) / W) * 100
-  const tipY = hovered === null ? 0 : ((padY + innerH - (hovered.value / max) * innerH) / H) * 100
+  const tipY =
+    hovered === null ? 0 : ((padY + innerH - ((hovered.value - base) / (max - base || 1)) * innerH) / H) * 100
   const flip = tipX > 62
 
   return (
@@ -67,9 +95,21 @@ export function BarChart({
               strokeDasharray="3 5"
             />
           ))}
+        {yAxis &&
+          ticks.map(({ f, value }) => (
+            <text
+              key={`tick-${f}`}
+              className="ui-chart-axis"
+              x={padX - 6}
+              y={padY + innerH * f + 4}
+              textAnchor="end"
+            >
+              {valueFormat(value)}
+            </text>
+          ))}
         {data.map((d, i) => {
           const c = seriesColor(i)
-          const h = (d.value / max) * innerH
+          const h = ((d.value - base) / (max - base || 1)) * innerH
           const x = padX + slot * i + (slot - barW) / 2
           const y = padY + innerH - h
           const dim = hover !== null && hover !== i
@@ -107,7 +147,7 @@ export function BarChart({
                   textAnchor="middle"
                   fill="var(--text-muted)"
                 >
-                  {d.value.toLocaleString()}
+                  {valueFormat(d.value)}
                 </text>
               )}
               <text
@@ -135,7 +175,7 @@ export function BarChart({
           <div className="chart-tip__row">
             <span className="chart-tip__dot" style={{ background: seriesColor(hover ?? 0) }} aria-hidden="true" />
             <span>{hovered.label}</span>
-            <span className="chart-tip__val">{hovered.value.toLocaleString()}</span>
+            <span className="chart-tip__val">{valueFormat(hovered.value)}</span>
           </div>
         </div>
       )}

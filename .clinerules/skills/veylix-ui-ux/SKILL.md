@@ -17,6 +17,68 @@ description: Use for any change under frontend/src - components, pages, Zustand 
 4. **The UI never owns a truth the server owns.** No locally derived VPN limits,
    no locally computed quota, no locally guessed expiry. Ask the server.
 5. **An empty state says "no data".** Never draw a zero line to fill a chart.
+6. **A VPN list shows the VPN's identity, not just its package name** (D-091.4).
+7. **A non-active VPN state is explained, not merely coloured** (D-091.5).
+8. **One layout hierarchy per screen, and no inline styles** (D-091, D-059).
+
+## Showing a VPN: identity beside the package (D-091.4)
+
+The panel email is the VPN's *name* — `<client email>_<kind>_<n>`, e.g.
+`nimal@gmail.com_paid_2`. A customer who cannot see it cannot tell support which
+client they hold, so every support thread starts with an operator guessing.
+
+Rules for any client-facing list or card:
+
+- Show **both** facts: the human label from `vpnDisplayName` (the package it came
+  from) **and** the panel identity from `vpn.panelEmail`. Never one without the other.
+- Render the identity so it is **readable**, not a raw `_paid_1` blob alone — pair
+  the local part with what the suffix means (e.g. `nimal@gmail.com` + a `Paid · #2`
+  chip). The **copy control must copy the exact panel email**, because that is the
+  string an operator will search for on the panel.
+- It is **not** a secret: it is the customer's own identity on their own server. Do
+  not hide it, and do not substitute a package name for it.
+- Never invent a label. If `panelEmail` is empty the row is malformed — say so rather
+  than rendering a plausible-looking name.
+- The same rule applies to any future screen that lists an owned VPN. A list without
+  it is incomplete, which is a defect rather than a design preference.
+
+## Explaining a non-active VPN (D-091.5)
+
+`ACTIVE` needs no sentence. Every other status does, **on the row as well as on the
+detail page**, because a grey chip is not an explanation:
+
+| Status | The sentence must convey |
+|---|---|
+| `SUSPENDED` | paused by the seller; nothing deleted; it can be resumed |
+| `TRAFFIC_DEPLETED` | the allowance is used up |
+| `EXPIRED` | expired; a new package is needed |
+| `SERVER_UNAVAILABLE` | **Veylix cannot currently see this VPN on its server** — this is why it is shown, not hidden |
+| `REVOCATION_PENDING` | a removal is waiting for the server to confirm |
+| `REVOKED` | revoked |
+| `RELEASED` | released by the customer; undo window before Veylix drops its record |
+| `REMOVED_FROM_CATALOG` | the package is gone but the VPN still exists |
+| `PENDING` | still being set up on the server |
+
+- Give an **unknown** status the generic sentence. Never invent an explanation —
+  `VPNDetailPage.tsx` already follows this and is the reference implementation.
+- `SERVER_UNAVAILABLE` is the case this rule exists for: it is the difference between
+  "your VPN is gone" and "Veylix cannot see it right now", and the customer must be
+  able to tell those apart.
+
+## Layout discipline (D-091, D-059)
+
+- **One hierarchy per screen.** Either every content group is an `<h2>` section, or
+  every group is a titled `Card` — not both stacked in one column. A page that mixes
+  them has no legible outline on screen or in a screen reader.
+- **A heading never repeats at two levels.** `<h2>Connection</h2>` directly above
+  `<Card title="Connection">` reads as a rendering fault.
+- **Shared layout is a class, not a `style={{ … }}`.** Inline styles are what make two
+  screens that should match drift apart; `D-059` already converted most of them, and
+  a regression back to inline is a defect. If a layout needs to repeat (a warning
+  block, a row of chips), it gets one class in that screen's stylesheet.
+- Status colours, spacing and radii come from tokens. A layout that only works in one
+  preset is broken.
+
 
 ## Store convention
 
@@ -91,3 +153,7 @@ page list, store count or mock-free claim is still true today — verify it.
 - [ ] Loading, empty, error and refused states all rendered honestly.
 - [ ] `npm run lint` and `npm run build` run, output shown.
 - [ ] `npm run audit` run, output shown.
+- [ ] Every VPN the list renders shows `panelEmail` beside the package name, copyable.
+- [ ] Every non-`ACTIVE` status carries an explanatory sentence on the row.
+- [ ] One layout hierarchy (all `<h2>` or all `Card`), no repeated heading word.
+- [ ] No new `style={{ … }}` for layout; the class lives in that screen's stylesheet.

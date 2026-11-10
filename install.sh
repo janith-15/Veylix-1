@@ -13,6 +13,11 @@
 #   sudo ./install.sh --domain vpn.example.com
 #   sudo ./install.sh --domain vpn.example.com --dry-run
 #   sudo ./install.sh --domain vpn.example.com --version v1.4.0
+#   sudo ./install.sh --domain vpn.example.com --repo you/veylix
+#
+# Fork or private mirror: --repo <owner/name> (or VEYLIX_REPO). The shipped
+# default is a placeholder, so a fork ALWAYS passes one of the two; the installer
+# refuses the placeholder rather than downloading a 404 and blaming the network.
 #
 # Exit codes:
 #   0  installed AND publicly served over HTTPS
@@ -31,8 +36,13 @@ HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
 VEYLIX_TOOL=install.sh
 
+# The repo slug the shipped default points at. It is NOT a real repository: a
+# stock `./install.sh` would fetch a 404 and report it as a network failure.
+# validate_repo() refuses it explicitly so the correction is one line long.
+PLACEHOLDER_REPO=janith-15/veylix
+
 # --- configuration (overridable, documented in docs/INSTALL.md §F) ----------
-REPO=${VEYLIX_REPO:-your-org/veylix}
+REPO=${VEYLIX_REPO:-$PLACEHOLDER_REPO}
 # Releases API origin. Overridable so a fork (or a test) can point elsewhere.
 RELEASE_API=${VEYLIX_RELEASE_API:-https://api.github.com}
 BIN_DIR=${VEYLIX_BIN_DIR:-/usr/local/bin}
@@ -46,6 +56,11 @@ SERVICE=veylixd
 
 DOMAIN=""
 VERSION=""
+# Where the deployment templates (Caddyfile, unit, backup script) come from.
+# Empty means "not resolved yet"; resolve_deploy_dir() decides before phase 3
+# because phase 3 (branch) and every later phase install from it.
+SCRIPT_BASE=${VEYLIX_SCRIPT_BASE:-}
+DEPLOY_SRC=""
 SKIP_DNS=0
 SKIP_PORTS=0
 REUSE_KEYS=0
@@ -65,6 +80,12 @@ Required:
 Options:
   --version <tag>      install an exact release (default: latest)
   --list-versions      list published releases, then exit (no install)
+  --repo <owner/name>  the GitHub repository to install FROM (default: the
+                       placeholder $PLACEHOLDER_REPO, which is refused). Also
+                       settable as VEYLIX_REPO; the flag wins.
+  --endpoint <url>     releases API origin for a GitHub Enterprise host
+                       (default: https://api.github.com)
+  --script-base <url>  legacy single-file fallback for the deployment templates
   --dry-run            print every phase and change nothing
   --skip-dns           skip the DNS A-record check (recorded in the output)
   --skip-ports         skip the port 80/443 check (recorded in the output)
@@ -83,6 +104,12 @@ parse_args() {
 			--domain=*)   DOMAIN=${1#*=}; shift ;;
 			--version)    VERSION=${2:-}; shift 2 ;;
 			--version=*)  VERSION=${1#*=}; shift ;;
+			--repo)       REPO=${2:-}; shift 2 ;;
+			--repo=*)     REPO=${1#*=}; shift ;;
+			--endpoint)   RELEASE_API=${2:-}; shift 2 ;;
+			--endpoint=*) RELEASE_API=${1#*=}; shift ;;
+			--script-base)   SCRIPT_BASE=${2:-}; shift 2 ;;
+			--script-base=*) SCRIPT_BASE=${1#*=}; shift ;;
 			--list-versions) LIST_VERSIONS=1; shift ;;
 			--dry-run)    DRY_RUN=1; shift ;;
 			--skip-dns)   SKIP_DNS=1; shift ;;
@@ -102,6 +129,104 @@ release_base() {
 	else
 		printf 'https://github.com/%s/releases/download/%s' "$REPO" "$VERSION"
 	fi
+}
+
+# validate_repo SLUG -> 0 for exactly "owner/name".
+#
+# This exists because the shipped default was a placeholder and a fork that
+# forgot to override it got `curl: 404` from github.com and a message about the
+# network. A refused input names the correction instead: one line, no guesswork.
+validate_repo() {
+	local r=$1
+	[ -n "$r" ] || return 1
+	# The shipped default is deliberately still refused: a fork must pass its own
+	# --repo, so no install ever fetches this project's releases by accident.
+	[ "$r" != "$PLACEHOLDER_REPO" ] || return 1
+	case "$r" in
+		http://*|https://*|git@*|*' '*) return 1 ;;
+	esac
+	# Exactly one slash, nothing empty on either side.
+	printf '%s' "$r" | grep -qE '^[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*$' || return 1
+	return 0
+}
+
+# resolve_deploy_dir - find the deployment templates, in order of trust:
+#
+#   1. $HERE/deploy/                     a checkout next to the installer
+#   2. $base/veylix-deploy.tar.gz        the release bundle (published by
+#                                        .github/workflows/release.yml)
+#   3. $SCRIPT_BASE/veylix-<name>        legacy per-file fallback
+#
+# WHY THIS EXISTS: a release used to publish only the two binaries and
+# SHA256SUMS, so a one-curl install had NO Caddyfile, NO systemd unit and NO
+# backup script. Phase 9 then skipped HTTPS and `vpn-platformctl update`
+# refused to run its own backup step. The templates are now part of the release,
+# and this function is what reaches them.
+#
+# A tarball is never extracted blindly: only members under deploy/ are written,
+# into a throwaway staging directory.
+resolve_deploy_dir() {
+	local base bundle stage
+
+	if [ -f "$HERE/deploy/Caddyfile" ] || [ -f "$HERE/deploy/veylixd.service" ]; then
+		DEPLOY_SRC="$HERE/deploy"
+		say "deployment files: $DEPLOY_SRC (checkout)"
+		return 0
+	fi
+
+	base=$(release_base)
+	bundle="$base/veylix-deploy.tar.gz"
+	stage=$(mktemp -d)
+
+	if is_dry_run; then
+		out "[dry-run] curl -fsSL $bundle -o $stage/veylix-deploy.tar.gz"
+		out "[dry-run] tar -xzf <bundle> -C $stage --wildcards 'deploy/*'"
+		DEPLOY_SRC="$stage/deploy"
+		say "deployment files: would come from $bundle"
+		return 0
+	fi
+
+	if curl -fsSL "$bundle" -o "$stage/veylix-deploy.tar.gz" 2>/dev/null; then
+		# Only deploy/* members. `--force-local` keeps a Windows-style path from
+		# being read as a remote host; the wildcard form is GNU tar, which is what
+		# every supported distribution ships.
+		if tar -xzf "$stage/veylix-deploy.tar.gz" -C "$stage" --wildcards 'deploy/*' 2>/dev/null \
+			&& [ -f "$stage/deploy/veylixd.service" ]; then
+			DEPLOY_SRC="$stage/deploy"
+			say "deployment files: $bundle"
+			return 0
+		fi
+		warn "downloaded $bundle but it did not contain deploy/veylixd.service - ignoring it"
+	fi
+
+	if [ -n "$SCRIPT_BASE" ]; then
+		local name
+		for name in Caddyfile veylixd.service veylix-backup.sh; do
+			if curl -fsSL "$SCRIPT_BASE/veylix-$name" -o "$stage/$name" 2>/dev/null; then
+				say "deployment file: $SCRIPT_BASE/veylix-$name"
+			else
+				warn "no veylix-$name at $SCRIPT_BASE"
+			fi
+		done
+		if [ -s "$stage/veylixd.service" ]; then
+			DEPLOY_SRC="$stage"
+			return 0
+		fi
+	fi
+
+	warn "no deployment templates found (no ./deploy next to the installer, no"
+	warn "$bundle, no --script-base). HTTPS and backups will be incomplete;"
+	warn "see docs/INSTALL.md §B.3 for the manual copy."
+	DEPLOY_SRC=""
+	return 1
+}
+
+# deploy_file NAME - the resolved path of one deployment template, or nothing.
+deploy_file() {
+	local name=$1
+	[ -n "$DEPLOY_SRC" ] || return 1
+	[ -s "$DEPLOY_SRC/$name" ] || return 1
+	printf '%s' "$DEPLOY_SRC/$name"
 }
 
 # list_versions prints the published release tags, newest first, then exits.
@@ -146,6 +271,16 @@ preflight() {
 	esac
 
 	have systemctl || die "systemd is required (systemctl not found). Non-systemd hosts are not supported."
+
+	# Name a missing template NOW rather than at phase 9. An install with no
+	# Caddyfile ships an API-only box, and one with no backup script produces a
+	# host where `vpn-platformctl update` refuses to run. Both are worth knowing
+	# before a single byte is written.
+	if [ "$SKIP_CADDY" -eq 0 ] && [ -z "$DEPLOY_SRC" ]; then
+		warn "no deployment templates could be located: HTTPS and the backup script"
+		warn "will be missing from this install. Fix the release bundle, or re-run"
+		warn "with --script-base <url>, or use --skip-caddy to say you meant it."
+	fi
 
 	if check_disk / "$((200))"; then
 		say "disk: at least 200 MB free on /"
@@ -397,12 +532,14 @@ install_binaries() {
 	fi
 
 	# Ship the backup script with the install so vpn-platformctl can delegate to
-	# it without depending on a checkout.
-	if [ -f "$HERE/deploy/veylix-backup.sh" ]; then
-		run install -o root -g root -m 0750 "$HERE/deploy/veylix-backup.sh" "$DEPLOY_DIR/veylix-backup.sh"
+	# it without depending on a checkout. It comes from the resolved template
+	# source: the checkout, the release bundle, or --script-base.
+	BACKUP_SRC=$(deploy_file veylix-backup.sh) || true
+	if [ -n "${BACKUP_SRC:-}" ]; then
+		run install -o root -g root -m 0750 "$BACKUP_SRC" "$DEPLOY_DIR/veylix-backup.sh"
 		say "installed $DEPLOY_DIR/veylix-backup.sh"
 	else
-		warn "deploy/veylix-backup.sh not found next to the installer; backups will not work until it is placed in $DEPLOY_DIR"
+		warn "no veylix-backup.sh in the deployment templates; backups will not work until it is placed in $DEPLOY_DIR"
 	fi
 }
 
@@ -413,10 +550,11 @@ install_binaries() {
 install_service() {
 	phase "systemd"
 
-	if [ -f "$HERE/deploy/veylixd.service" ]; then
-		run install -o root -g root -m 0644 "$HERE/deploy/veylixd.service" "$UNIT_PATH"
+	UNIT_SRC=$(deploy_file veylixd.service) || true
+	if [ -n "${UNIT_SRC:-}" ]; then
+		run install -o root -g root -m 0644 "$UNIT_SRC" "$UNIT_PATH"
 	else
-		warn "deploy/veylixd.service not found next to the installer; writing a minimal unit"
+		warn "no veylixd.service in the deployment templates; writing a minimal unit"
 		if would_run; then
 			cat >"$UNIT_PATH" <<'EOF'
 [Unit]
@@ -497,14 +635,15 @@ install_caddy() {
 		return 0
 	fi
 
-	if [ -f "$HERE/deploy/Caddyfile" ]; then
+	CADDY_SRC=$(deploy_file Caddyfile) || true
+	if [ -n "${CADDY_SRC:-}" ]; then
 		if would_run; then
-			sed "s|vpn\.example\.com|$DOMAIN|g" "$HERE/deploy/Caddyfile" >"$CADDYFILE.veylix-new"
+			sed "s|vpn\.example\.com|$DOMAIN|g" "$CADDY_SRC" >"$CADDYFILE.veylix-new"
 		else
-			out "[dry-run] render $CADDYFILE from deploy/Caddyfile with domain $DOMAIN"
+			out "[dry-run] render $CADDYFILE from $CADDY_SRC with domain $DOMAIN"
 		fi
 	else
-		warn "deploy/Caddyfile not found next to the installer; skipping the proxy configuration"
+		warn "no Caddyfile in the deployment templates; skipping the proxy configuration"
 		INCOMPLETE=1
 		return 0
 	fi
@@ -611,9 +750,26 @@ main() {
 	[ -n "$DOMAIN" ] || { usage >&2; die "--domain is required" 2; }
 	validate_domain "$DOMAIN" || die "'$DOMAIN' is not a valid public hostname. Certificates need an FQDN such as vpn.example.com" 2
 
+	# Refuse a bogus repo slug BEFORE downloading anything: a 404 from a
+	# placeholder is otherwise reported as a network failure and sends an
+	# operator looking in the wrong place.
+	if ! validate_repo "$REPO"; then
+		if [ "$REPO" = "$PLACEHOLDER_REPO" ]; then
+			die "no repository configured: --repo is still the shipped placeholder ('$PLACEHOLDER_REPO'). Pass the repository that publishes the release:
+         sudo ./install.sh --domain $DOMAIN --repo <owner>/<name>
+       (or export VEYLIX_REPO=<owner>/<name>)" 2
+		fi
+		die "'$REPO' is not a valid repository slug. Expected exactly <owner>/<name>, e.g. acme/veylix" 2
+	fi
+
 	export DRY_RUN
 
 	acquire_lock "$LOCK_PATH"
+
+	# The deployment templates are needed by phase 3 onward, so they are located
+	# before the branch decision. A miss is recorded, not fatal: the install can
+	# still serve the API on loopback, and report() says HTTPS is incomplete.
+	resolve_deploy_dir || true
 
 	preflight
 	fetch_artifact

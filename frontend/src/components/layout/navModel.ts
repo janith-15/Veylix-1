@@ -197,8 +197,21 @@ const CLIENT_NAV: AppNavGroup[] = [
     items: [
       { to: '/client/offers', label: 'Offers & Orders', icon: Package },
       { to: '/buy', label: 'Buy premium', icon: ShoppingBag },
+      /*
+       * ONE billing destination, not two.
+       *
+       * `Payments & Billing` and `Purchases` sat side by side and read the same
+       * payment records: `/history` drew the full statement, and `/client/billing`
+       * spent its whole length telling the reader to go there. A customer had to
+       * guess which of the two was the real one, and the one they picked first
+       * was a dead end.
+       *
+       * `/client/billing` is now the single entry point: it shows what is still
+       * waiting and links to the full statement. The `/history` ROUTE is kept -
+       * bookmarks, e-mail links and the Dashboard's "Open Purchases" button all
+       * still resolve - it is simply no longer a second navigation item.
+       */
       { to: '/client/billing', label: 'Payments & Billing', icon: CreditCard },
-      { to: '/history', label: 'Purchases', icon: ScrollText },
     ],
   },
   {

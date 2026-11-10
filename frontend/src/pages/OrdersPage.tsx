@@ -17,6 +17,7 @@ import { Ban, CheckCircle2, History, Settings2, ShieldCheck, XCircle } from 'luc
 import { usePaymentsStore, allowedTransitions, type Payment } from '../stores/paymentsStore'
 import { useOrdersStore } from '../stores/ordersStore'
 import './orders.css'
+import { activeTimeZone } from '../lib/time'
 
 /**
  * L2 — the order queue (D-031, D-036).
@@ -44,7 +45,7 @@ function formatMoney(cents: number, currency: string): string {
 
 /** Seconds → a short local timestamp; the wire never carries a formatted date. */
 function when(seconds: number): string {
-  return new Date(seconds * 1000).toLocaleString()
+  return new Date(seconds * 1000).toLocaleString(undefined, { timeZone: activeTimeZone() })
 }
 
 /** Human label for a timeline `kind`, without inventing one the server cannot send. */
@@ -69,7 +70,9 @@ interface Target {
 }
 
 export function OrdersPage() {
-  const { payments, loading, busy, error, load, confirm, reject, refund, cancel } = usePaymentsStore()
+  const { payments, loading, busy, error, load, confirm, reject, refund, cancel, totalOrders, truncated } =
+    usePaymentsStore()
+
   const { loadEvents, eventsFor, block, unblock } = useOrdersStore()
   const toast = useToast()
   const navigate = useNavigate()
@@ -131,6 +134,14 @@ export function OrdersPage() {
       key: 'id',
       header: 'Order',
       sortable: true,
+      // The cell renders "#12" plus a human date, so the raw id is not what
+      // sorts — but it IS what an operator means by "newest first".
+      sortValue: (p) => p.apiId,
+      filter: {
+        kind: 'text',
+        getValue: (p) => String(p.apiId),
+        placeholder: 'Order #…',
+      },
       render: (p) => (
         <span>
           <strong>#{p.apiId}</strong>
@@ -139,22 +150,101 @@ export function OrdersPage() {
       ),
     },
     {
+      key: 'placedBy',
+      header: 'Placed by',
+      // D-113: the operator's first question is whose money this is. It sits
+      // right after the order number so a row reads left to right: this order,
+      // placed by whom, for what. An order bought FOR someone else shows both,
+      // because naming only the payer would mislead about who receives the VPN.
+      sortable: true,
+      // Sorting by the PAYER, then the recipient, so an order bought for
+      // somebody else files under the account that paid. Without `sortValue`
+      // this column sorted on `row.placedBy`, which does not exist, so the
+      // arrow moved and the order never changed.
+      sortValue: (p) => p.payerEmail || p.targetEmail || '',
+      // Search matches BOTH identities, so an order bought for somebody is
+      // findable by their address as well as the payer's.
+      searchValue: (p) => `${p.payerEmail} ${p.targetEmail}`,
+      filter: {
+        kind: 'text',
+        // Matches either identity: an operator searching "for tenant" or the
+        // reseller's address both find the order.
+        getValue: (p) => `${p.payerEmail} ${p.targetEmail}`,
+        placeholder: 'Email…',
+      },
+      render: (p) => (
+        <span className="ord-who">
+          {p.payerEmail ? (
+            <span className="ord-who__name">{p.payerEmail}</span>
+          ) : (
+            <span className="ui-muted t-sm2">account no longer exists</span>
+          )}
+          {p.targetEmail && p.targetEmail !== p.payerEmail && (
+            <span className="ord-who__for t-sm2">for {p.targetEmail}</span>
+          )}
+        </span>
+      ),
+    },
+    {
+      key: 'package',
+      header: 'Package',
+      hideOnMobile: true,
+      sortable: true,
+      // Sorted by the plan NAME; an order with no plan sorts first, which puts
+      // the manual records together instead of scattering them.
+      sortValue: (p) => p.offerName || '',
+      searchValue: (p) => `${p.offerName} ${p.offerKind}`,
+      filter: { kind: 'text', getValue: (p) => p.offerName, placeholder: 'Package…' },
+      // A manual record or a deleted plan has no name. Say so — an empty cell
+      // reads as "we lost it", which is a different and worse claim.
+      render: (p) =>
+        p.offerName ? (
+          <span className="ord-package">
+            <span>{p.offerName}</span>
+            {p.offerKind && <span className="ord-package__kind t-sm2">{p.offerKind}</span>}
+          </span>
+        ) : (
+          <span className="ui-muted t-sm2">no package (manual record)</span>
+        ),
+    },
+    {
       key: 'amount',
       header: 'Amount',
       align: 'right',
       sortable: true,
+      // Money is integer cents on the wire and a formatted string on screen.
+      // Sorting the string would order "LKR 900" before "LKR 1,200".
+      sortValue: (p) => p.amountCents,
+      searchValue: (p) => formatMoney(p.amountCents, p.currency),
       render: (p) => <span className="ord-amount">{formatMoney(p.amountCents, p.currency)}</span>,
     },
     {
       key: 'status',
       header: 'Status',
       sortable: true,
+      // Typing "confirmed" into the search box should find confirmed orders.
+      searchValue: (p) => p.status.replace(/_/g, ' '),
+      filter: {
+        kind: 'select',
+        options: [
+          { value: 'PENDING', label: 'Pending' },
+          { value: 'AWAITING_CONFIRMATION', label: 'Awaiting confirmation' },
+          { value: 'CONFIRMED', label: 'Confirmed' },
+          { value: 'REJECTED', label: 'Rejected' },
+          { value: 'CANCELLED', label: 'Cancelled' },
+          { value: 'REFUND_PENDING', label: 'Refund pending' },
+          { value: 'REFUNDED', label: 'Refunded' },
+        ],
+      },
       render: (p) => <StatusBadge status={p.status} />,
     },
     {
       key: 'reference',
       header: 'Reference',
       hideOnMobile: true,
+      sortable: true,
+      sortValue: (p) => p.reference || '',
+      filter: { kind: 'text', getValue: (p) => p.reference, placeholder: 'Reference…' },
       render: (p) =>
         p.reference ? (
           <code className="ord-ref">{p.reference}</code>
@@ -320,12 +410,30 @@ export function OrdersPage() {
               }
             />
           ) : (
-            <Table
-              columns={COLUMNS}
-              data={visible}
-              rowKey={(p) => p.id}
-              initialSort={{ key: 'id', dir: 'desc' }}
-            />
+            <>
+              {/*
+               * D-116: the list is capped at the newest 200. Silence here was the
+               * defect — the page looked like the complete set. The sentence says
+               * which orders are missing and that the total is unknown when the
+               * count could not be read, rather than showing a reassuring zero.
+               */}
+              {truncated && (
+                <p className="ord-truncated" data-testid="orders-truncated">
+                  {totalOrders < 0
+                    ? `Showing the newest ${payments.length} orders. The total could not be read, so there may be older orders not listed here.`
+                    : `Showing the newest ${payments.length} of ${totalOrders.toLocaleString()} orders. Older orders are not listed here.`}
+                </p>
+              )}
+              <Table
+                columns={COLUMNS}
+                data={visible}
+                rowKey={(p) => p.id}
+                initialSort={{ key: 'id', dir: 'desc' }}
+                searchable
+                searchPlaceholder="Search order #, email, package or reference…"
+                caption="orders"
+              />
+            </>
           )}
         </Card>
       </AsyncState>

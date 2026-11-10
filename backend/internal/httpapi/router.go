@@ -70,6 +70,9 @@ type Deps struct {
 	// GET /api/vpns/claims/me and leaves the monthly cap at the policy default.
 	FreeClaims FreeClaimStore
 	Usage      UsageStore
+	// PingSamples stores reachability probes (D-092). Nil keeps the ping route
+	// working and simply has no latency history to plot.
+	PingSamples PingSampleStore
 	// SyncRunner runs a sync pass on demand (POST /api/sync/run). Nil leaves the
 	// route unregistered, so a build without the scheduler still serves.
 	SyncRunner SyncRunner
@@ -84,8 +87,13 @@ type Deps struct {
 	AdminAudit *audit.Logger
 	// SyncStaleAfter is the freshness window reported by /api/sync/status.
 	SyncStaleAfter time.Duration
-	UserAdmin      UserAdminService
-	SetupState     SetupStateReader
+	// DisplayTimezone is the zone every screen renders an absolute instant in
+	// (D-099), published through /api/me. Empty means "do not advertise one",
+	// and the UI then falls back to the zone the browser reports — which is the
+	// pre-D-099 behaviour rather than a guessed offset.
+	DisplayTimezone string
+	UserAdmin       UserAdminService
+	SetupState      SetupStateReader
 	// Accounts reads the safe projection of one account so GET /api/me can
 	// answer the display name and creation date (D1/D2). Nil degrades that
 	// route to the session's own facts — never to a wrong account.
@@ -221,7 +229,8 @@ func Router(deps Deps) http.Handler {
 			// sign-ups lock out real sign-ins.
 			auth.NewRateLimiter(3, 1.0/60.0),
 			deps.Mail,
-			deps.Accounts)
+			deps.Accounts,
+			deps.DisplayTimezone)
 		// Google sign-in/sign-up and e-mail verification (D-039). Mounted in the
 		// same block because both mint a session through the same manager.
 		GoogleRoutes(mux, deps.Google, deps.Sessions, deps.EmailVerifier, authed)
@@ -298,10 +307,15 @@ func Router(deps Deps) http.Handler {
 			}
 			VPNRoutes(mux, deps.VPNs, deps.VPNLister, superLister, deps.FreeClaims, authed)
 			if deps.VPNConnection != nil {
-				VPNConnectionRoutes(mux, deps.VPNConnection, deps.PanelPing, authed)
+				VPNConnectionRoutes(mux, deps.VPNConnection, deps.PanelPing,
+					deps.PingSamples, authed)
 			}
 			if deps.Releases != nil {
 				ReleaseRoutes(mux, deps.Releases, authed)
+				// D-112: replace is one action — build the new VPN, then
+				// release the old one. Only registered when both halves exist,
+				// because a replace that cannot release is not a replace.
+				ReplaceRoutes(mux, provisioningReplacer(deps.VPNs), deps.Releases, deps.FreeClaims, authed)
 			}
 		}
 		if deps.UserAdmin != nil {
@@ -347,6 +361,16 @@ func Router(deps Deps) http.Handler {
 			if staffSvc, ok := deps.UserAdmin.(staffService); ok && staffSvc != nil {
 				StaffAdminRoutes(mux, staffStore, staffSvc, deps.AdminAudit, authed)
 			}
+		}
+
+		/*
+		 * D-107: the Super Admin overview. One route that answers "is the business
+		 * alive, and what must I do today?" — money and the reseller book, which no
+		 * route exposed before. It is gated on the store implementing BOTH reads, so
+		 * a partial store leaves the route absent rather than answering half a page.
+		 */
+		if ov, ok := deps.Clients.(OverviewStore); ok && ov != nil {
+			OverviewRoutes(mux, ov, authed)
 		}
 		if deps.Offers != nil {
 			OfferRoutes(mux, deps.Offers, deps.OfferAudit, authed)

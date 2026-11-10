@@ -2,8 +2,10 @@ import { Link } from 'react-router-dom'
 import { StatusBadge, Button, formatBytes } from '../ui'
 import { MapPin, ExternalLink, ShieldCheck, Crown } from 'lucide-react'
 import { VpnKindBadge } from './VpnKindBadge'
+import { PanelIdentityRow } from './PanelIdentityRow'
 import type { ClientVpn } from '../../stores/vpnStore'
 import { vpnDisplayName, vpnServerLabel } from '../../stores/vpnStore'
+import { activeTimeZone } from '../../lib/time'
 
 export interface VpnHeroCardProps {
   vpn: ClientVpn
@@ -23,21 +25,32 @@ export function VpnHeroCard({ vpn, usage, daysLeft }: VpnHeroCardProps) {
   const u = usage ?? null
   return (
     <div className="vpn-detail-hero client-vpn-hero" data-testid="vpn-hero-card">
-      <div className="ui-col" style={{ gap: 8, flex: 1, minWidth: 0 }}>
-        <span className="ui-row" style={{ gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-          <span className="ui-strong" style={{ fontSize: 18 }}>
+      <div className="chv__body">
+        <span className="chv__row chv__row--head">
+          <span className="chv__name">
             {vpnDisplayName(vpn)}
           </span>
           <VpnKindBadge kind={vpn.kind} />
           <StatusBadge status={vpn.status} />
         </span>
-        <span className="ui-muted t-sm2 ui-row" style={{ gap: 6, alignItems: 'center' }}>
+        <span className="ui-muted t-sm2 chv__row chv__row--tight">
           <MapPin size={13} aria-hidden="true" />
           {vpnServerLabel(vpn)}
         </span>
-        <span className="ui-row" style={{ gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+        {/*
+          The panel identity, beside the package name (D-091.4, non-negotiable 7).
+          Every client screen that lists a VPN shows this, so the customer can
+          read and copy it without opening the detail page - which is the only
+          way they can quote it to support or paste it into a client config.
+        */}
+        <PanelIdentityRow
+          panelEmail={vpn.panelEmail}
+          layout="inline"
+          testId={`hero-panel-identity-${vpn.apiId}`}
+        />
+        <span className="chv__row chv__row--head">
           <span className="ui-muted t-sm2">
-            expires {vpn.expiresAt ? new Date(vpn.expiresAt * 1000).toLocaleDateString() : 'never'}
+            expires {vpn.expiresAt ? new Date(vpn.expiresAt * 1000).toLocaleDateString(undefined, { timeZone: activeTimeZone() }) : 'never'}
           </span>
           {daysLeft !== null &&
             (daysLeft < 0 ? (
@@ -49,7 +62,7 @@ export function VpnHeroCard({ vpn, usage, daysLeft }: VpnHeroCardProps) {
             ))}
         </span>
         {u && (
-          <span className="cl-quotabar" style={{ minWidth: 200, maxWidth: 360 }}>
+          <span className="chv__meter">
             <span className="cl-quotabar__num">
               {formatBytes(u.total)}
               {u.limit > 0 ? ` / ${formatBytes(u.limit)}` : ' used · unlimited'}
@@ -65,19 +78,19 @@ export function VpnHeroCard({ vpn, usage, daysLeft }: VpnHeroCardProps) {
           </span>
         )}
         {vpn.status !== 'ACTIVE' && (
-          <span className="vpn-warn" style={{ display: 'flex', gap: 8 }}>
+          <span className="vpn-warn chv__warn">
             <ShieldCheck size={15} aria-hidden="true" /> Not connectable right now — details inside.
           </span>
         )}
       </div>
-      <div className="ui-col" style={{ gap: 8, alignItems: 'flex-end' }}>
+      <div className="chv__side">
         <Link to={`/vpn/${vpn.id}`} className="no-underline">
           <Button size="sm" leading={<ExternalLink size={14} />}>
             Open
           </Button>
         </Link>
         {vpn.kind === 'PREMIUM' ? (
-          <span className="ui-muted t-sm2" style={{ display: 'inline-flex', gap: 4, alignItems: 'center' }}>
+          <span className="ui-muted t-sm2 chv__kind">
             <Crown size={12} aria-hidden="true" /> Premium credential
           </span>
         ) : (

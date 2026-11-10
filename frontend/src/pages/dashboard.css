@@ -342,6 +342,18 @@ html.low-resource .dash-3d__surface { transform: none; }
 @media (prefers-reduced-motion: reduce) {
   .dash-live__dot { animation: none; box-shadow: 0 0 0 2px color-mix(in srgb, var(--success) 30%, transparent); }
 }
+
+/*
+ * P1-2: a stale fleet turns the freshness dot red and stops the pulse. The text
+ * beside it already says "N stale" — the colour is redundant encoding for an
+ * operator who scans before reading, not the message itself.
+ */
+.dash-live[data-stale='true'] { color: var(--error); }
+.dash-live[data-stale='true'] .dash-live__dot {
+  background: var(--error);
+  animation: none;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--error) 30%, transparent);
+}
 .dash-ranges { display: inline-flex; gap: 4px; }
 .dash-range {
   padding: 4px 10px;
@@ -411,5 +423,219 @@ html.low-resource .dash-3d__surface { transform: none; }
   gap: 1px;
   min-width: 0;
   flex: 1 1 auto;
+}
+
+
+/* ------------------------------------------------------------------ *
+ * The business row (D-107)
+ *
+ * Money is the hero and the reseller book is its peer, so the grid is 3fr/2fr
+ * rather than 1fr/1fr: an equal split states that both questions matter equally
+ * and leaves neither dominant. On a narrow screen they stack, money first.
+ * ------------------------------------------------------------------ */
+.dash-business {
+  display: grid;
+  grid-template-columns: 3fr 2fr;
+  gap: var(--space-4);
+  align-items: stretch;
+}
+
+@media (max-width: 1100px) {
+  .dash-business { grid-template-columns: 1fr; }
+}
+
+.dash-money {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.dash-money__hero {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/*
+ * The one number this page exists for.
+ *
+ * `clamp` so it is a hero on a wide screen and merely large on a phone, instead of
+ * wrapping into a broken line. `tabular-nums` because proportional digits make a
+ * money column ragged — 1,111 next to 9,999 looks taller, which reads as "more".
+ */
+.dash-money__value {
+  font-size: clamp(1.9rem, 3vw, 2.4rem);
+  font-weight: 800;
+  line-height: 1.05;
+  letter-spacing: -0.03em;
+  color: var(--text-strong);
+  font-variant-numeric: tabular-nums;
+}
+
+.dash-money__sub {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.dash-money__row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border);
+}
+
+@media (max-width: 520px) {
+  .dash-money__row { grid-template-columns: 1fr; }
+}
+
+.dash-money__mini {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.dash-money__mini-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.dash-money__mini-value {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text-strong);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Tone is a semantic signal, not decoration: money waiting and money leaving. */
+.dash-money__mini[data-tone='warning'] .dash-money__mini-value { color: var(--warning); }
+.dash-money__mini[data-tone='error'] .dash-money__mini-value { color: var(--error); }
+
+.dash-money__mini-hint {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.dash-money__mixed {
+  margin: 0 0 var(--space-3);
+  font-size: 13px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+/* ------------------------------------------------------------------ *
+ * Reseller book (D-107)
+ *
+ * Same row shape as `.dash-attention__row` on purpose: both are "a number and what
+ * to do about it". Reusing the shape is what makes the two cards read as one system
+ * instead of two designs on one screen.
+ * ------------------------------------------------------------------ */
+.dash-resellers {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.dash-resellers__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid transparent;
+  border-left: 3px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--dur-fast, 120ms) var(--ease, ease),
+              border-color var(--dur-fast, 120ms) var(--ease, ease);
+}
+
+.dash-resellers__row:hover {
+  background: var(--bg-hover);
+  border-color: var(--border-strong, var(--border));
+  border-left-color: var(--c-primary);
+}
+
+.dash-resellers__row[data-tone='warning'] { border-left-color: var(--warning); }
+.dash-resellers__row[data-tone='error'] { border-left-color: var(--error); }
+
+/* The number leads: it is what gets scanned. */
+.dash-resellers__value {
+  flex: 0 0 auto;
+  min-width: 2.6ch;
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: var(--text-strong);
+  font-variant-numeric: tabular-nums;
+}
+
+.dash-resellers__text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.dash-resellers__top {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border);
+}
+
+.dash-resellers__top-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.dash-resellers__who {
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dash-resellers__quota {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+/* ---------- D-059: rules moved out of DashboardPage ------------------------
+ * Each replaces a `style={{ … }}` prop. Values unchanged.
+ */
+.dash-sync-time {
+  margin-left: 8px;
+}
+.dash-error-banner {
+  margin-bottom: 12px;
+}
+.dash-attention-list {
+  gap: 8px;
+}
+.dash-health-col {
+  flex: 1;
+}
+.dash-endpoint {
+  margin-left: 4px;
 }
 

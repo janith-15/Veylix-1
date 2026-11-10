@@ -30,6 +30,13 @@
   border-radius: 999px;
   background: var(--c-primary);
   transition: width 160ms ease;
+  /*
+   * The percentage is genuinely per-row, so it arrives as a CSS custom property
+   * and is consumed here (D-059: a dynamic value may be an inline custom
+   * property; it may not be an inline `width`). Falls back to 0 so a row that
+   * forgets to set it renders an empty bar rather than a full one.
+   */
+  width: var(--quota-pct, 0%);
 }
 
 /* 80%+ is the warning band; full is a hard stop until a slot frees up. */

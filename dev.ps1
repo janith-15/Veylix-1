@@ -37,6 +37,11 @@ param(
     [switch]$Restart,
     [switch]$Wait,
     [switch]$Preflight,
+    # Verify the running servers without starting or stopping anything.
+    #   .\dev.ps1 -Check
+    # Separate from -Preflight (which starts both first) so a routine gate run
+    # cannot fail on "port already in use" and does not cost a restart.
+    [switch]$Check,
     [switch]$Seed,
     [switch]$FakeAdmin,
     [string]$Verify = '',
@@ -352,6 +357,40 @@ if ($Status) {
     }
     Write-Host ''
     Write-Host "App      : $frontendURL/login   (sign in with an account from seed.json)"
+    Write-Host 'Verify   : .\dev.ps1 -Check     (runs the auth gate against the servers as they are)'
+    return
+}
+
+# -Check runs the full auth gate against servers that are ALREADY running, and
+# starts nothing. This is the counterpart to -Preflight: no port is claimed, so
+# it cannot dead-end on "port already in use", and a routine verification does
+# not cost a backend restart (which loses the dev session cookie the browser is
+# holding and makes the next click on screen answer 401 for no visible reason).
+#
+# The two are deliberately separate switches rather than one clever one:
+#   .\dev.ps1 -Preflight   start both, then verify
+#   .\dev.ps1 -Check       verify only, servers must already be up
+if ($Check) {
+    $listening = Get-Listening 8080, 5173
+    if (-not $listening) {
+        Write-Host 'Nothing is listening on :8080 or :5173 - start it with .\dev.ps1 first.' -ForegroundColor Red
+        Write-Host '  (.\dev.ps1 -Preflight does both in one command.)'
+        throw 'preflight cannot run against a stopped server'
+    }
+    Write-Host ''
+    Write-Host 'running the auth preflight gate against the running servers ...' -ForegroundColor Cyan
+    Push-Location $frontendDir
+    try {
+        & node (Join-Path $frontendDir 'scripts\preflight-dev.mjs')
+        $pfExit = $LASTEXITCODE
+    } finally { Pop-Location }
+    if ($pfExit -ne 0) {
+        Write-Host ''
+        Write-Host 'PREFLIGHT FAILED - see the FAIL lines above.' -ForegroundColor Red
+        throw "preflight failed (exit $pfExit)"
+    }
+    Write-Host ''
+    Write-Host 'PREFLIGHT PASSED - the real login works for all three roles.' -ForegroundColor Green
     return
 }
 

@@ -395,6 +395,138 @@ func TestRollbackWithoutPreviousBinaryRefuses(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// rollback takes its own backup
+//
+// The defect this pins: cmdRollback used to swap the binary and then print
+// "also restore the pre-upgrade backup", having taken no backup at all. Every
+// test below is a gate on the recovery path actually existing.
+// ---------------------------------------------------------------------------
+
+// fakeBackupScript writes a stand-in for deploy/veylix-backup.sh that reports a
+// directory, so the parser and the ordering can be tested with no real SQLite
+// and no real data directory.
+func fakeBackupScript(t *testing.T, body string) string {
+	t.Helper()
+	dir := t.TempDir()
+	script := filepath.Join(dir, "veylix-backup.sh")
+	if err := os.WriteFile(script, []byte("#!/usr/bin/env bash\n"+body+"\n"), 0o755); err != nil {
+		t.Fatalf("write fake backup script: %v", err)
+	}
+	t.Setenv("VEYLIX_DEPLOY_DIR", dir)
+	return script
+}
+
+func TestRollbackRefusesWithoutBackupScript(t *testing.T) {
+	p := newTree(t)
+	write(t, p.binary(), "current")
+	write(t, p.prevBin(), "previous")
+	t.Setenv("VEYLIX_DEPLOY_DIR", filepath.Join(t.TempDir(), "no-such-dir"))
+
+	err := cmdRollback(p, []string{"--base", "http://127.0.0.1:1"})
+	if err == nil {
+		t.Fatal("rollback proceeded with no backup script; it must refuse")
+	}
+	if !strings.Contains(err.Error(), "without a backup") {
+		t.Fatalf("error = %v, want a refuse-without-a-backup error", err)
+	}
+	// The refusal must happen BEFORE the swap, or the point is lost.
+	if current, _ := os.ReadFile(p.binary()); string(current) != "current" {
+		t.Fatalf("the binary was replaced before the backup guard: %q", current)
+	}
+}
+
+func TestRollbackDryRunPrintsTheBackupAndChangesNothing(t *testing.T) {
+	p := newTree(t)
+	write(t, p.binary(), "current")
+	write(t, p.prevBin(), "previous")
+	fakeBackupScript(t, `exit 0`)
+
+	if err := cmdRollback(p, []string{"--dry-run", "--base", "http://127.0.0.1:1"}); err != nil {
+		t.Fatalf("dry-run rollback returned %v, want nil", err)
+	}
+	if current, _ := os.ReadFile(p.binary()); string(current) != "current" {
+		t.Fatalf("dry-run replaced the binary: %q", current)
+	}
+}
+
+func TestRollbackBackupFailureStopsBeforeTheSwap(t *testing.T) {
+	p := newTree(t)
+	write(t, p.binary(), "current")
+	write(t, p.prevBin(), "previous")
+	fakeBackupScript(t, `echo "veylix-backup: disk full" >&2; exit 1`)
+
+	err := cmdRollback(p, []string{"--base", "http://127.0.0.1:1"})
+	if err == nil || !strings.Contains(err.Error(), "backup failed") {
+		t.Fatalf("error = %v, want a backup-failed error", err)
+	}
+	if current, _ := os.ReadFile(p.binary()); string(current) != "current" {
+		t.Fatalf("the binary was replaced despite a failed backup: %q", current)
+	}
+}
+
+func TestRollbackRestoreDefaultsToTheBackupItJustTook(t *testing.T) {
+	p := newTree(t)
+	write(t, p.binary(), "current")
+	write(t, p.prevBin(), "previous")
+
+	// The backup root the CLI is configured with, exactly as newTree() lays it out.
+	backupDir := filepath.Join(p.BackupDir, "2026-11-08_1200")
+	if err := os.MkdirAll(backupDir, 0o755); err != nil {
+		t.Fatalf("mkdir backup: %v", err)
+	}
+	fakeBackupScript(t, `echo "veylix-backup: backup complete under `+backupDir+`"`)
+
+	// The parser must find the directory the backup just reported...
+	if got := backupDirFromOutput("veylix-backup: backup complete under "+backupDir, p.BackupDir); got != backupDir {
+		t.Fatalf("backupDirFromOutput = %q, want %q", got, backupDir)
+	}
+	// ...and the dry run must complete without touching anything.
+	if err := cmdRollback(p, []string{"--dry-run", "--base", "http://127.0.0.1:1"}); err != nil {
+		t.Fatalf("dry-run rollback returned %v, want nil", err)
+	}
+	if current, _ := os.ReadFile(p.binary()); string(current) != "current" {
+		t.Fatalf("dry-run replaced the binary: %q", current)
+	}
+}
+
+func TestRollbackSkipBackupIsDeliberateAndAllowed(t *testing.T) {
+	p := newTree(t)
+	write(t, p.binary(), "current")
+	write(t, p.prevBin(), "previous")
+	// No backup script at all: only the explicit flag may get past the guard.
+	t.Setenv("VEYLIX_DEPLOY_DIR", filepath.Join(t.TempDir(), "no-such-dir"))
+
+	if err := cmdRollback(p, []string{"--dry-run", "--skip-backup", "--base", "http://127.0.0.1:1"}); err != nil {
+		t.Fatalf("--skip-backup must let the dry run proceed, got %v", err)
+	}
+}
+
+func TestBackupDirFromOutputOnlyTrustsTheConfiguredRoot(t *testing.T) {
+	p := newTree(t)
+
+	if got := backupDirFromOutput("", p.BackupDir); got != "" {
+		t.Errorf("empty output must yield no directory, got %q", got)
+	}
+	// Prose naming a path outside the backup root must not be trusted, even if
+	// that path exists: it is not something this host's backup wrote.
+	if got := backupDirFromOutput("see "+t.TempDir(), p.BackupDir); got != "" {
+		t.Errorf("an out-of-root path must not be returned, got %q", got)
+	}
+	// A missing directory inside the root is equally untrusted.
+	if got := backupDirFromOutput(filepath.Join(p.BackupDir, "gone"), p.BackupDir); got != "" {
+		t.Errorf("a non-existent path must not be returned, got %q", got)
+	}
+	// Trailing punctuation from prose is stripped.
+	real := filepath.Join(p.BackupDir, "2026-11-08")
+	if err := os.MkdirAll(real, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if got := backupDirFromOutput("backup complete under "+real+".", p.BackupDir); got != real {
+		t.Errorf("backupDirFromOutput = %q, want %q", got, real)
+	}
+}
+
+// ---------------------------------------------------------------------------
 // schema agreement
 // ---------------------------------------------------------------------------
 

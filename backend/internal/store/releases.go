@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 )
 
 // ReleaseGraceDays is the undo window for a released VPN (D-027.2).
@@ -102,6 +103,24 @@ func (s *Store) CreateRelease(ctx context.Context, vpnID, clientUserID int64, re
 // lifecycle (release, restore, purge) can be driven by one injected time in
 // tests instead of three independent reads of the wall clock.
 func (s *Store) CreateReleaseAt(ctx context.Context, vpnID, clientUserID int64, reason string, now int64) (*ReleaseRow, error) {
+	return s.CreateReleaseAtAs(ctx, vpnID, clientUserID, reason, now, false)
+}
+
+// CreateReleaseAtAs is CreateReleaseAt with an explicit ownership override.
+//
+// P-2: the Super Admin owns the platform and must be able to act on ANY VPN — a
+// support request, an abused account, a customer who e-mailed instead of using the
+// app. Refusing the platform owner was never a security property; it was an
+// ownership check that had no override.
+//
+// `asSuperAdmin` is a separate parameter rather than an inference from the caller
+// id, because "this release was forced" must be provable from the call site and
+// must travel into the audit trail. It does NOT weaken the client path: when it is
+// false the ownership rule is exactly what it was.
+//
+// The Super Admin never deletes anything either — a forced release opens the same
+// 3-day undo window, and the 3X-UI client stays (D-027.3).
+func (s *Store) CreateReleaseAtAs(ctx context.Context, vpnID, clientUserID int64, reason string, now int64, asSuperAdmin bool) (*ReleaseRow, error) {
 	if reason == "" {
 		reason = ReleaseReasonQuotaExhausted
 	}
@@ -109,7 +128,8 @@ func (s *Store) CreateReleaseAt(ctx context.Context, vpnID, clientUserID int64, 
 	deadline := now + int64(ReleaseGraceDays)*24*60*60
 
 	err := s.Tx(ctx, func(tx *sql.Tx) error {
-		// Ownership: a client may only release their own VPN.
+		// Ownership: a client may only release their own VPN. A Super Admin is the
+		// platform owner and may release any VPN (P-2).
 		var owner int64
 		err := tx.QueryRowContext(ctx,
 			`SELECT owner_user_id FROM vpn_instances WHERE id = ?`, vpnID).Scan(&owner)
@@ -119,7 +139,7 @@ func (s *Store) CreateReleaseAt(ctx context.Context, vpnID, clientUserID int64, 
 		if err != nil {
 			return fmt.Errorf("store: lookup vpn owner: %w", err)
 		}
-		if owner != clientUserID {
+		if owner != clientUserID && !asSuperAdmin {
 			return ErrNoRows // same answer as "missing": ids stay unprobeable
 		}
 
@@ -169,9 +189,9 @@ func (s *Store) CreateReleaseAt(ctx context.Context, vpnID, clientUserID int64, 
 		// RELEASED is written here rather than by the caller so the row and its
 		// release record can never disagree about whether the VPN was set aside.
 		if _, err := tx.ExecContext(ctx,
-			`UPDATE vpn_instances SET status = 'RELEASED', updated_at = ?
+			`UPDATE vpn_instances SET status = 'RELEASED', status_changed_at = ?, updated_at = ?
 			  WHERE id = ? AND status NOT IN ('REVOKED', 'REMOVED_FROM_CATALOG')`,
-			now, vpnID); err != nil {
+			now, now, vpnID); err != nil {
 			return fmt.Errorf("store: mark vpn released: %w", err)
 		}
 		return nil
@@ -269,9 +289,9 @@ func (s *Store) RestoreRelease(ctx context.Context, releaseID, clientUserID int6
 		// resume in; if it was suspended or depleted, the next sync pass observes
 		// that again from the panel rather than guessing it here.
 		if _, err := tx.ExecContext(ctx,
-			`UPDATE vpn_instances SET status = 'ACTIVE', updated_at = ?
+			`UPDATE vpn_instances SET status = 'ACTIVE', status_changed_at = ?, updated_at = ?
 			  WHERE id = (SELECT vpn_instance_id FROM vpn_releases WHERE id = ?)
-			    AND status = 'RELEASED'`, now, releaseID); err != nil {
+			    AND status = 'RELEASED'`, now, now, releaseID); err != nil {
 			return fmt.Errorf("store: unmark released vpn: %w", err)
 		}
 		return nil
@@ -304,6 +324,88 @@ func (s *Store) DueRemovals(ctx context.Context, now int64, limit int) ([]Releas
 			return nil, fmt.Errorf("store: scan due release: %w", err)
 		}
 		out = append(out, *r)
+	}
+	return out, rows.Err()
+}
+
+// StaleVPN is a VPN that has been in a non-serving status for longer than the
+// owner's lifecycle window (D-098).
+//
+// It carries the panel identity by value because the row it names may be gone by
+// the time anybody reads the record: the whole point of a lifecycle sweep is to
+// move a VPN toward removal, and after removal `vpn_instances` no longer answers.
+type StaleVPN struct {
+	VPNID       int64  `json:"vpn_id"`
+	PanelEmail  string `json:"panel_email"`
+	OwnerID     int64  `json:"owner_user_id"`
+	OwnerEmail  string `json:"owner_email"`
+	Status      string `json:"status"`
+	StatusSince int64  `json:"status_changed_at"`
+	// AgeSecs is how long it has held that status, so a log line or an audit
+	// entry states the fact instead of making the reader subtract dates.
+	AgeSecs int64 `json:"age_secs"`
+}
+
+// StaleVPNs lists VPNs that have held one of `statuses` since before `cutoff`.
+//
+// SERVER_UNAVAILABLE is deliberately NOT reachable from here even if a caller
+// passes it: that status means "Veylix cannot currently see this VPN", not "this
+// VPN is finished" (D-091.5, INV-1). A panel outage must never move a row toward
+// removal, so the status is refused in the query rather than trusted to every
+// future caller.
+//
+// `status_changed_at > 0` skips rows the lifecycle column has never been set on,
+// so a half-migrated database reports nothing rather than everything.
+func (s *Store) StaleVPNs(ctx context.Context, statuses []string, cutoff int64, now int64, limit int) ([]StaleVPN, error) {
+	if limit <= 0 || limit > 500 {
+		limit = 100
+	}
+	if len(statuses) == 0 {
+		return []StaleVPN{}, nil
+	}
+	// Placeholders bind in the order they APPEAR in the statement, and `? - i.…`
+	// sits in the SELECT list — before the WHERE. `now` therefore has to be the
+	// FIRST argument, not the second-to-last.
+	args := make([]any, 0, len(statuses)+3)
+	args = append(args, now)
+	for _, st := range statuses {
+		if st == "SERVER_UNAVAILABLE" || st == "RELEASED" {
+			// Not a lifecycle input: see the doc comment above. RELEASED has its
+			// own path (PurgeDue) and must not be double-driven from here.
+			return []StaleVPN{}, fmt.Errorf("store: %q is not a stale-lifecycle status", st)
+		}
+		args = append(args, st)
+	}
+	args = append(args, cutoff, limit)
+
+	placeholders := make([]string, len(statuses))
+	for i := range statuses {
+		placeholders[i] = "?"
+	}
+
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT i.id, COALESCE(i.panel_email, ''), i.owner_user_id,
+		        COALESCE(u.email, ''), i.status, i.status_changed_at, ? - i.status_changed_at
+		   FROM vpn_instances i
+		   LEFT JOIN users u ON u.id = i.owner_user_id
+		  WHERE i.status IN (`+strings.Join(placeholders, ",")+`)
+		    AND i.status_changed_at > 0
+		    AND i.status_changed_at <= ?
+		  ORDER BY i.status_changed_at ASC
+		  LIMIT ?`, args...)
+	if err != nil {
+		return nil, fmt.Errorf("store: list stale vpns: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	out := make([]StaleVPN, 0, limit)
+	for rows.Next() {
+		var v StaleVPN
+		if err := rows.Scan(&v.VPNID, &v.PanelEmail, &v.OwnerID,
+			&v.OwnerEmail, &v.Status, &v.StatusSince, &v.AgeSecs); err != nil {
+			return nil, fmt.Errorf("store: scan stale vpn: %w", err)
+		}
+		out = append(out, v)
 	}
 	return out, rows.Err()
 }

@@ -254,6 +254,16 @@ type localVPN struct {
 	PanelLimitHwid  int64
 	PanelEnable     int64
 	PanelSyncedAt   sql.NullInt64
+
+	// DormantAt is set when the customer put this VPN to sleep (D-094). It is
+	// read here for one reason: a dormant VPN must not be PROMOTED to
+	// SERVER_UNAVAILABLE by the sync pass. Its panel client may genuinely be
+	// gone, but the customer explicitly asked to stop hearing about it, so the
+	// pass leaves its status alone instead of re-raising the alarm every tick.
+	//
+	// It is NOT skipped entirely — usage is still mirrored while the client
+	// exists, so waking the VPN shows current numbers rather than week-old ones.
+	DormantAt sql.NullInt64
 }
 
 // limitsFrom extracts the limits a panel row reports.
@@ -382,10 +392,17 @@ func (s *Service) applyReadings(ctx context.Context, serverID int64, client Pane
 				// working VPN: mark it, and say so (the client can then remove
 				// it — D-027). REVOKED is deliberately not used here: only a
 				// verified *delete we performed* may produce REVOKED.
-				if err := s.markAbsent(ctx, v, takenAt); err != nil {
+				//
+				// markAbsent reports whether it actually changed the row: a
+				// dormant VPN keeps its status, so counting it as "absent"
+				// here would report work the pass deliberately did not do.
+				changed, err := s.markAbsent(ctx, v, takenAt)
+				if err != nil {
 					return err
 				}
-				res.Absent++
+				if changed {
+					res.Absent++
+				}
 				continue
 			}
 		}
@@ -419,8 +436,12 @@ func (s *Service) applyReadings(ctx context.Context, serverID int64, client Pane
 		next, changed := nextStatus(v, row, folded, s.now())
 		if changed {
 			if _, err := s.db.ExecContext(ctx,
-				`UPDATE vpn_instances SET status = ?, updated_at = ? WHERE id = ?`,
-				string(next), takenAt, v.ID); err != nil {
+				// The status clock moves with the status (D-098). Without it a
+				// lifecycle rule cannot tell a VPN suspended today from one
+				// suspended a year ago, and would have to guess from
+				// `updated_at`, which also moves on unrelated edits.
+				`UPDATE vpn_instances SET status = ?, status_changed_at = ?, updated_at = ? WHERE id = ?`,
+				string(next), takenAt, takenAt, v.ID); err != nil {
 				return fmt.Errorf("sync: update status: %w", err)
 			}
 			switch next {
@@ -435,15 +456,16 @@ func (s *Service) applyReadings(ctx context.Context, serverID int64, client Pane
 }
 
 // markAbsent records that the panel positively no longer holds a VPN's client.
+// It reports whether it CHANGED the row, so the caller can count only real work.
 //
 // The state is SERVER_UNAVAILABLE, never REVOKED (D-024.5 / REQUIREMENTS §7): we
 // did not delete the client and cannot know why it went away. The row is kept
 // so the client's own record of the purchase survives and so they can release
 // it (D-027); it is excluded from every "working VPN" projection.
-func (s *Service) markAbsent(ctx context.Context, v localVPN, takenAt int64) error {
+func (s *Service) markAbsent(ctx context.Context, v localVPN, takenAt int64) (bool, error) {
 	current := domain.VPNStatus(v.Status)
 	if current == domain.VPNRevoked || current == domain.VPNRemovedFromCatalog {
-		return nil
+		return false, nil
 	}
 	// A released VPN is absent from the panel BY DESIGN: releasing disabled its
 	// client, so the sync pass is describing our own action, not a fault. Calling
@@ -453,19 +475,32 @@ func (s *Service) markAbsent(ctx context.Context, v localVPN, takenAt int64) err
 	// The state machine also refuses RELEASED → SERVER_UNAVAILABLE, so this is a
 	// second line of defence rather than the only one.
 	if current == domain.VPNReleased {
-		return nil
+		return false, nil
+	}
+	// A dormant VPN is one the customer asked to stop hearing about (D-094). The
+	// panel really has lost the client, but promoting it to SERVER_UNAVAILABLE
+	// would put it straight back on the card, back into "Needs attention" and
+	// back into the inbox — which is exactly the noise the switch exists to
+	// silence. The status therefore stays where it was while it sleeps.
+	//
+	// This is honest rather than convenient: nothing is claimed to be working,
+	// and waking the VPN lets the next pass record the absence normally. It is
+	// also why the frontend NEVER hides a dormant VPN — it moves it to the
+	// bottom and keeps its real status visible there.
+	if v.DormantAt.Valid {
+		return false, nil
 	}
 	if !domain.CanTransition(current, domain.VPNServerUnavailable) {
-		return nil
+		return false, nil
 	}
 	if _, err := s.db.ExecContext(ctx,
-		`UPDATE vpn_instances SET status = ?, updated_at = ? WHERE id = ?`,
-		string(domain.VPNServerUnavailable), takenAt, v.ID); err != nil {
-		return fmt.Errorf("sync: mark absent: %w", err)
+		`UPDATE vpn_instances SET status = ?, status_changed_at = ?, updated_at = ? WHERE id = ?`,
+		string(domain.VPNServerUnavailable), takenAt, takenAt, v.ID); err != nil {
+		return false, fmt.Errorf("sync: mark absent: %w", err)
 	}
 	s.log.Info("sync: panel no longer holds this VPN; marked unavailable",
 		"vpn_id", v.ID, "panel_email", v.PanelEmail, "from", v.Status)
-	return nil
+	return true, nil
 }
 
 // readUsage extracts the counters from a panel row, tolerating a missing
@@ -518,7 +553,7 @@ func (s *Service) localVPNs(ctx context.Context, serverID int64) ([]localVPN, er
 		`SELECT id, panel_email, status, traffic_limit_bytes, expires_at,
 		        lifetime_up_bytes, lifetime_down_bytes, last_remote_reset_count,
 		        panel_total_gb, panel_expiry_time, panel_limit_ip, panel_limit_hwid,
-		        panel_enable, panel_synced_at
+		        panel_enable, panel_synced_at, dormant_at
 		   FROM vpn_instances
 		  WHERE server_id = ? AND status NOT IN ('REVOKED','REMOVED_FROM_CATALOG')`, serverID)
 	if err != nil {
@@ -532,7 +567,7 @@ func (s *Service) localVPNs(ctx context.Context, serverID int64) ([]localVPN, er
 		if err := rows.Scan(&v.ID, &v.PanelEmail, &v.Status, &v.TrafficLimitBytes,
 			&v.ExpiresAt, &v.LifetimeUp, &v.LifetimeDown, &v.LastRemoteResetCnt,
 			&v.PanelTotalGB, &v.PanelExpiryTime, &v.PanelLimitIP, &v.PanelLimitHwid,
-			&v.PanelEnable, &v.PanelSyncedAt); err != nil {
+			&v.PanelEnable, &v.PanelSyncedAt, &v.DormantAt); err != nil {
 			return nil, fmt.Errorf("sync: scan vpn: %w", err)
 		}
 		out = append(out, v)

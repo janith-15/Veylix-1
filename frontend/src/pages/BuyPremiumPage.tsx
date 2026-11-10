@@ -55,6 +55,17 @@ export function BuyPremiumPage() {
       setError('Enter the amount you are paying, greater than zero.')
       return
     }
+    /*
+     * A plan chosen in step 1 MUST travel with the order. Without offer_id the
+     * server records a deposit, confirmation releases no product, and the buyer
+     * pays for a VPN that is never built (D-031.1). Refusing here is better than
+     * sending a payment that cannot be fulfilled.
+     */
+    if (offerId === null) {
+      setError('Choose a plan first, so the seller knows which product to deliver.')
+      setStep(1)
+      return
+    }
     setSubmitting(true)
     try {
       await createPayment({
@@ -62,6 +73,8 @@ export function BuyPremiumPage() {
         amountCents: Math.round(units * 100),
         methodId: methodId ?? undefined,
         reference: note.trim(),
+        // The product, not just the money: this is what the confirmation builds.
+        offerId,
       })
       setStep(3)
       toast('success', 'Order recorded', 'The seller confirms once your payment arrives')

@@ -462,6 +462,32 @@
   white-space: nowrap;
 }
 
+/*
+ * D-100: the two things the "Not in service" section needs, and nothing else.
+ *
+ * The Actions column is right-aligned on its cells already; a header has no
+ * cell class, so it gets this one instead of an inline style (D-059 — shared
+ * layout lives in a class, never in a `style={{ … }}`).
+ */
+.mv-list th.mv-list__actions-head {
+  text-align: right;
+}
+
+/*
+ * The sentence that opens the "Not in service" section.
+ *
+ * It has to be read BEFORE the cards, so it cannot be a muted footnote: its job
+ * is to stop "why is this on my page?" from becoming a support call. Muted text
+ * colour, body size, and a hard stop before the grid.
+ */
+.mv-resting__note {
+  margin: 0 0 0.85rem;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: var(--text-muted);
+  max-width: 62ch;
+}
+
 /* --- pagination ---------------------------------------------------------- */
 
 .mv-pager {
@@ -551,3 +577,98 @@
     min-width: 44px;
   }
 }
+
+/* ---------------------------------------------------------------------- *
+ * D-091.5 — the row-level explanation for a non-active VPN.
+ *
+ * The status badge already colours the state, but colour is not an explanation
+ * (rule 8 of 01-project-core). This is the sentence, and it is deliberately a
+ * class rather than an inline `style={{ display:'flex', gap:8 }}` so the card
+ * and the list row share one definition (D-059).
+ * ---------------------------------------------------------------------- */
+.mv-card__note {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 0;
+  /* The sentence can be long ("Veylix cannot see this VPN on its server right
+     now…"), so it wraps rather than truncating: a half-sentence is not an
+     explanation. */
+  line-height: 1.4;
+}
+
+.mv-card__note svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+}
+/* ---------------------------------------------------------------------------
+   Dormant VPN — "put to sleep" (D-094)
+
+   A sleeping card is QUIETER, not hidden. It stays legible and clickable at
+   full contrast on its text, because the customer still has to read the panel
+   identity and find the Wake button; only the surface and the accent stripe are
+   muted, which is what "not now" should look like.
+   --------------------------------------------------------------------------- */
+
+.mv-card--dormant {
+  background: var(--bg-surface-sunken, var(--bg-surface));
+  border-style: dashed;
+}
+
+/* The accent stripe carries the state, so the card does not need an extra badge
+   competing with the package badge. */
+.mv-card--dormant::before {
+  background: var(--text-muted, var(--border));
+}
+
+/* The sentence explaining the choice. It is NOT styled as a warning: reusing
+   `.vpn-warn` would tell the customer something is wrong with their VPN, when
+   what actually happened is that they turned it down on purpose. */
+.mv-card__asleep {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.mv-card__asleep svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+}
+
+
+
+/* The list row keeps the badge and its sentence in one column, so a long
+   explanation cannot push the server column out of alignment. */
+.mv-list__status {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  align-items: flex-start;
+  min-width: 0;
+}
+
+.mv-list__status .t-xs2 {
+  line-height: 1.35;
+  max-width: 34ch;
+}
+
+/* The identity row inside a card title needs to breathe under the name without
+   becoming the headline — the package name stays first. */
+.mv-card__title .pid {
+  margin: 2px 0 1px;
+}
+
+.mv-card__actions {
+  /* Three actions on a card (Quick view, Full details, Upgrade) wrap rather than
+     overflow on a narrow column. */
+  flex-wrap: wrap;
+}
+
+@media (max-width: 560px) {
+  .mv-card__note {
+    font-size: var(--t-sm2, 12px);
+  }
+}
+

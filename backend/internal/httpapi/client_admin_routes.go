@@ -223,7 +223,14 @@ func clientListHandler(st ClientAdminStore) http.Handler {
 		if page < 1 {
 			page = 1
 		}
-		f.Limit = parseIntDefault(q.Get("limit"), 50)
+		// B-2: clamp the page size FIRST, then derive the offset from the clamped
+		// value. The store performs the same clamp, so the two can never describe
+		// different windows (`?limit=9999&page=5` used to ask for LIMIT 50 at
+		// OFFSET 39996).
+		f.Limit = parseIntDefault(q.Get("limit"), store.ClientAdminDefaultLimit)
+		if f.Limit < 1 || f.Limit > store.ClientAdminMaxLimit {
+			f.Limit = store.ClientAdminDefaultLimit
+		}
 		f.Offset = (page - 1) * f.Limit
 
 		rows, total, err := st.ListClientsAdmin(r.Context(), f)

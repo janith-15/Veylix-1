@@ -140,7 +140,8 @@ func (l *PanelVPNLister) localRows(ctx context.Context) (map[string]VPNRow, erro
 		        COALESCE(o.name, ''),
 		        COALESCE(si.name, ''),
 		        COALESCE(su.display_name, ''), COALESCE(su.email, ''),
-		        COALESCE(su.whatsapp, ''), COALESCE(su.telegram, '')
+		        COALESCE(su.whatsapp, ''), COALESCE(su.telegram, ''),
+		        i.dormant_at
 		   FROM vpn_instances i
 		   LEFT JOIN vpn_assignments a ON a.vpn_instance_id = i.id
 		   LEFT JOIN panel_client_tags t
@@ -158,22 +159,27 @@ func (l *PanelVPNLister) localRows(ctx context.Context) (map[string]VPNRow, erro
 	for rows.Next() {
 		var r VPNRow
 		var exp sql.NullInt64
+		var dormant sql.NullInt64
 		if err := rows.Scan(&r.ID, &r.ServerID, &r.PanelEmail, &r.Status, &r.OwnerID,
 			&r.SellerID, &exp, &r.CreatedAt, &r.Tag,
 			&r.OwnerEmail, &r.OwnerName,
 			&r.OfferID, &r.OfferKind, &r.KindSource, &r.OfferName,
-			&r.ServerName, &r.SellerName, &r.SellerEmail, &r.SellerWhatsApp, &r.SellerTelegram); err != nil {
+			&r.ServerName, &r.SellerName, &r.SellerEmail, &r.SellerWhatsApp, &r.SellerTelegram,
+			&dormant); err != nil {
 			return nil, fmt.Errorf("httpapi: scan local vpn: %w", err)
 		}
 		if exp.Valid {
 			v := exp.Int64
 			r.ExpiresAt = &v
 		}
+		if dormant.Valid {
+			v := dormant.Int64
+			r.DormantAt = &v
+		}
 		r.Source = SourceLocal
 		// A local row exists because a Veylix account holds it, so it is assigned by
 		// definition (D-063). Leaving this false made a VPN a customer owns report
-		// ssigned: false whenever the panel could not confirm it, so the console
-		// confirm it, so the console printed unassigned and ?assigned=1 returned nothing.
+		// `assigned: false` whenever the panel could not confirm it, so the console
 		r.Assigned = r.OwnerID > 0
 		out[vpnKey(r.ServerID, r.PanelEmail)] = r
 	}

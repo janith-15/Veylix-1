@@ -241,6 +241,19 @@ func (c *Client) DeleteClient(ctx context.Context, email string) error {
 // SetClientEnabled suspends or resumes a client without deleting it
 // (POST /panel/api/clients/bulkEnable | bulkDisable) — "suspend" must always be
 // reversible.
+//
+// D-114: the bulk endpoint is NOT trusted on its own answer. It can reply
+// 200 {"success":true} for a client it did not change, so every call is
+// confirmed with a fresh single-client read (`GetClient`, GET /clients/get).
+// Live evidence on 3X-UI 3.11.0: `bulkDisable` returned success while
+// GET /clients/list/paged still reported the client `enable: true`; the
+// single-client read is the document of record, and trusting the bulk reply
+// produced a `suspend` that answered 204 and changed nothing.
+//
+// Note the two panel views can disagree for a short while after a write. This
+// function therefore confirms against `GetClient` only — never against the
+// paged list — so one authoritative answer decides whether the caller may claim
+// success.
 func (c *Client) SetClientEnabled(ctx context.Context, email string, enable bool) error {
 	path := "/panel/api/clients/bulkDisable"
 	if enable {
@@ -255,8 +268,39 @@ func (c *Client) SetClientEnabled(ctx context.Context, email string, enable bool
 	if code != http.StatusOK {
 		return &StatusError{HTTPStatus: code, Endpoint: path}
 	}
-	_, err = decodeEnvelope(raw)
-	return err
+	if _, err := decodeEnvelope(raw); err != nil {
+		return err
+	}
+
+	/*
+	 * D-114: confirm the panel ACTUALLY changed the client.
+	 *
+	 * The bulk endpoint can answer 200 {"success":true} and still leave the
+	 * client alone — observed against a live 3X-UI panel, intermittently, where
+	 * `suspend` returned 204 while the client stayed `enable: true`. Trusting
+	 * the response produced a false success: `Suspend`/`Resume` then marked the
+	 * local row SUSPENDED/ACTIVE for a state the panel never entered, and the
+	 * operator had no way to tell.
+	 *
+	 * The only honest confirmation is a fresh read — which this adapter already
+	 * does for every other write (create, update, delete). An absent client is a
+	 * different outcome from an unchanged one, so the two are reported apart.
+	 */
+	got, err := c.GetClient(ctx, email)
+	if err != nil {
+		return fmt.Errorf("panel: confirm %s: %w", path, err)
+	}
+	if got == nil {
+		return fmt.Errorf("panel: confirm %s: the client is no longer on the panel", path)
+	}
+	if got.Enable != enable {
+		state := "disabled"
+		if got.Enable {
+			state = "enabled"
+		}
+		return fmt.Errorf("panel: confirm %s: the panel still reports the client %s", path, state)
+	}
+	return nil
 }
 
 // GetClient reads one client's full record (GET /panel/api/clients/get/{email}).

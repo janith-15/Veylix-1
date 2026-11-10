@@ -3,6 +3,7 @@ import { BookOpen, ExternalLink, ShieldCheck } from 'lucide-react'
 import { Button, Card } from '../../components/ui'
 import { ClientPage, ClientSection } from '../../components/client/ClientPage'
 import '../../components/client/client.css'
+import './guides.css'
 
 /**
  * VPN Guides — client shell (S9 outer layer).
@@ -53,34 +54,30 @@ export function ClientGuidesPage() {
     >
       <ClientSection title="Supported platforms">
         <Card>
-          <div className="ui-col" style={{ gap: 10 }}>
-            <span className="ui-row" style={{ gap: 8, alignItems: 'center' }}>
-              <BookOpen size={16} aria-hidden="true" style={{ color: 'var(--text-muted)' }} />
+          <div className="ui-col gd__stack">
+            <span className="ui-row gd__row">
+              <BookOpen size={16} aria-hidden="true" className="gd__icon" />
               <strong>Each guide opens next to your own connection link</strong>
             </span>
-            <p className="ui-muted t-sm2" style={{ margin: 0 }}>
+            <p className="ui-muted t-sm2 gd__note">
               A setup guide is only useful beside the credential it configures, so the full steps
               live on each VPN&apos;s own screen. Open a VPN, then use its “Setup guide” card to pick
               your platform.
             </p>
-            <div className="ui-col" style={{ gap: 6 }}>
+            <div className="ui-col gd__stack--tight">
               {PLATFORMS.map((p) => (
-                <span
-                  key={p.key}
-                  className="ui-row"
-                  style={{ gap: 8, alignItems: 'baseline', flexWrap: 'wrap' }}
-                >
+                <span key={p.key} className="ui-row gd__row--baseline">
                   <span className="ui-strong">{p.label}</span>
                   <span className="ui-muted t-sm2">— {p.apps}</span>
                 </span>
               ))}
             </div>
-            <p className="ui-muted t-sm2" style={{ margin: 0 }}>
+            <p className="ui-muted t-sm2 gd__note">
               macOS and Linux have no written guide in this build yet. The connection link and QR
               code work on those systems with any compatible client — ask your seller if you need
               help.
             </p>
-            <div className="ui-row" style={{ gap: 8 }}>
+            <div className="ui-row gd__row--plain">
               <Button size="sm" variant="primary" onClick={() => navigate('/client/vpns')}>
                 Open my VPNs
               </Button>
@@ -99,12 +96,12 @@ export function ClientGuidesPage() {
 
       <ClientSection title="Before you start">
         <Card>
-          <div className="ui-col" style={{ gap: 8 }}>
-            <span className="ui-row" style={{ gap: 8, alignItems: 'center' }}>
-              <ShieldCheck size={16} aria-hidden="true" style={{ color: 'var(--success)' }} />
+          <div className="ui-col gd__stack--snug">
+            <span className="ui-row gd__row">
+              <ShieldCheck size={16} aria-hidden="true" className="gd__icon gd__icon--ok" />
               <strong>Only install an app you can verify</strong>
             </span>
-            <p className="ui-muted t-sm2" style={{ margin: 0 }}>
+            <p className="ui-muted t-sm2 gd__note">
               Every app named in a guide is open source or published on its own official store page.
               Anything else asking for your connection link is not part of this service — never paste
               a link into a client you did not choose.

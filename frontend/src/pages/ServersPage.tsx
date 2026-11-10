@@ -20,6 +20,7 @@ import { useServersStore, type ServerIntegration } from '../stores/serversStore'
 import { InstallerDialog } from '../components/vpn/InstallerDialog'
 import { ApiError } from '../lib/api'
 import './servers.css'
+import { activeTimeZone } from '../lib/time'
 
 interface FormData {
   name: string
@@ -190,7 +191,7 @@ export function ServersPage() {
       key: 'lastHealthCheck',
       header: 'Last check',
       hideOnMobile: true,
-      render: (s) => (s.lastHealthCheck ? new Date(s.lastHealthCheck * 1000).toLocaleString() : 'never'),
+      render: (s) => (s.lastHealthCheck ? new Date(s.lastHealthCheck * 1000).toLocaleString(undefined, { timeZone: activeTimeZone() }) : 'never'),
     },
     {
       key: 'actions',

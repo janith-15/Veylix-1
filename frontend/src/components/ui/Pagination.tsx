@@ -28,7 +28,7 @@ export function Pagination({
       </button>
       {pages.map((p, i) =>
         p === '…' ? (
-          <span key={`dots-${i}`} className="ui-muted" style={{ padding: '0 4px' }}>
+          <span key={`dots-${i}`} className="ui-muted ui-pagination__dots">
             …
           </span>
         ) : (

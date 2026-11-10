@@ -108,6 +108,10 @@ func cmdDoctor(p paths, args []string) error {
 		fmt.Sprintf("install it at %s, or set VEYLIX_BIN_DIR", p.binary()))
 	check("veylixd.prev kept for rollback", fileExists(p.prevBin()),
 		"no previous binary yet: the first update will create one")
+	check("backup script present", fileExists(backupScript()),
+		fmt.Sprintf("expected %s; it ships in the release bundle as "+
+			"deploy/veylix-backup.sh - set VEYLIX_DEPLOY_DIR (or re-install). "+
+			"Without it BOTH update and rollback refuse to run", backupScript()))
 	check("database present", fileExists(p.dbFile()),
 		fmt.Sprintf("no database at %s: run install.sh, or check VEYLIX_DATA_DIR", p.dbFile()))
 	check("enc.key present", fileExists(p.encKey()),

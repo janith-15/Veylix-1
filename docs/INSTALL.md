@@ -195,8 +195,11 @@ sudo systemctl start veylixd
 Also back up `/etc/veylix/*.key` — without them the sealed panel tokens are useless.
 Restore = stop the service, put the three files back, start.
 
-> An automated `vpn-platformctl backup/restore` is planned in Milestone 7. Until then this is a
-> manual, documented procedure — not a tested tool.
+> `vpn-platformctl backup` / `vpn-platformctl restore <dir>` are shipped (D-079) and
+> delegate to this same script, so the WAL handling above is the only implementation.
+> `vpn-platformctl rollback` now takes its own backup before swapping the binary and
+> defaults `--restore` to the directory it just wrote (D-093). The manual procedure
+> above remains the fallback when the service is in an unknown state.
 
 ---
 
@@ -237,12 +240,17 @@ Removing Veylix **never** deletes clients from 3X-UI — that is a product invar
 | `deploy/veylixd.service` | ✅ shipped — hardened unit (no capabilities, `ProtectSystem=strict`, `MemoryMax=384M`) |
 | `deploy/veylix.env.example` | ✅ shipped — install as `/etc/veylix/veylix.env`, mode `0600` |
 | `deploy/veylix-backup.sh` | ✅ shipped — `backup` / `restore` / `verify`, stops the service and verifies the copy |
+| **`veylix-deploy.tar.gz` in every release** | ✅ **shipped (D-093)** — `release.yml` bundles `deploy/` and asserts the unit, Caddyfile and backup script are inside, so a host installed from a release has the templates. `install.sh` resolves: checkout → bundle → `--script-base`. Only `deploy/*` is extracted. |
+| `--repo <owner/name>` | ✅ **shipped (D-093)** — the shipped default is a placeholder and is REFUSED with the exact correction; `VEYLIX_REPO` and `--endpoint` also work |
+| `--script-base <url>` | ✅ **shipped** — legacy per-file fallback for the templates |
+| `rollback` takes its own backup | ✅ **shipped (D-093, F-061)** — refuses without the script, and `--restore` defaults to the backup it just took; `--skip-backup` is the only way past, and it warns |
+| **Lifecycle in the UI** | ⛔ **deliberately not built (D-093)** — install/upgrade/rollback/restore stay on the command line: a screen cannot repair the service it depends on |
 | CI (`.github/workflows/ci.yml`) | ✅ shipped — build, vet, gofmt, tests, **`go test -race`**, typecheck, lint, UI-truth gate, self-tests, docs verify, build |
 | Release (`.github/workflows/release.yml`) | ✅ shipped — linux amd64 + arm64, **boots the amd64 artifact** and asserts `/api/ready`, `/dashboard` 200 and `/assets/nope.js` 404, publishes `SHA256SUMS` **including both binaries** |
 | **One-line installer** | ✅ **BUILT** — `install.sh`. Refuses an existing database, verifies the release checksum, never overwrites a key, and claims HTTPS only after a real 200. **Not yet run on a clean Linux VM — see below.** |
 | **`vpn-platformctl` CLI** | ✅ **BUILT** — `backend/cmd/vpn-platformctl`: `status` `doctor` `update` `rollback` `domain-set` `backup` `restore` `repair` `uninstall`, covered by `go test ./cmd/vpn-platformctl` |
 | `vpn-platformctl` in a release | ✅ **ships together** — `vpn-platformctl-linux-<arch>` is built and checksummed in `release.yml` |
-| Installer guard self-test | ✅ **runs here** — `scripts/install.selftest.sh`: 31 checks (branch refusals, dry-run, checksum). 1 check **SKIPPED** (needs Linux for the full phase walk) |
+| Installer guard self-test | ✅ **runs here** — `scripts/install.selftest.sh`: **PASS=59 · FAIL=0 · SKIP=1** (branch refusals, dry-run, checksum, `out()`, repo-slug validation, template resolution incl. a bundle member outside `deploy/`). The 1 SKIP needs Linux for the full phase walk |
 | `common.sh` self-test | ✅ **runs here** — `scripts/lib/common.selftest.sh`: 31 checks. 1 check **SKIPPED** (POSIX modes on Windows) |
 | **Stage 5b isolated rehearsal** | ✅ **PASS=12 · FAIL=0 · BLOCKED=1 · ESTIMATED=1** — `scripts/stage5b-rehearsal.ps1` against the real binary in a throwaway `$env:TEMP` tree. See `QA_REPORT.md` §3.2 |
 | **Clean-VM install test** | ❌ **NOT PERFORMED** — no Linux VM or public domain on this machine |

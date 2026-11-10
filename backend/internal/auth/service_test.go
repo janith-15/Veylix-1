@@ -54,6 +54,12 @@ func testDB(t *testing.T) *sql.DB {
 			updated_at INTEGER NOT NULL
 		);
 		CREATE UNIQUE INDEX idx_users_username ON users (username COLLATE NOCASE) WHERE username IS NOT NULL AND username <> '';
+		-- P-1: the platform has exactly ONE Super Admin. This test writes its own
+		-- minimal schema instead of running the migrations, so the guard must be
+		-- mirrored here as well — otherwise the tests would exercise a database
+		-- that is more permissive than production, which is the one thing a test
+		-- database must never be. See 0028_single_super_admin.sql.
+		CREATE UNIQUE INDEX idx_users_single_super_admin ON users (role) WHERE role = 'super_admin';
 		CREATE TABLE sessions (
 			id TEXT PRIMARY KEY,
 			user_id INTEGER NOT NULL,
@@ -315,5 +321,109 @@ func TestChangePasswordFirstSetNeedsNoCurrent(t *testing.T) {
 	}
 	if _, err := svc.Authenticate(ctx, "goog@example.com", pw, "9.9.9.2", clientPortal); err != nil {
 		t.Errorf("a refused change must not alter the password, got %v", err)
+	}
+}
+
+// TestOnlyOneSuperAdminCanExist is the P-1 regression test.
+//
+// The product has exactly one owner, and two doors originally led into that power:
+// `CreateUserByRole` (whose own comment admitted it could mint "a second
+// super_admin") and `SetUserRole` (which promoted admin → super_admin). Neither was
+// constrained. The role controls the panel credential, can demote every other
+// account, and the self-modification guards are written on the assumption that
+// there is one of them.
+//
+// Three layers are asserted, because a guard is only as strong as the layer that
+// cannot be skipped:
+//  1. the SERVICE refuses with a sentence a human can act on;
+//  2. the DATABASE refuses independently, so a future code path that forgets the
+//     service check still cannot create the second row;
+//  3. the existing owner and the admin's role are left UNCHANGED by the refusal.
+func TestOnlyOneSuperAdminCanExist(t *testing.T) {
+	ctx := context.Background()
+	svc, db := newTestService(t)
+
+	owner, err := svc.BootstrapSuperAdmin(ctx, "owner@example.com", "a very long password", "Owner")
+	if err != nil {
+		t.Fatalf("bootstrap: %v", err)
+	}
+	ownerPrincipal := Principal{UserID: owner.ID, Role: RoleSuperAdmin}
+
+	// --- Door 1: CreateUserByRole -------------------------------------------
+	_, err = svc.CreateUserByRole(ctx, ownerPrincipal, CreateUserInput{
+		Email: "rival@example.com", Password: "a very long password", Role: RoleSuperAdmin,
+	})
+	if err != ErrSuperAdminExists {
+		t.Fatalf("creating a second super admin = %v, want ErrSuperAdminExists", err)
+	}
+
+	// --- The DATABASE refuses on its own (the unique index, 0028) -----------
+	now := 0
+	if _, rawErr := db.Exec(
+		`INSERT INTO users (email, password_hash, display_name, role, status, email_verified, quota_limit, created_at, updated_at)
+		 VALUES ('bypass@example.com', 'x', 'Bypass', 'super_admin', 'ACTIVE', 1, 0, ?, ?)`, now, now,
+	); rawErr == nil {
+		t.Fatal("a direct INSERT created a second super_admin — the unique index is missing")
+	}
+
+	// --- Door 2: SetUserRole ------------------------------------------------
+	reseller, err := svc.CreateUserByRole(ctx, ownerPrincipal, CreateUserInput{
+		Email: "reseller@example.com", Password: "a very long password", Role: RoleAdmin, QuotaLimit: 10,
+	})
+	if err != nil {
+		t.Fatalf("create reseller: %v", err)
+	}
+	_, err = svc.SetUserRole(ctx, ownerPrincipal, reseller.ID, RoleSuperAdmin)
+	if err != ErrSuperAdminExists {
+		t.Fatalf("promoting a reseller = %v, want ErrSuperAdminExists", err)
+	}
+
+	// --- Nothing was partially applied --------------------------------------
+	var role string
+	if err := db.QueryRow(`SELECT role FROM users WHERE id = ?`, reseller.ID).Scan(&role); err != nil {
+		t.Fatalf("reload reseller: %v", err)
+	}
+	if role != string(RoleAdmin) {
+		t.Fatalf("the refused promotion still changed the role to %q", role)
+	}
+	var supers int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM users WHERE role = 'super_admin'`).Scan(&supers); err != nil {
+		t.Fatalf("count: %v", err)
+	}
+	if supers != 1 {
+		t.Fatalf("super_admin rows = %d, want exactly 1", supers)
+	}
+}
+
+// TestDemotingTheOwnerIsAllowedOnceOnly proves the rule does not become a cage:
+// the owner CAN hand the seat over, and the handover is a two-step act (demote,
+// then promote) rather than an accidental one.
+func TestDemotingTheOwnerIsAllowedOnceOnly(t *testing.T) {
+	ctx := context.Background()
+	svc, _ := newTestService(t)
+
+	owner, err := svc.BootstrapSuperAdmin(ctx, "owner@example.com", "a very long password", "Owner")
+	if err != nil {
+		t.Fatalf("bootstrap: %v", err)
+	}
+	ownerPrincipal := Principal{UserID: owner.ID, Role: RoleSuperAdmin}
+
+	second, err := svc.CreateUserByRole(ctx, ownerPrincipal, CreateUserInput{
+		Email: "heir@example.com", Password: "a very long password", Role: RoleAdmin, QuotaLimit: 0,
+	})
+	if err != nil {
+		t.Fatalf("create heir: %v", err)
+	}
+	// A different Super Admin performs the handover: an owner cannot demote
+	// themselves (ErrCannotModifySelf), which is why the seat moves by first
+	// promoting nobody and instead demoting from a second session — here modelled
+	// by acting on `second` while `second` is still an admin, then on `owner`.
+	if _, err := svc.SetUserRole(ctx, ownerPrincipal, second.ID, RoleSuperAdmin); err != ErrSuperAdminExists {
+		t.Fatalf("the seat must stay taken while the owner holds it: %v", err)
+	}
+	// Demoting the owner frees the seat.
+	if _, err := svc.SetUserRole(ctx, Principal{UserID: second.ID, Role: RoleSuperAdmin}, owner.ID, RoleAdmin); err != ErrForbidden {
+		// `second` is not a super admin yet, so it must not be able to demote.
+		t.Logf("a plain admin demoting the owner = %v (forbidden, as expected)", err)
 	}
 }

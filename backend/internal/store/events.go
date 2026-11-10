@@ -290,8 +290,12 @@ func (s *Store) setBlocked(ctx context.Context, orderID, actorID int64, note str
 			kind = EventBlocked
 		}
 		if _, err := tx.ExecContext(ctx,
-			`UPDATE vpn_instances SET status = ?, updated_at = ? WHERE id = ?`,
-			target, nowUnix(), vpnID.Int64); err != nil {
+			// `status_changed_at` moves with `status` (D-098). It is the only
+			// clock a lifecycle rule may count from: `updated_at` also moves on
+			// unrelated edits, so counting from it would make a VPN look
+			// freshly suspended (or freshly stale) after a rename.
+			`UPDATE vpn_instances SET status = ?, status_changed_at = ?, updated_at = ? WHERE id = ?`,
+			target, nowUnix(), nowUnix(), vpnID.Int64); err != nil {
 			return fmt.Errorf("store: %s vpn: %w", strings.ToLower(kind), err)
 		}
 		return s.AppendOrderEvent(ctx, tx, OrderEvent{

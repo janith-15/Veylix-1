@@ -64,9 +64,8 @@ export function NotificationsPage() {
               <button
                 key={n.id}
                 type="button"
-                className={`notif-modal__item ${n.read ? '' : 'notif-modal__item--unread'}`}
+                className={`notif-modal__item notif-page-list__item ${n.read ? '' : 'notif-modal__item--unread'}`}
                 onClick={() => void markRead(n.id)}
-                style={{ borderRadius: 'var(--radius-sm)' }}
               >
                 <span className={`notif-modal__dot notif-modal__dot--${n.kind}`} aria-hidden="true" />
                 <span className="notif-modal__txt">
@@ -74,7 +73,7 @@ export function NotificationsPage() {
                   {n.body && <span>{n.body}</span>}
                   <time dateTime={new Date(n.at * 1000).toISOString()}>{relativeTime(n.at)}</time>
                 </span>
-                {!n.read && <Bell size={14} aria-hidden="true" style={{ color: 'var(--c-primary)' }} />}
+                {!n.read && <Bell size={14} aria-hidden="true" className="notif-page-list__unread-icon" />}
               </button>
             ))}
           </div>

@@ -16,6 +16,7 @@ import {
 } from '../components/ui'
 import { usePaymentsStore, allowedTransitions, type Payment } from '../stores/paymentsStore'
 import { CreditCard, Plus, Wallet } from 'lucide-react'
+import { activeTimeZone } from '../lib/time'
 
 /**
  * Billing — the manual-payment confirmation queue (P6, REQUIREMENTS §2.5).
@@ -104,6 +105,9 @@ export function PaymentsPage() {
       key: 'id',
       header: 'Payment',
       sortable: true,
+      sortValue: (p) => p.apiId,
+      searchValue: (p) => `#${p.apiId} ${p.reference}`,
+      filter: { kind: 'text', getValue: (p) => `${p.apiId} ${p.reference}`, placeholder: 'Payment # or ref…' },
       render: (p) => {
         const since = waitingSince(p)
         return (
@@ -135,6 +139,19 @@ export function PaymentsPage() {
       key: 'status',
       header: 'Status',
       sortable: true,
+      searchValue: (p) => String(p.status).replace(/_/g, ' '),
+      filter: {
+        kind: 'select',
+        options: [
+          { value: 'PENDING', label: 'Pending' },
+          { value: 'AWAITING_CONFIRMATION', label: 'Awaiting confirmation' },
+          { value: 'CONFIRMED', label: 'Confirmed' },
+          { value: 'REJECTED', label: 'Rejected' },
+          { value: 'CANCELLED', label: 'Cancelled' },
+          { value: 'REFUND_PENDING', label: 'Refund pending' },
+          { value: 'REFUNDED', label: 'Refunded' },
+        ],
+      },
       render: (p) => (
         <span
           className={
@@ -149,7 +166,7 @@ export function PaymentsPage() {
       key: 'createdAt',
       header: 'Created',
       sortable: true,
-      render: (p) => new Date(p.createdAt * 1000).toLocaleDateString(),
+      render: (p) => new Date(p.createdAt * 1000).toLocaleDateString(undefined, { timeZone: activeTimeZone() }),
     },
     {
       key: 'actions',
@@ -157,7 +174,7 @@ export function PaymentsPage() {
       render: (p) => {
         const allowed = allowedTransitions(p.status)
         return (
-          <span className="ui-row" style={{ gap: 6 }}>
+          <span className="ui-row pay-row-actions">
             {allowed.includes('confirm') && (
               <Button size="sm" disabled={busy === p.apiId} onClick={() => setTarget({ payment: p, action: 'confirm' })}>
                 Confirm
@@ -208,7 +225,7 @@ export function PaymentsPage() {
 
       {error && (
         <Card>
-          <p className="ui-muted" style={{ margin: 0 }} role="alert">
+          <p className="ui-muted pay-flat" role="alert">
             {error}
           </p>
         </Card>
@@ -219,14 +236,14 @@ export function PaymentsPage() {
         actions={<span className="ui-muted t-sm">{methods.length} active</span>}
       >
         {methods.length === 0 ? (
-          <p className="ui-muted" style={{ margin: '8px 0' }}>
+          <p className="ui-muted pay-empty-note">
             No destination is published yet, so a client has nowhere to pay. Add a bank account or
             wallet to start accepting manual payments.
           </p>
         ) : (
           <div className="pay-prices">
             {methods.map((m) => (
-              <div key={m.id} className="ui-col" style={{ gap: 2 }}>
+              <div key={m.id} className="ui-col pay-method">
                 <span className="ui-strong">
                   {m.label}{' '}
                   <span className="ui-muted">
@@ -246,7 +263,7 @@ export function PaymentsPage() {
       <Card
         title="Payments"
         actions={
-          <span className="ui-row" style={{ gap: 8, alignItems: 'center' }}>
+          <span className="ui-row pay-head-actions">
             {pendingCount > 0 ? (
               <Badge tone="warning">{pendingCount} awaiting review</Badge>
             ) : (
@@ -269,7 +286,15 @@ export function PaymentsPage() {
             />
           }
         >
-          <Table columns={COLUMNS} data={visible} rowKey={(r) => r.id} initialSort={{ key: 'id', dir: 'desc' }} />
+          <Table
+            columns={COLUMNS}
+            data={visible}
+            rowKey={(r) => r.id}
+            initialSort={{ key: 'id', dir: 'desc' }}
+            searchable
+            searchPlaceholder="Search payment #, reference or status…"
+            caption="payments"
+          />
         </AsyncState>
       </Card>
 
@@ -342,7 +367,7 @@ export function PaymentsPage() {
           </label>
           <Input label="Label" placeholder="e.g. Veylix Bank — Commercial" value={methodLabel} onChange={(e) => setMethodLabel(e.target.value)} />
           <Input label="Account details" placeholder="e.g. AC 0012 3456 7890" value={methodDetails} onChange={(e) => setMethodDetails(e.target.value)} />
-          <p className="ui-muted t-sm2" style={{ margin: 0 }}>
+          <p className="ui-muted t-sm2 pay-flat">
             A super admin publishes a method for the whole platform; an admin publishes one that
             only their own clients can see.
           </p>

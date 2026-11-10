@@ -1,0 +1,262 @@
+/*
+ * Usage & History — per-VPN blocks (`pages/client/ClientUsagePage.tsx`).
+ *
+ * Every selector is scoped under `.usg`, and the file is imported only by that
+ * page, so it ships as its own route-split chunk and cannot leak into another
+ * screen.
+ *
+ * NO COLOUR LITERALS, NO INVENTED TOKENS. Only the names `client.css` and
+ * `offers.css` already prove exist in every preset: --bg-surface, --border,
+ * --text, --text-muted, --c-primary, --success, --warning, --error, --radius,
+ * --space-N. A token that does not exist silently falls back to an unset value
+ * and the block renders unstyled - that was the Offers defect.
+ */
+
+.usg__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3, 12px);
+}
+
+.usg__intro {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+.usg__intro svg {
+  flex: none;
+  margin-top: 2px;
+}
+
+/* ---- one VPN block ---------------------------------------------------- */
+
+.usg {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2, 8px);
+  padding: var(--space-3, 12px);
+  border: 1px solid var(--border);
+  border-radius: var(--radius, 10px);
+  background: var(--bg-surface);
+}
+
+.usg__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.usg__id {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.usg__name {
+  font-weight: 640;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+/* A non-ACTIVE status explained in words, never only a colour. */
+.usg__state {
+  margin: 0;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  color: var(--warning);
+}
+
+.usg__note {
+  margin: 0;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  color: var(--text-muted);
+}
+
+.usg__note--warn {
+  color: var(--error);
+}
+
+/* Dormant VPN (D-094): a quiet statement, not a warning. It reuses the muted
+   note colour on purpose — nothing is wrong with a VPN the customer chose to
+   put to sleep, so it must not borrow the red of a real failure. */
+.usg__asleep {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.usg__asleep svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+}
+
+/* ---- the allowance meter --------------------------------------------- */
+
+.usg__meter {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.usg__meter-num {
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+.usg__track {
+  display: block;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--border);
+  overflow: hidden;
+}
+
+.usg__fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--c-primary);
+  transition: width 160ms ease;
+}
+
+/* 80%+ is the warning band; full is a hard stop until the window rolls. */
+.usg__fill.is-high {
+  background: var(--warning);
+}
+
+.usg__fill.is-full {
+  background: var(--error);
+}
+
+.usg__meta {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+/* ---- the sparklines --------------------------------------------------- */
+
+.usg__charts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--space-3, 12px);
+}
+
+.usg__chart {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.usg__cap {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.usg__cap-sub {
+  font-weight: 450;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/*
+ * "Not enough snapshots" is a sentence, not an empty frame and not a flat line.
+ * A zero line would claim the link carried nothing, which is a different and
+ * unproven fact.
+ */
+.usg__empty {
+  margin: 0;
+  padding: 14px 10px;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  text-align: center;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius, 10px);
+}
+
+.usg__empty-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* ---- the page-level unit picker -------------------------------------- */
+
+/* The unit sits beside the count in the section header, so "how many VPNs" and
+   "in what unit" are answered in the same place. */
+.usg__controls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.usg__controls .ui-field {
+  margin: 0;
+}
+
+/*
+ * The search sits inside the section's control row (D-097).
+ *
+ * It reuses the shared `.client-filters__*` styling so it matches My VPNs
+ * rather than inventing a second search look, and only narrows the width —
+ * the Usage control row is tighter than the My VPNs toolbar.
+ */
+.usg__controls .client-filters__search {
+  flex: 1 1 200px;
+  max-width: 320px;
+}
+
+/*
+ * The source select lists every VPN as "<package> · <panel email>", so it needs
+ * room to show the whole identity on one line (D-091.4). With several VPNs off
+ * the same package the panel email is the only thing that tells them apart.
+ */
+.usg__controls .ui-field select {
+  max-width: 340px;
+  text-overflow: ellipsis;
+}
+
+.usg__controls .ui-input {
+  min-width: 96px;
+  padding: 4px 8px;
+  font-size: var(--text-sm);
+}
+
+/* ---- responsive ------------------------------------------------------- */
+
+@media (max-width: 560px) {
+  .usg__charts {
+    grid-template-columns: 1fr;
+  }
+  .usg__head {
+    align-items: flex-start;
+  }
+}
+
+/* Touch targets: 44px where a coarse pointer is in use. */
+@media (pointer: coarse) {
+  .usg__head .ui-btn {
+    min-height: 44px;
+  }
+  .usg__controls .ui-input {
+    min-height: 44px;
+  }
+}

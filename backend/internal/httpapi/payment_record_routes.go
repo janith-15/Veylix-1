@@ -13,19 +13,43 @@ import (
 
 // paymentRecordRoutes registers the payment records and their transitions.
 func paymentRecordRoutes(mux *http.ServeMux, st PaymentStore, record func(context.Context, audit.Entry), authed func(http.Handler) http.Handler) {
-	// GET /api/payments[?pending=1] — role-scoped by the store.
+	// GET /api/payments[?pending=1][?envelope=1] — role-scoped by the store.
+	//
+	// Without `envelope` the response is the bare array it has always been, so
+	// every existing caller (badge counts, dashboards, stores) keeps working.
+	// With `envelope=1` the caller additionally learns the UNCAPPED total, which
+	// is the only way a screen can tell the difference between "there are 200
+	// orders" and "there are 200 shown of 2,400" (D-116).
 	mux.Handle("GET /api/payments", authed(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		p, ok := PrincipalFrom(r.Context())
 		if !ok {
 			WriteError(w, http.StatusUnauthorized, "unauthorized", "authentication required")
 			return
 		}
-		rows, err := st.PaymentsVisible(r.Context(), p.UserID, string(p.Role), r.URL.Query().Get("pending") == "1")
+		onlyPending := r.URL.Query().Get("pending") == "1"
+		rows, err := st.PaymentsVisible(r.Context(), p.UserID, string(p.Role), onlyPending)
 		if err != nil {
 			WriteError(w, http.StatusInternalServerError, "internal_error", "could not list payments")
 			return
 		}
-		WriteJSON(w, http.StatusOK, rows)
+		if r.URL.Query().Get("envelope") != "1" {
+			WriteJSON(w, http.StatusOK, rows)
+			return
+		}
+		total, err := st.PaymentsVisibleCount(r.Context(), p.UserID, string(p.Role), onlyPending)
+		if err != nil {
+			// The page itself is fine; only the count failed. Becoming 500 here
+			// would hide readable orders behind a statistics problem, so the
+			// count is reported as unknown rather than guessed (D-116).
+			total = -1
+		}
+		WriteJSON(w, http.StatusOK, map[string]any{
+			"payments": rows,
+			"shown":    len(rows),
+			"total":    total,
+			// `total < 0` means "not counted", never "none".
+			"truncated": total >= 0 && total > len(rows),
+		})
 	})))
 
 	// GET /api/payments/{id}

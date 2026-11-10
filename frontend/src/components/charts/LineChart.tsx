@@ -1,4 +1,5 @@
 ﻿import { useId, useState, type PointerEvent as ReactPointerEvent } from 'react'
+import { plainValue } from '../../lib/format'
 
 export interface Series {
   label: string
@@ -40,7 +41,31 @@ interface LineChartProps {
   ariaLabel?: string
   /** Force legend chips on/off (defaults to on when 2+ series). */
   showLegend?: boolean
+  /**
+   * How a value is turned into text — the tooltip and the Y axis both use it.
+   *
+   * This is what lets a byte series read `33.3 GB` instead of `33,327,637,690`.
+   * Defaulted to a plain grouped number so every existing caller is unchanged.
+   */
+  valueFormat?: (value: number) => string
+  /**
+   * Draw a labelled Y axis. Off by default: a 92 px sparkline on a dashboard has
+   * no room for an axis, and turning it on everywhere would be a layout change
+   * nobody asked for.
+   */
+  yAxis?: boolean
+  /**
+   * Anchor the value axis at zero.
+   *
+   * A line pinned to `lo` exaggerates small differences — for BYTES that is a
+   * lie the reader will act on ("33 GB vs 34 GB" drawn as a cliff). A usage
+   * series therefore asks for a zero baseline.
+   */
+  zeroBased?: boolean
 }
+
+/** The default value label: a grouped number, never a raw float. */
+
 
 function linePath(values: number[], w: number, h: number, lo: number, hi: number, smooth: boolean): string {
   const span = hi - lo || 1
@@ -63,14 +88,17 @@ function linePath(values: number[], w: number, h: number, lo: number, hi: number
   return d
 }
 
-export function LineChart({ series, height = 180, style = 'area', showGrid = true, labels, ariaLabel, showLegend }: LineChartProps) {
+export function LineChart({ series, height = 180, style = 'area', showGrid = true, labels, ariaLabel, showLegend, valueFormat = plainValue, yAxis = false, zeroBased = false }: LineChartProps) {
   const uid = useId().replace(/:/g, '')
   const W = 600
   const H = height
-  const padX = 8
+  /* A labelled axis needs a gutter to sit in; without one the tick text is drawn
+     over the plot and clipped at the SVG edge (the "axis labels are clipped"
+     defect). 46 px holds the widest realistic byte label, e.g. "1023.9 GB". */
+  const padX = yAxis ? 46 : 8
   const padY = 12
-  const innerW = W - padX * 2
-  const innerH = H - padY * 2
+  const innerW = W - padX - (yAxis ? 8 : padX)
+  const innerH = H - padY * 2 - (yAxis ? 12 : 0)
   const smooth = style !== 'sharp'
 
   /* Hover + series-toggle interaction (UI 2.1). */
@@ -82,12 +110,21 @@ export function LineChart({ series, height = 180, style = 'area', showGrid = tru
     .filter(({ i }) => !hidden.includes(i))
 
   const count = visible[0]?.s.values.length ?? 0
-  const [lo, hi] = extent(visible.map(({ s }) => s))
+  const [rawLo, rawHi] = extent(visible.map(({ s }) => s))
+  /* A zero-based axis keeps the plot honest for quantities (bytes, counts). A
+     min-max axis is kept for anything else, because a trend line that always
+     starts at zero hides the variation it exists to show. */
+  const lo = zeroBased ? 0 : rawLo
+  const hi = zeroBased ? Math.max(rawHi, 1) : rawHi
   const safeIdx = hoverIdx === null ? null : Math.max(0, Math.min(count - 1, hoverIdx))
   const step = count > 1 ? innerW / (count - 1) : innerW
   const px = (i: number) => i * step
   const py = (v: number) => innerH - ((v - lo) / (hi - lo || 1)) * innerH
   const multi = showLegend ?? series.length > 1
+
+  /* Ticks at 0%, 50% and 100% of the axis — the same three places the grid is
+     drawn, so a tick always has a line to sit beside. */
+  const ticks = [0, 0.5, 1].map((f) => ({ f, value: hi - (hi - lo) * f }))
 
   const onPointerMove = (e: ReactPointerEvent<SVGSVGElement>) => {
     const rect = e.currentTarget.getBoundingClientRect()
@@ -125,7 +162,13 @@ export function LineChart({ series, height = 180, style = 'area', showGrid = tru
                 aria-pressed={!off}
                 onClick={() => toggleSeries(i)}
               >
-                <span className="ui-chart-legend__dot" style={{ background: s.color ?? seriesColor(i) }} aria-hidden="true" />
+                <span
+                  className="ui-chart-legend__dot"
+                  /* D-059: a series colour is runtime data, so it travels as a
+                   * custom property and the stylesheet applies it. */
+                  style={{ ['--legend-color' as string]: s.color ?? seriesColor(i) }}
+                  aria-hidden="true"
+                />
                 {s.label}
               </button>
             )
@@ -138,7 +181,10 @@ export function LineChart({ series, height = 180, style = 'area', showGrid = tru
         aria-label={ariaLabel ?? 'Line chart'}
         viewBox={'0 0 ' + W + ' ' + H}
         preserveAspectRatio="none"
-        style={{ width: '100%', height, display: 'block', touchAction: 'pan-y' }}
+        style={{
+          /* D-059: the SVG's own height is per-call; width comes from CSS. */
+          ['--ui-chart-h' as string]: `${height}px`,
+        }}
         onPointerMove={onPointerMove}
         onPointerLeave={() => setHoverIdx(null)}
       >
@@ -162,6 +208,22 @@ export function LineChart({ series, height = 180, style = 'area', showGrid = tru
               strokeWidth="1"
               strokeDasharray="3 5"
             />
+          ))}
+
+        {/* The value axis. A chart that draws a shape and never states a number
+            leaves the reader unable to answer "how much?" — which is the whole
+            question a usage chart exists to answer. */}
+        {yAxis &&
+          ticks.map(({ f, value }) => (
+            <text
+              key={`tick-${f}`}
+              className="ui-chart-axis"
+              x={padX - 6}
+              y={padY + innerH * f + 4}
+              textAnchor="end"
+            >
+              {valueFormat(value)}
+            </text>
           ))}
 
         {safeIdx !== null && count > 0 && (
@@ -219,14 +281,23 @@ export function LineChart({ series, height = 180, style = 'area', showGrid = tru
           className="chart-tip"
           data-flip={flip}
           role="presentation"
-          style={{ left: tipX + '%', top: tipY + '%' }}
+          style={{
+            /* D-059: tooltip position is genuinely dynamic, so it travels as
+             * custom properties and the stylesheet positions the box. */
+            ['--chart-tip-x' as string]: `${tipX}%`,
+            ['--chart-tip-y' as string]: `${tipY}%`,
+          }}
         >
           <div className="chart-tip__title">{labels?.[safeIdx] ?? 'Point ' + (safeIdx + 1)}</div>
           {visible.map(({ s, i }) => (
             <div className="chart-tip__row" key={s.label + i}>
-              <span className="chart-tip__dot" style={{ background: s.color ?? seriesColor(i) }} aria-hidden="true" />
+              <span
+                className="chart-tip__dot"
+                style={{ ['--legend-color' as string]: s.color ?? seriesColor(i) }}
+                aria-hidden="true"
+              />
               <span>{s.label}</span>
-              <span className="chart-tip__val">{(s.values[safeIdx] ?? 0).toLocaleString()}</span>
+              <span className="chart-tip__val">{valueFormat(s.values[safeIdx] ?? 0)}</span>
             </div>
           ))}
         </div>

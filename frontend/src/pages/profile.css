@@ -14,6 +14,10 @@
   max-width: 100%;
   overflow-x: auto;
 }
+/* D-059: the bio field's stack spacing lives here, not in a style prop. */
+.prof-field {
+  gap: 6px;
+}
 
 .prof-tab {
   display: inline-flex;

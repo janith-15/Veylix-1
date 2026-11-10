@@ -567,6 +567,129 @@ button.cl-ov:focus-visible {
   grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
   gap: var(--space-3);
 }
+/*
+ * The reason a claim button is disabled.
+ *
+ * A disabled control with no explanation is the defect this replaces, so the
+ * sentence sits under the button in the muted tone: readable, not shouting.
+ * It is never the only place the meaning lives - the same fact is in the
+ * button title and in the verdict at the top of the page.
+ */
+.cl-claim__blocked {
+  display: block;
+  color: var(--text-muted);
+  line-height: 1.45;
+  margin-top: 2px;
+}
+
+/* ------------------------------------------------------------------ *
+ * Client VPN hero card (`components/vpn/VpnHeroCard.tsx`)
+ *
+ * The card used nine inline `style={{ … }}` attributes for nothing but gap,
+ * alignment and a max width. D-059 forbids that: inline styles cannot be
+ * overridden by a preset, cannot be media-queried, and made the card the only
+ * place in the client surface that ignored the design tokens. Every one of them
+ * now lives in a class here.
+ *
+ * The quota bar (`cl-quotabar*`) was borrowed from `admins.css`. It is the same
+ * visual so it is restyled here under `chv__meter` instead of importing that
+ * stylesheet into a client route - a reseller stylesheet must never be what a
+ * customer's screen depends on.
+ * ------------------------------------------------------------------ */
+
+.chv__body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+
+.chv__row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.chv__row--head {
+  align-items: center;
+}
+
+.chv__row--tight {
+  gap: 6px;
+}
+
+.chv__name {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.chv__meter {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 200px;
+  max-width: 360px;
+}
+
+.chv__meter .cl-quotabar__num {
+  font-size: 0.71875rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.chv__meter .cl-quotabar__track {
+  display: block;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--border);
+  overflow: hidden;
+}
+
+.chv__meter .cl-quotabar__fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--c-primary);
+  transition: width 160ms ease;
+}
+
+.chv__meter .cl-quotabar__fill.is-high {
+  background: var(--warning);
+}
+
+.chv__meter .cl-quotabar__fill.is-full {
+  background: var(--error);
+}
+
+.chv__warn {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.chv__side {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-end;
+}
+
+.chv__kind {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+}
+.cl-claim__blocked {
+  display: block;
+  color: var(--text-muted);
+  line-height: 1.45;
+  margin-top: 2px;
+}
+
+
 
 /* --- 07 . quick access -------------------------------------------------- */
 

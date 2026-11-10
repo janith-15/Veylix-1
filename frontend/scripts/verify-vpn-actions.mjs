@@ -28,6 +28,9 @@ const API = process.env.VEYLIX_API ?? 'http://127.0.0.1:8080'
 // only trustworthy value comes from the catalogue the Super Admin can actually
 // read, not from a constant this file invented.
 let VPN_ID = 0
+// The operator's own detail route (`/vpns/:serverId/:panelEmail`). `/vpn/:id`
+// belongs to the client block in App.tsx and must not be used by a staff run.
+let VPN_PATH = ''
 
 /*
  * SAFETY: this suite used to end with a real `DELETE /api/vpns/{id}` against
@@ -153,28 +156,57 @@ const superCookie = await actAs('super_admin')
 // write then 404'd, which looked like a broken VPN action rather than a broken
 // fixture. So: take an explicit id if given, otherwise pick the first row the
 // Super Admin can actually see, and abort when the catalogue is empty.
-async function resolveTargetVPN() {
+function resolveTargetVPN() {
   if (process.env.VEYLIX_VPN_ID) {
     return { id: Number(process.env.VEYLIX_VPN_ID), source: 'VEYLIX_VPN_ID' }
   }
   const arg = process.argv[2]
   if (arg) return { id: Number(arg), source: 'argument' }
 
-  const rows = await fetch(`${API}/api/super/vpns?limit=200`, {
+  return fetch(`${API}/api/super/vpns?limit=200`, {
     headers: { cookie: superCookie },
-  }).then((r) => r.json())
-  const list = Array.isArray(rows) ? rows : (rows.vpns ?? [])
-  const usable = list.filter((v) => Number(v.id) > 0)
-  if (usable.length === 0) {
-    throw new Error('no VPN with a local id exists — seed or provision one first')
-  }
-  return { id: Number(usable[0].id), source: `first of ${usable.length} in /api/super/vpns` }
+  })
+    .then((r) => r.json())
+    .then((rows) => {
+      const list = Array.isArray(rows) ? rows : (rows.vpns ?? [])
+      /*
+       * The operator's detail route is `/vpns/:serverId/:panelEmail`, NOT
+       * `/vpn/:id`.
+       *
+       * `App.tsx` declares `/vpn/:id` inside the CLIENT block on purpose: one
+       * path, one owner. This suite signs in as the Super Admin, so navigating
+       * there matched no operator route, fell through to the dashboard, and the
+       * "Suspend" assertion searched the dashboard for a VPN control. The check
+       * could never pass — it was asserting the wrong page, not a broken product.
+       *
+       * Rows also need a real server_id and panel_email to build that path, so a
+       * panel client with no local row (id 0) is not usable here either.
+       */
+      const usable = list.filter(
+        (v) => Number(v.id) > 0 && Number(v.server_id) > 0 && String(v.panel_email || '') !== '',
+      )
+      if (usable.length === 0) {
+        throw new Error(
+          'no VPN with a local id, server_id and panel_email exists — seed or provision one first',
+        )
+      }
+      const first = usable[0]
+      return {
+        id: Number(first.id),
+        path: `/vpns/${Number(first.server_id)}/${encodeURIComponent(first.panel_email)}`,
+        source: `first of ${usable.length} in /api/super/vpns`,
+      }
+    })
 }
 
 try {
   const target = await resolveTargetVPN()
   VPN_ID = target.id
-  console.log(`vpn ${VPN_ID} (${target.source})\n`)
+  // The operator detail path. When the id came from an argument or the env var
+  // there is no row to build it from, so fall back to the list screen — which
+  // still proves no operator action is exposed to a client.
+  VPN_PATH = target.path ?? ''
+  console.log(`vpn ${VPN_ID} (${target.source})${VPN_PATH ? ` at ${VPN_PATH}` : ''}\n`)
 } catch (err) {
   console.error(String(err.message ?? err))
   try {
@@ -187,7 +219,7 @@ try {
   process.exit(1)
 }
 
-await open(`/vpn/${VPN_ID}`)
+await open(VPN_PATH)
 const staffButtons = (await buttons()) ?? []
 check(staffButtons.includes('Suspend') || staffButtons.includes('Resume'),
   `staff sees a Suspend/Resume control (got: ${staffButtons.join(' | ')})`)

@@ -3,30 +3,38 @@ import { useNavigate } from 'react-router-dom'
 import {
   Crown,
   ExternalLink,
+  Eye,
   Filter,
   LayoutGrid,
   List as ListIcon,
   MapPin,
+  Moon,
   Plus,
   RefreshCw,
   Search,
   ShieldCheck,
+  Sun,
   TriangleAlert,
   X,
 } from 'lucide-react'
 import {
   AsyncState,
   Button,
+  Dialog,
   EmptyState,
   Pagination,
   Skeleton,
   StatusBadge,
 } from '../../components/ui'
 import { ClientPage, ClientSection } from '../../components/client/ClientPage'
+import { api } from '../../lib/api'
 import { useListQuery } from '../../hooks/useListQuery'
-import { useVpnStore, vpnDisplayName, vpnServerLabel, type ClientVpn } from '../../stores/vpnStore'
+import { useVpnStore, vpnDisplayName, vpnServerLabel, statusNote, type ClientVpn } from '../../stores/vpnStore'
 import { VpnKindBadge } from '../../components/vpn/VpnKindBadge'
+import { PanelIdentityRow } from '../../components/vpn/PanelIdentityRow'
+import { VpnQuickView } from '../../components/vpn/VpnQuickView'
 import './vpns.css'
+import { activeTimeZone, formatDateTime, zoneLabel } from '../../lib/time'
 
 /*
  * ===========================================================================
@@ -67,6 +75,64 @@ const PAGE_SIZE = 9
 
 type SortKey = 'newest' | 'name' | 'expiry'
 
+/**
+ * How far down the list a status belongs, lower reading higher.
+ *
+ * This exists because the list is sorted by NAME or DATE, not by "can I use
+ * this?". A client sorting by NEWEST therefore got a suspended or revoked VPN
+ * sitting at the very top of their inventory — the loudest possible position for
+ * the row they can do least with — purely because it was created recently.
+ *
+ * The order is not a preference, it is the answer to "what should I look at
+ * first?":
+ *
+ *   0  ACTIVE              works now; this is the inventory
+ *   1  needs attention     Veylix or the seller must act, the customer cannot
+ *   2  recoverable         a problem the customer can resolve (top-up, re-buy)
+ *   3  not in service      suspended / revoked / released — nothing to do
+ *   4  dormant             already filed away by the customer (D-094)
+ *
+ * Anything unrecognised lands at 2: an unknown status is more likely to need a
+ * look than to be finished with.
+ */
+const STATUS_RANK: Record<string, number> = {
+  ACTIVE: 0,
+  SERVER_UNAVAILABLE: 1,
+  REVOCATION_PENDING: 1,
+  PENDING: 1,
+  TRAFFIC_DEPLETED: 2,
+  EXPIRED: 2,
+  SUSPENDED: 3,
+  REVOKED: 3,
+  RELEASED: 3,
+  REMOVED_FROM_CATALOG: 3,
+  DORMANT: 4,
+}
+
+/**
+ * The statuses that belong in the "Not in service" section.
+ *
+ * A client cannot use any of these, so listing them beside working VPNs made the
+ * working ones harder to find. They are NOT hidden: each still renders with its
+ * sentence and its panel identity, one section further down, because a customer
+ * who released or lost a VPN must still be able to see what happened to it
+ * (D-091.5 / INV-1).
+ */
+const NOT_IN_SERVICE = new Set(['SUSPENDED', 'REVOKED', 'RELEASED', 'REMOVED_FROM_CATALOG'])
+
+/** True when this VPN is a record rather than something the client can use. */
+function isNotInService(v: ClientVpn): boolean {
+  return NOT_IN_SERVICE.has(v.status)
+}
+
+/** The sort rank for a VPN: status first, then dormant last of all. */
+function rankOf(v: ClientVpn): number {
+  // Dormant always sorts LAST whatever its status (D-094) — the customer has
+  // already said "not now", so re-floating it to the top would undo the switch.
+  if (v.dormantAt !== null) return 4
+  return STATUS_RANK[v.status] ?? 2
+}
+
 const SORTS: { value: SortKey; label: string }[] = [
   { value: 'newest', label: 'Newest first' },
   { value: 'name', label: 'Name A-Z' },
@@ -92,14 +158,45 @@ function expiryLabel(expiresAt: number | null, nowSec: number): string {
   return `${d}d left`
 }
 
-/** True when the VPN needs the client's attention (same rule as the dashboard). */
+/**
+ * "Since when" for a non-active VPN, or null when there is nothing honest to say.
+ *
+ * Two rules, both about not inventing a fact:
+ *
+ *   - ACTIVE needs no date. "Active since March" invites the reader to treat the
+ *     date as meaningful, when it only records the last sync's decision.
+ *   - A row with no clock (null, or a database that predates D-098's backfill)
+ *     shows NOTHING. "1 Jan 1970" would be worse than silence, and a client
+ *     must never be told a date the record does not hold.
+ *
+ * The wording is relative for anything inside a week because that is the range
+ * where "3 days ago" is more useful than a date; beyond it, the date.
+ */
+function sinceLabel(v: ClientVpn, nowSec: number): string | null {
+  if (v.status === 'ACTIVE') return null
+  const at = v.statusChangedAt
+  if (at === null || at <= 0) return null
+  const days = Math.floor((nowSec - at) / 86400)
+  if (days <= 0) return 'today'
+  if (days === 1) return 'yesterday'
+  if (days < 7) return `${days} days ago`
+  return `${formatDateTime(at)} (${zoneLabel()})`
+}
+
+/**
+ * True when the VPN needs the client's attention (same rule as the dashboard).
+ *
+ * A dormant VPN never does (D-094). That is the entire point of the switch: the
+ * customer has already seen the problem and said "not now", so re-counting it
+ * every visit would make the switch do nothing.
+ */
 function needsAttention(v: ClientVpn, nowSec: number): boolean {
+  if (v.dormantAt !== null) return false
   if (v.status !== 'ACTIVE') return true
   const d = daysLeft(v.expiresAt, nowSec)
   return d !== null && d >= 0 && d <= 7
 }
 
-/**
 /**
  * Usage on this screen: a LINK, not a number (D-088.1).
  *
@@ -127,12 +224,105 @@ function UsageCell() {
 }
 
 
+/**
+ * "3 Nov" — the day a VPN was put to sleep (D-094).
+ *
+ * Deliberately short and locale-formatted: the exact clock time of a "not now"
+ * decision is noise, but the date is what makes the sentence believable (it
+ * proves the customer did this, and when). A missing stamp returns an empty
+ * string rather than "Invalid Date" — a dormant row always has one, and if that
+ * ever changed the card should read as a plain sentence, not as a crash.
+ */
+function asleepSinceLabel(dormantAt: number | null): string {
+  if (dormantAt === null) return ''
+  return new Date(dormantAt * 1000).toLocaleDateString(undefined, {
+    timeZone: activeTimeZone(),
+    day: 'numeric',
+    month: 'short',
+  })
+}
+
 export function MyVpnsPage() {
   const navigate = useNavigate()
   const vpns = useVpnStore((s) => s.vpns)
   const loading = useVpnStore((s) => s.loading)
   const error = useVpnStore((s) => s.error)
   const load = useVpnStore((s) => s.load)
+  const busy = useVpnStore((s) => s.busy)
+  const dormant = useVpnStore((s) => s.dormant)
+  const wake = useVpnStore((s) => s.wake)
+
+  /**
+   * Puts a VPN to sleep or wakes it (D-094).
+   *
+   * One handler for both directions because the two differ only in which call
+   * runs; keeping them separate invited the two paths to drift apart on the
+   * error handling, which is the part that must behave identically.
+   *
+   * A failure is swallowed here on purpose: the store already recorded the
+   * message and `error` is rendered by `<AsyncState>`. Re-throwing would produce
+   * an unhandled rejection in the console for a condition the customer can
+   * already read on screen.
+   */
+  const toggleSleep = async (v: ClientVpn) => {
+    try {
+      if (v.dormantAt !== null) await wake(v.apiId)
+      else await dormant(v.apiId)
+    } catch {
+      /* reported by the store; see above */
+    }
+  }
+
+  /*
+   * Replace (D-112).
+   *
+   * A replace builds a NEW VPN and then releases the current one, so the
+   * customer ends up with a genuinely different panel client rather than the
+   * same one renamed. It has two side effects, so it is never a single click:
+   * the confirmation names both halves and, for a FREE VPN, the monthly claim it
+   * costs (Bible §17.18 — releasing does not refund a claim).
+   */
+  const [replaceTarget, setReplaceTarget] = useState<ClientVpn | null>(null)
+  const [replacing, setReplacing] = useState(false)
+  const [replaceError, setReplaceError] = useState('')
+  const [replaceDone, setReplaceDone] = useState<{
+    newEmail: string
+    oldEmail: string
+    oldVpnId: number
+    claimConsumed: boolean
+    claimsRemaining: number
+  } | null>(null)
+
+  const doReplace = async () => {
+    if (!replaceTarget) return
+    setReplacing(true)
+    setReplaceError('')
+    try {
+      const res = await api.replaceVpn(replaceTarget.apiId)
+      // Say exactly what happened, with both panel identities: the customer has
+      // to be able to tell support which client they now hold and which one is
+      // in its undo window.
+      setReplaceDone({
+        newEmail: res.new.panel_email,
+        oldEmail: res.old_panel_email,
+        oldVpnId: res.old_vpn_id,
+        claimConsumed: res.claim_consumed,
+        claimsRemaining: res.claims_remaining,
+      })
+      setReplaceTarget(null)
+      await load()
+    } catch (err) {
+      // The route answers with a sentence the customer can act on — a spent
+      // allowance names the window, a refused create says nothing changed.
+      setReplaceError(
+        err instanceof Error && err.message
+          ? err.message
+          : 'Could not replace this VPN. Nothing was changed.',
+      )
+    } finally {
+      setReplacing(false)
+    }
+  }
 
   useEffect(() => {
     void load()
@@ -140,6 +330,15 @@ export function MyVpnsPage() {
 
   /** One clock read per mount, so "days left" cannot differ between renders. */
   const [nowSec] = useState(() => Date.now() / 1000)
+
+  /*
+   * The VPN whose quick view is open, or null.
+   *
+   * Holding the row itself (not an id) means the sheet can render its identity
+   * and status immediately, with no second list lookup and no spinner on the
+   * frame the customer cares about. Only the usage summary is fetched.
+   */
+  const [quick, setQuick] = useState<ClientVpn | null>(null)
 
   /*
    * All list state lives in the URL (`useListQuery`), so a filtered view is
@@ -235,26 +434,67 @@ export function MyVpnsPage() {
   }, [vpns, q, cat, statusFilter, server, expiry, nowSec])
 
   /* ---- sorting --------------------------------------------------------- */
+  /*
+   * Dormant VPNs always sort LAST, whatever the chosen key (D-094).
+   *
+   * This is applied as an OUTER comparison rather than inside each `case`, so
+   * "sort by name" cannot float a sleeping VPN back to the top — the one thing
+   * the customer asked for is that it stops being first. Within each group the
+   * chosen sort still applies in full, so the order the customer picked is never
+   * silently replaced.
+   */
   const sorted = useMemo(() => {
     const rows = [...filtered]
     switch (sort) {
       case 'name':
-        return rows.sort((a, b) => vpnDisplayName(a).localeCompare(vpnDisplayName(b)))
+        rows.sort((a, b) => vpnDisplayName(a).localeCompare(vpnDisplayName(b)))
+        break
       case 'expiry':
         /* "No expiry" sorts LAST, not first: a reader asking "what runs out
            next" does not want a never-expiring VPN at the top. */
-        return rows.sort(
+        rows.sort(
           (a, b) => (a.expiresAt ?? Number.MAX_SAFE_INTEGER) - (b.expiresAt ?? Number.MAX_SAFE_INTEGER),
         )
+        break
       default:
-        return rows.sort((a, b) => b.apiId - a.apiId)
+        rows.sort((a, b) => b.apiId - a.apiId)
     }
+    /* STATUS beats the chosen key (D-100).
+     *
+     * Before this, the only outer comparison was dormancy — so a SUSPENDED or
+     * REVOKED VPN floated to the TOP under "Newest first" purely because its row
+     * was created recently. The customer's most prominent slot was given to the
+     * one VPN they could do nothing with.
+     *
+     * `rankOf` puts it below everything usable, and dormant keeps its place at
+     * the very bottom. The chosen sort still applies IN FULL inside each rank,
+     * so the order the customer picked is never silently replaced — only
+     * grouped. Array.prototype.sort is stable, so equal ranks keep that order. */
+    return rows.sort((a, b) => rankOf(a) - rankOf(b))
   }, [filtered, sort])
 
+  /* ---- the two sections (D-100) ---------------------------------------- *
+   *
+   * `sorted` is split into what the client can USE and what is a RECORD of
+   * something finished. They are not two datasets: one filter pass, one sort
+   * pass, and the same rows — just presented in the order a person reads them.
+   *
+   * Nothing is dropped. Every matching row still renders, with its status
+   * sentence and its panel identity; the second group simply stops competing
+   * with the working inventory for the top of the page.
+   *
+   * The Overview counts below deliberately still count ALL owned VPNs (D-088),
+   * not `usable`: "Total VPNs" is a property of the account, not of one
+   * section, and a count that silently excluded suspended rows would be a
+   * smaller number than the truth.
+   */
+  const usable = useMemo(() => sorted.filter((v) => !isNotInService(v)), [sorted])
+  const resting = useMemo(() => sorted.filter(isNotInService), [sorted])
+
   /* ---- paging ---------------------------------------------------------- */
-  const pageCount = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE))
+  const pageCount = Math.max(1, Math.ceil(usable.length / PAGE_SIZE))
   const page = Math.min(Math.max(1, Number(query.values.page) || 1), pageCount)
-  const visible = sorted.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+  const visible = usable.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
 
   const asyncStatus =
     error ? 'error' : loading && vpns.length === 0 ? 'loading' : vpns.length === 0 ? 'empty' : 'ready'
@@ -287,12 +527,24 @@ export function MyVpnsPage() {
   const renderCard = (v: ClientVpn) => (
     <article
       key={v.id}
-      className={`mv-card${v.kind === 'PREMIUM' ? ' mv-card--premium' : ''}`}
+      className={`mv-card${v.kind === 'PREMIUM' ? ' mv-card--premium' : ''}${
+        v.dormantAt !== null ? ' mv-card--dormant' : ''
+      }`}
       data-testid={`vpn-card-${v.apiId}`}
+      data-dormant={v.dormantAt !== null ? 'true' : 'false'}
     >
       <div className="mv-card__head">
         <div className="mv-card__title">
           <span className="mv-card__name" title={vpnDisplayName(v)}>{vpnDisplayName(v)}</span>
+          {/* D-091.4: the panel identity sits beside the package name on the
+              very screen a customer opens most — never one without the other,
+              and copyable because that is the string support will ask for. */}
+          <PanelIdentityRow
+            panelEmail={v.panelEmail}
+            layout="inline"
+            testId={`vpn-identity-${v.apiId}`}
+          />
+
           <span className="mv-card__sub">
             <MapPin size={11} aria-hidden="true" style={{ marginRight: 3, verticalAlign: '-1px' }} />
             {vpnServerLabel(v)}
@@ -308,6 +560,16 @@ export function MyVpnsPage() {
           <span>Status</span>
           <span><StatusBadge status={v.status} /></span>
         </div>
+        {/* D-100: WHEN, beside WHAT. "Suspended" alone cannot tell a customer
+            whether it happened this morning or last quarter, and that gap is
+            exactly what a support call fills. Rendered only when the server
+            actually sent a clock — a guessed date would be worse than none. */}
+        {sinceLabel(v, nowSec) !== null && (
+          <div className="mv-card__row" data-testid={`vpn-since-${v.apiId}`}>
+            <span>Since</span>
+            <span>{sinceLabel(v, nowSec)}</span>
+          </div>
+        )}
         <UsageCell />
         <div className="mv-card__row">
           <span>Expiry</span>
@@ -315,14 +577,43 @@ export function MyVpnsPage() {
         </div>
       </div>
 
-      {v.status !== 'ACTIVE' && (
-        <span className="vpn-warn t-sm2" style={{ display: 'flex', gap: 8, marginBottom: 0 }}>
+      {/* D-091.5: the row explains a non-active state instead of only colouring
+          it. The sentence comes from `statusNote`, the same function the quick
+          view and the detail page use, so the three cannot drift apart. */}
+      {statusNote(v.status) !== null && (
+        <span className="vpn-warn t-sm2 mv-card__note" data-testid={`vpn-note-${v.apiId}`}>
           <TriangleAlert size={14} aria-hidden="true" />
-          Not connectable right now - details inside.
+          {statusNote(v.status)}
+        </span>
+      )}
+
+      {/* D-094: a dormant VPN says what was done and what it means, in the
+          customer's own terms. It is deliberately NOT phrased as an error —
+          nothing is broken and nothing was lost; the customer chose this, and
+          the sentence has to make that obvious or they will think they deleted
+          something. The real status above stays visible, so sleeping never
+          disguises a dead VPN as a healthy one. */}
+      {v.dormantAt !== null && (
+        <span className="mv-card__asleep t-sm2" data-testid={`vpn-dormant-note-${v.apiId}`}>
+          <Moon size={14} aria-hidden="true" />
+          <span>
+            You put this VPN to sleep on {asleepSinceLabel(v.dormantAt)}. It is safe — nothing was
+            deleted and it still works exactly as before. You can bring it back any time.
+          </span>
         </span>
       )}
 
       <div className="mv-card__actions">
+        <Button
+          size="sm"
+          variant="outline"
+          leading={<Eye size={13} />}
+          onClick={() => setQuick(v)}
+          data-testid={`vpn-quick-${v.apiId}`}
+        >
+          Quick view
+        </Button>
+
         <Button
           size="sm"
           variant="outline"
@@ -341,6 +632,41 @@ export function MyVpnsPage() {
             Upgrade
           </Button>
         )}
+        {/* The "not now" switch. It sits last because it is the least common
+            action, and its label states the effect rather than the mechanism:
+            "Sleep" / "Wake", never "dormant" or "deactivate". */}
+        <Button
+          size="sm"
+          variant="ghost"
+          leading={v.dormantAt !== null ? <Sun size={13} /> : <Moon size={13} />}
+          onClick={() => void toggleSleep(v)}
+          disabled={busy === v.apiId}
+          data-testid={`vpn-sleep-${v.apiId}`}
+        >
+          {v.dormantAt !== null ? 'Wake' : 'Sleep'}
+        </Button>
+        {/*
+          Replace (D-112). Offered only for a VPN that is actually in service:
+          replacing a released or revoked one would be a second VPN on top of a
+          dead one, and the customer wants `restore` in that case. The label
+          states the outcome ("Replace"), never the mechanism.
+        */}
+        {!NOT_IN_SERVICE.has(v.status) && (
+          <Button
+            size="sm"
+            variant="ghost"
+            leading={<RefreshCw size={13} />}
+            onClick={() => {
+              setReplaceError('')
+              setReplaceDone(null)
+              setReplaceTarget(v)
+            }}
+            disabled={busy === v.apiId}
+            data-testid={`vpn-replace-${v.apiId}`}
+          >
+            Replace
+          </Button>
+        )}
       </div>
     </article>
   )
@@ -352,19 +678,41 @@ export function MyVpnsPage() {
       <td>
         <div className="mv-list__name">
           <strong>{vpnDisplayName(v)}</strong>
-          <span>{v.offerName ?? vpnServerLabel(v)}</span>
+          <PanelIdentityRow
+            panelEmail={v.panelEmail}
+            layout="inline"
+            testId={`vpn-row-identity-${v.apiId}`}
+          />
+          <span className="ui-muted t-xs2">{vpnServerLabel(v)}</span>
         </div>
       </td>
       <td><VpnKindBadge kind={v.kind} /></td>
-      <td><StatusBadge status={v.status} /></td>
+      <td>
+        <div className="mv-list__status">
+          <StatusBadge status={v.status} />
+          {statusNote(v.status) !== null && (
+            <span className="t-xs2 ui-muted">{statusNote(v.status)}</span>
+          )}
+          {/* D-100: WHEN, inside the same cell as WHAT — a whole extra column
+              for a date most rows do not have would be a column of dashes. */}
+          {sinceLabel(v, nowSec) !== null && (
+            <span className="t-xs2 ui-muted" data-testid={`vpn-row-since-${v.apiId}`}>
+              since {sinceLabel(v, nowSec)}
+            </span>
+          )}
+        </div>
+      </td>
       <td>{vpnServerLabel(v)}</td>
       <td className="mv-list__num">
         <span className="ui-muted">detail screen</span>
       </td>
       <td className="mv-list__num">{expiryLabel(v.expiresAt, nowSec)}</td>
       <td className="mv-list__act">
+        <Button size="sm" variant="ghost" onClick={() => setQuick(v)}>
+          Quick view
+        </Button>
         <Button size="sm" variant="ghost" onClick={() => navigate(`/vpn/${v.id}`)}>
-          View Details
+          Full details
         </Button>
       </td>
     </tr>
@@ -617,7 +965,7 @@ export function MyVpnsPage() {
                 title={sectionTitle}
                 actions={
                   <span className="ui-muted t-sm">
-                    {sorted.length} of {vpns.length}
+                    {usable.length} of {vpns.length}
                   </span>
                 }
               >
@@ -632,7 +980,7 @@ export function MyVpnsPage() {
                           <th scope="col">Server</th>
                           <th scope="col">Usage</th>
                           <th scope="col">Expiry</th>
-                          <th scope="col" style={{ textAlign: 'right' }}>Actions</th>
+                          <th scope="col" className="mv-list__actions-head">Actions</th>
                         </tr>
                       </thead>
                       <tbody>{visible.map(renderRow)}</tbody>
@@ -656,10 +1004,146 @@ export function MyVpnsPage() {
                   />
                 </div>
               )}
+
+              {/* ---- Not in service (D-100) ---------------------------------
+               *
+               * A suspended or revoked VPN is a RECORD, not inventory: the
+               * client cannot connect through it and cannot resume it without
+               * the seller. Sitting it beside working VPNs meant the working
+               * ones were harder to find, and it is what pushed it to the top
+               * under "Newest first".
+               *
+               * It is shown, not hidden (D-091.5 / INV-1). Each row keeps its
+               * sentence and its panel identity, because "where did my VPN go?"
+               * is answered by seeing it here — never by a list that quietly
+               * stopped listing it.
+               */}
+              {resting.length > 0 && (
+                <ClientSection
+                  title="Not in service"
+                  actions={
+                    <span className="ui-muted t-sm">
+                      {resting.length} {resting.length === 1 ? 'VPN' : 'VPNs'} kept for your records
+                    </span>
+                  }
+                >
+                  <p className="mv-resting__note">
+                    These are still yours and still on file. They cannot be used right now, so
+                    they are kept here instead of among your working VPNs.
+                  </p>
+                  {view === 'list' ? (
+                    <div className="mv-listwrap">
+                      <table className="mv-list">
+                        <thead>
+                          <tr>
+                            <th scope="col">VPN</th>
+                            <th scope="col">Category</th>
+                            <th scope="col">Status</th>
+                            <th scope="col">Server</th>
+                            <th scope="col">Usage</th>
+                            <th scope="col">Expiry</th>
+                            <th scope="col" className="mv-list__actions-head">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody>{resting.map(renderRow)}</tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <div className="mv-grid">{resting.map(renderCard)}</div>
+                  )}
+                </ClientSection>
+              )}
             </>
           )}
         </AsyncState>
       </div>
+      <VpnQuickView vpn={quick} onClose={() => setQuick(null)} />
+
+      {/* Replace confirmation (D-112). Names both halves — a new VPN, and the
+          current one released with a 3-day undo — because the action has two
+          side effects and a customer must not discover the second one after. */}
+      <Dialog
+        open={replaceTarget !== null}
+        title={replaceTarget ? `Replace ${vpnDisplayName(replaceTarget)}?` : 'Replace this VPN?'}
+        onClose={() => {
+          if (!replacing) setReplaceTarget(null)
+        }}
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setReplaceTarget(null)} disabled={replacing}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => void doReplace()}
+              disabled={replacing}
+              data-testid="vpn-replace-confirm"
+            >
+              {replacing ? 'Replacing…' : 'Replace this VPN'}
+            </Button>
+          </>
+        }
+      >
+        {replaceTarget && (
+          <div className="ui-col" data-testid="vpn-replace-dialog">
+            <p className="t-sm">
+              This creates a <strong>new</strong> VPN with fresh traffic and expiry, and confirms it
+              on the server <strong>before</strong> the current one is released — so you are never
+              left without a working VPN. You will have <strong>3 days</strong> to undo the release.
+            </p>
+            <p className="t-sm2">
+              Current VPN: <code data-testid="vpn-replace-old">{replaceTarget.panelEmail}</code>
+              <br />
+              <span className="t-xs">
+                A replacement always gets a new panel identity — it is a different VPN on the
+                server, not the same one renamed.
+              </span>
+            </p>
+            {replaceTarget.kind === 'FREE' && (
+              <p className="t-sm2 of-note of-note--warn" data-testid="vpn-replace-claim-note">
+                This uses <strong>one FREE claim</strong> from your 30-day allowance on this
+                server. Releasing the old VPN does not refund it.
+              </p>
+            )}
+            {replaceError && (
+              <p className="ui-field__error" role="alert" data-testid="vpn-replace-error">
+                {replaceError}
+              </p>
+            )}
+          </div>
+        )}
+      </Dialog>
+
+      {/* The outcome, stated with both panel identities so a support thread can
+          begin without guessing which client the customer now holds. */}
+      <Dialog
+        open={replaceDone !== null}
+        title="VPN replaced"
+        onClose={() => setReplaceDone(null)}
+        footer={
+          <Button onClick={() => setReplaceDone(null)} data-testid="vpn-replace-done-close">
+            Done
+          </Button>
+        }
+      >
+        {replaceDone && (
+          <div className="ui-col" data-testid="vpn-replace-done">
+            <p className="t-sm">
+              Your new VPN is <code data-testid="vpn-replace-new">{replaceDone.newEmail}</code>. It
+              is ready to use now.
+            </p>
+            <p className="t-sm2">
+              The previous VPN <code data-testid="vpn-replace-released">{replaceDone.oldEmail}</code>{' '}
+              was released, not deleted. You can restore it for 3 days from its entry in your list.
+            </p>
+            {replaceDone.claimConsumed && (
+              <p className="t-sm2">
+                This used one FREE claim. {replaceDone.claimsRemaining} left in the last 30 days on
+                this server.
+              </p>
+            )}
+          </div>
+        )}
+      </Dialog>
     </ClientPage>
   )
 }

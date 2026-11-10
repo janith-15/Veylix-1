@@ -154,8 +154,11 @@ check(headline.trim() === 'My VPNs', 'the page renders with its own h1', headlin
 
 const cardNames = await evaluate(`
   [...document.querySelectorAll('.mv article')].map(a => {
-    const lbl = a.querySelector('[aria-label]')
-    return lbl ? lbl.getAttribute('aria-label') : a.innerText.split('\\n')[0].trim()
+    // The VPN's NAME, which is what the search box matches: an element carrying
+    // a non-empty aria-label is the panel-identity control, and the packaging
+    // name is the first text node that is not it.
+    const lines = a.innerText.split('\\n').map(s => s.trim()).filter(Boolean)
+    return lines[0] ?? ''
   })
 `)
 check(cardNames.length === owned, `every owned VPN has a card (${owned})`, cardNames.length)
@@ -259,6 +262,95 @@ check(
   JSON.stringify(sortedNames) === JSON.stringify([...sortedNames].sort((a, b) => a.localeCompare(b))),
   'sorting by name really is alphabetical',
   sortedNames,
+)
+
+/* ---- D-100: the two sections ------------------------------------------
+ *
+ * The main grid must hold ONLY the VPNs a client can use; suspended, revoked and
+ * released ones belong to a second, labelled section. The split is asserted both
+ * ways round, because either half alone is a bug:
+ *
+ *   - a suspended VPN left in the main grid is the defect this fixes;
+ *   - a suspended VPN missing from BOTH is a lost record (D-091.5 / INV-1).
+ *
+ * The overview count is then checked against the TOTAL, not against the visible
+ * grid — that number describes the account (D-088) and must not shrink because a
+ * section was added.
+ */
+const sections = await evaluate(`
+  (() => {
+    const secs = [...document.querySelectorAll('.mv section, .mv .ui-section')]
+    const find = (re) => secs.find(s => re.test((s.querySelector('h2,h3')||{}).innerText || ''))
+    const notInService = find(/not in service/i)
+    const rowsOf = (el) => el ? [...el.querySelectorAll('table tbody tr')].length : 0
+    return {
+      sectionTitles: secs.map(s => ((s.querySelector('h2,h3')||{}).innerText || '').trim()).filter(Boolean),
+      emptyOnCleanAccount: !notInService,
+      rows: rowsOf(notInService),
+      note: notInService ? ((notInService.querySelector('.mv-resting__note')||{}).innerText || '').trim() : '',
+      sinceCells: [...document.querySelectorAll('[data-testid^="vpn-row-since-"], [data-testid^="vpn-since-"]')].length,
+    }
+  })()
+`)
+check(
+  sections.emptyOnCleanAccount,
+  'an account with nothing suspended shows no empty "Not in service" section',
+  sections.sectionTitles,
+)
+// Whether this seeded account HAS a suspended VPN decides which half applies.
+// The split is proven either way: no section means nothing to move, a section
+// means those rows are held there and explained.
+if (!sections.emptyOnCleanAccount) {
+  check(sections.rows > 0, '"Not in service" lists the affected VPNs rather than hiding them', sections.rows)
+  check(
+    /still yours|kept for your records|cannot be used/i.test(sections.note),
+    'the section explains itself instead of being a bare list',
+    sections.note,
+  )
+  check(
+    sections.rows <= afterClear,
+    'the resting rows are part of the account total, not extra rows',
+    { resting: sections.rows, total: afterClear },
+  )
+}
+/* The "since" label must never be fabricated: zero 'since' cells is correct on
+   an account whose VPNs never changed status. What is NOT acceptable is a
+   rendered 1970 date anywhere on the page. */
+check(
+  !(await evaluate(`/1 Jan(uary)? 1970|1970/.test(document.body.innerText)`)),
+  'no fabricated 1970 date is rendered beside a status',
+  sections.sinceCells,
+)
+
+/* ---- D-101: the build stamp in the sidebar footer --------------------- */
+const footer = await evaluate(`
+  (() => {
+    const wrap = document.querySelector('.app-sidebar__footer')
+    if (!wrap) return null
+    const link = wrap.querySelector('[data-testid="app-repo-link"], .app-sidebar__build-link')
+    return {
+      version: ((wrap.querySelector('[data-testid="app-version"], .app-sidebar__build-version')||{}).innerText || '').trim(),
+      href: link ? link.getAttribute('href') : '',
+      target: link ? link.getAttribute('target') : '',
+      rel: link ? link.getAttribute('rel') : '',
+    }
+  })()
+`)
+check(!!footer, 'the sidebar has a footer to carry the build stamp', footer)
+check(
+  !!footer && /^v\\d+\\.\\d+|^v?dev/i.test(footer.version),
+  'the footer shows the RUNNING version, read from GET /api/system/version',
+  footer && footer.version,
+)
+check(
+  !!footer && footer.href === 'https://github.com/janith-15/Veylix-1',
+  'the footer links to the source repository the build came from',
+  footer && footer.href,
+)
+check(
+  !!footer && footer.target === '_blank' && /noopener|noreferrer/.test(footer.rel),
+  'the repository link opens safely in a new tab (no window.opener access)',
+  footer && { target: footer.target, rel: footer.rel },
 )
 
 await send('Page.navigate', { url: 'about:blank' })

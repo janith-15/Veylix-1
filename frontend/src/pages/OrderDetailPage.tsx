@@ -6,6 +6,7 @@ import { ApiError } from '../lib/api'
 import { useOrdersStore } from '../stores/ordersStore'
 import { useServersStore } from '../stores/serversStore'
 import './order-detail.css'
+import { activeTimeZone } from '../lib/time'
 
 /**
  * L3 — releasing a CUSTOM order (D-036.6).
@@ -132,6 +133,30 @@ export function OrderDetailPage() {
         order && (
           <>
             <Card className="od-summary">
+              {/* D-113: who placed this order and what it buys.
+                  These come from the row itself, so the operator never has to
+                  cross-reference an id. An absent value is stated, not blanked. */}
+              <div className="od-fact">
+                <span className="od-fact__label">Placed by</span>
+                <span className="od-fact__value" data-testid="order-payer">
+                  {order.payer_email || 'account no longer exists'}
+                </span>
+              </div>
+              {order.target_email && order.target_email !== order.payer_email && (
+                <div className="od-fact">
+                  <span className="od-fact__label">For</span>
+                  <span className="od-fact__value" data-testid="order-target">
+                    {order.target_email}
+                  </span>
+                </div>
+              )}
+              <div className="od-fact">
+                <span className="od-fact__label">Package</span>
+                <span className="od-fact__value" data-testid="order-package">
+                  {order.offer_name || 'no package (manual record)'}
+                  {order.offer_kind ? ` · ${order.offer_kind}` : ''}
+                </span>
+              </div>
               <div className="od-fact">
                 <span className="od-fact__label">Amount</span>
                 <span className="od-fact__value">
@@ -149,7 +174,7 @@ export function OrderDetailPage() {
               <div className="od-fact">
                 <span className="od-fact__label">Created</span>
                 <span className="od-fact__value">
-                  {new Date(order.created_at * 1000).toLocaleString()}
+                  {new Date(order.created_at * 1000).toLocaleString(undefined, { timeZone: activeTimeZone() })}
                 </span>
               </div>
             </Card>
@@ -236,7 +261,7 @@ export function OrderDetailPage() {
                     <li key={e.id}>
                       <span className="od-events__kind">{e.kind}</span>
                       <span className="ui-muted t-sm2">
-                        {new Date(e.createdAt * 1000).toLocaleString()}
+                        {new Date(e.createdAt * 1000).toLocaleString(undefined, { timeZone: activeTimeZone() })}
                         {e.actorEmail ? ` · ${e.actorEmail}` : ''}
                       </span>
                       {e.detail && <span className="od-events__detail">{e.detail}</span>}

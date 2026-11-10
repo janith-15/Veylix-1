@@ -558,6 +558,24 @@ func (s *Service) SetUserRole(ctx context.Context, actor Principal, userID int64
 	if target.Role == string(role) {
 		return target, nil // idempotent: re-stating the same role changes nothing
 	}
+	/*
+	 * P-1: promoting to `super_admin` is only legal when the seat is empty.
+	 *
+	 * Without this, `SetUserRole` was a second door into the same power that
+	 * `CreateUserByRole` guards — the unique index (0028) would refuse the UPDATE,
+	 * but with a constraint error instead of an explanation. Demoting the existing
+	 * owner is a deliberate, audited act; it must happen first.
+	 */
+	if role == RoleSuperAdmin {
+		var existing int
+		if err := s.db.QueryRowContext(ctx,
+			`SELECT COUNT(*) FROM users WHERE role = 'super_admin' AND id <> ?`, userID).Scan(&existing); err != nil {
+			return nil, fmt.Errorf("auth: count super admins: %w", err)
+		}
+		if existing > 0 {
+			return nil, ErrSuperAdminExists
+		}
+	}
 	if _, err := s.db.ExecContext(ctx,
 		`UPDATE users SET role = ?, updated_at = ? WHERE id = ?`,
 		string(role), time.Now().Unix(), userID); err != nil {
@@ -646,6 +664,14 @@ var ErrUserNotFound = errors.New("auth: user not found")
 
 // ErrCannotModifySelf prevents a super admin from locking themselves out.
 var ErrCannotModifySelf = errors.New("auth: you cannot change your own status or role")
+
+// ErrSuperAdminExists is returned when a second Super Admin is requested.
+//
+// P-1: the platform has exactly ONE owner. Enforced in the database by
+// `idx_users_single_super_admin` (0028); this sentinel exists so the operator gets
+// a sentence they can act on ("there is already an owner — demote them first")
+// instead of a raw UNIQUE-constraint error.
+var ErrSuperAdminExists = errors.New("auth: the platform already has a Super Admin; demote them first")
 
 // ErrNotAnAdmin keeps server assignment off accounts that have no reseller scope.
 var ErrNotAnAdmin = errors.New("auth: target account is not an admin")
@@ -773,6 +799,25 @@ func (s *Service) CreateUserByRole(ctx context.Context, actor Principal, in Crea
 	}
 	if !in.Role.Valid() {
 		return nil, fmt.Errorf("auth: unknown role %q", in.Role)
+	}
+	/*
+	 * P-1: the platform has exactly ONE Super Admin.
+	 *
+	 * The unique index (0028) is the real guard — it cannot be bypassed by a code
+	 * path that forgets this check. Checking here as well turns a raw
+	 * UNIQUE-constraint error into a sentence the operator can act on, and it
+	 * avoids hashing a password (argon2id, 64 MB) for a request that cannot
+	 * succeed.
+	 */
+	if in.Role == RoleSuperAdmin {
+		var existing int
+		if err := s.db.QueryRowContext(ctx,
+			`SELECT COUNT(*) FROM users WHERE role = 'super_admin'`).Scan(&existing); err != nil {
+			return nil, fmt.Errorf("auth: count super admins: %w", err)
+		}
+		if existing > 0 {
+			return nil, ErrSuperAdminExists
+		}
 	}
 	email := strings.ToLower(strings.TrimSpace(in.Email))
 	if !emailPattern.MatchString(email) || len(email) > 190 {

@@ -10,6 +10,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net"
 	"os"
 	"path/filepath"
@@ -58,6 +59,32 @@ type Config struct {
 	// Zero or negative disables the scheduler, which is what tests and a
 	// read-only deployment want.
 	SyncInterval time.Duration
+	// LifecycleMode controls the D-098 stale-VPN sweep. It has three values so
+	// the feature can be observed on a live box before it is allowed to act:
+	//
+	//   off     — no sweep at all. The default, so an upgrade cannot change
+	//             behaviour nobody asked to change.
+	//   report  — find and LOG/audit what would be set aside, change nothing.
+	//             This is the mode to run for a few days after deploying.
+	//   enforce — actually move stale VPNs into the RELEASED undo window.
+	//
+	// It is an explicit opt-in because every other mode of failure here is a
+	// customer losing a row they did not expect to lose.
+	LifecycleMode string
+	// DisplayTimezone decides how an absolute instant is SHOWN to a person. It
+	// never changes what is stored: every timestamp in this product is a UTC
+	// epoch second, the only form that cannot drift when a server changes
+	// datacentre or a country changes its rules (D-099).
+	//
+	// It is a SERVER setting rather than a browser reading because the answer
+	// must be the same for everybody. Rendered from the device's own zone, one
+	// VPN's "last seen 14:30" reads 20:00 to a customer in Colombo and 22:30 to
+	// the same customer on a trip — and the support call then starts with two
+	// people disputing a time neither of them got wrong.
+	DisplayTimezone string
+	// DisplayZone is DisplayTimezone loaded once at startup, so no request pays
+	// for a tzdata lookup and a bad zone cannot fail halfway through a render.
+	DisplayZone *time.Location
 	// SyncTimeout bounds ONE server's pass, so a hanging panel cannot consume
 	// the whole cycle (REQUIREMENTS §3).
 	SyncTimeout time.Duration
@@ -170,6 +197,7 @@ func Load(getenv func(string) string) (*Config, error) {
 		return nil, err
 	}
 	secureCookies := resolveSecureCookies(addr, getenv("VEYLIX_INSECURE_COOKIES"))
+	displayTZ, displayZone := resolveDisplayZone(getenv("VEYLIX_DISPLAY_TIMEZONE"))
 
 	return &Config{
 		HTTPAddr:      addr,
@@ -183,9 +211,16 @@ func Load(getenv func(string) string) (*Config, error) {
 		IdleTimeout:   60 * time.Second,
 
 		SyncInterval: resolveDuration(getenv("VEYLIX_SYNC_INTERVAL"), 5*time.Minute),
-		SyncTimeout:  resolveDuration(getenv("VEYLIX_SYNC_TIMEOUT"), 60*time.Second),
-		SyncPageSize: resolveInt(getenv("VEYLIX_SYNC_PAGE_SIZE"), 200, 1, 200),
-		SyncMaxPages: resolveInt(getenv("VEYLIX_SYNC_MAX_PAGES"), 50, 1, 1000),
+		// `off` is the default: an upgrade must not begin retiring customers'
+		// VPNs because a new code path happened to ship (D-098).
+		LifecycleMode: resolveLifecycleMode(getenv("VEYLIX_LIFECYCLE_MODE")),
+		// Default Asia/Colombo, not UTC and not the host's zone: every screen
+		// must read in the timezone the business runs on, on any device.
+		DisplayTimezone: displayTZ,
+		DisplayZone:     displayZone,
+		SyncTimeout:     resolveDuration(getenv("VEYLIX_SYNC_TIMEOUT"), 60*time.Second),
+		SyncPageSize:    resolveInt(getenv("VEYLIX_SYNC_PAGE_SIZE"), 200, 1, 200),
+		SyncMaxPages:    resolveInt(getenv("VEYLIX_SYNC_MAX_PAGES"), 50, 1, 1000),
 
 		GoogleOAuth: GoogleOAuth{
 			ClientID:     strings.TrimSpace(getenv("VEYLIX_GOOGLE_CLIENT_ID")),
@@ -217,6 +252,63 @@ func Load(getenv func(string) string) (*Config, error) {
 
 // resolveDuration parses a Go duration string, falling back to def on any
 // problem. "0" or a negative value deliberately disables the feature.
+// Lifecycle modes (D-098). Stated as constants so a typo in the environment
+// cannot become a fourth, undefined behaviour.
+const (
+	LifecycleOff     = "off"
+	LifecycleReport  = "report"
+	LifecycleEnforce = "enforce"
+)
+
+// resolveLifecycleMode normalises VEYLIX_LIFECYCLE_MODE.
+//
+// Anything unrecognised resolves to `off`, never to `enforce`: a mistyped
+// variable must fail SAFE. Silently enabling a sweep because the operator wrote
+// "on" instead of "enforce" would retire customers' VPNs on a typo, and a
+// tidy-up rule has no business being that easy to switch on by accident.
+func resolveLifecycleMode(raw string) string {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case LifecycleReport:
+		return LifecycleReport
+	case LifecycleEnforce:
+		return LifecycleEnforce
+	default:
+		return LifecycleOff
+	}
+}
+
+// DefaultDisplayTimezone is where "8 PM" means 8 PM for this business.
+//
+// Sri Lanka has observed no DST since 2006, so Asia/Colombo is a constant
+// +05:30 — but the zone NAME is used rather than a fixed offset, so a future
+// rule change is picked up from tzdata instead of silently keeping the wrong
+// hour.
+const DefaultDisplayTimezone = "Asia/Colombo"
+
+// resolveDisplayZone turns VEYLIX_DISPLAY_TIMEZONE into a name plus a loaded
+// location.
+//
+// A zone that cannot be loaded falls back to UTC and KEEPS the requested name
+// in the config string, so the operator sees what they asked for in the startup
+// log while the screens still render a defensible, correct-by-construction time.
+// It never panics and never guesses an offset: a made-up +05:30 would look right
+// today and be wrong the moment a rule changed.
+func resolveDisplayZone(raw string) (string, *time.Location) {
+	name := strings.TrimSpace(raw)
+	if name == "" {
+		name = DefaultDisplayTimezone
+	}
+	// "UTC" resolves from tzdata, but an explicit fallback keeps a container
+	// with no tzdata at all from failing to describe time.
+	if loc, err := time.LoadLocation(name); err == nil {
+		return name, loc
+	}
+	slog.Warn("config: display timezone could not be loaded; falling back to UTC",
+		"requested", name, "note", "timestamps are stored as UTC epoch either way")
+	return name, time.UTC
+}
+
+// resolveDuration normalises a duration environment variable.
 func resolveDuration(raw string, def time.Duration) time.Duration {
 	if raw == "" {
 		return def

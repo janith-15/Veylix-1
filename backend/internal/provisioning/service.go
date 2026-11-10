@@ -18,6 +18,7 @@ import (
 	"net"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	"veylix/backend/internal/audit"
@@ -128,6 +129,14 @@ type CreateInput struct {
 	// Spec, when set, replaces the offer's limits and target for this release
 	// (a CUSTOM order).
 	Spec *Spec
+	// ReplacesPanelEmail names the FREE claim this create is REPLACING (D-112).
+	//
+	// A replace builds the new VPN before releasing the old one, so at the
+	// concurrent cap an ordinary claim would always be refused and a customer
+	// holding three FREE VPNs could never replace any of them. Naming the old
+	// claim lets the booking swap its slot atomically instead of taking a new
+	// one. Empty means an ordinary claim.
+	ReplacesPanelEmail string
 }
 
 // Result reports what actually happened remotely.
@@ -529,9 +538,22 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*Result, error) {
 		// row, so the two caps (3 concurrent, 5 per rolling 30 days) are checked
 		// and consumed atomically. Checking outside would let two concurrent
 		// claims both observe the last slot and both take it.
+		//
+		// D-112: a replace swaps the claim it is replacing, in the same
+		// transaction, because the new VPN is created before the old one is
+		// released — at the concurrent cap an ordinary claim would always fail
+		// and the customer could never replace. The monthly window is still
+		// consumed either way (§17.18: releasing does not refund a claim).
 		if offer.Kind == "FREE" {
-			claimID, cerr := s.st.RecordFreeClaim(ctx, tx, in.ClientUserID, serverID,
-				panelEmail, in.FreeMonthlyLimit)
+			var claimID int64
+			var cerr error
+			if in.ReplacesPanelEmail != "" {
+				claimID, cerr = s.st.ReplaceFreeClaim(ctx, tx, in.ClientUserID, serverID,
+					in.ReplacesPanelEmail, panelEmail, in.FreeMonthlyLimit)
+			} else {
+				claimID, cerr = s.st.RecordFreeClaim(ctx, tx, in.ClientUserID, serverID,
+					panelEmail, in.FreeMonthlyLimit)
+			}
 			if cerr != nil {
 				return cerr // rolls the whole create back: no VPN without a claim
 			}
@@ -914,11 +936,74 @@ func (s *Service) Resume(ctx context.Context, id int64, p auth.Principal) error 
 	return nil
 }
 
-// Revoke removes the panel client.
+// Dormant puts a VPN to sleep from the customer's point of view (D-094).
 //
-// REVOKED is written ONLY after a verified success or a confirmed absence
-// (REQUIREMENTS Â§7). Any other outcome leaves REVOCATION_PENDING and queues the
-// delete in the outbox for the reconciler.
+// WHAT IT DOES NOT DO — and this is the whole design
+//
+//   - no panel call. The 3X-UI client is not disabled, not removed, not touched.
+//   - no status change. `status` keeps reporting what the panel says, so a
+//     dormant VPN cannot claim to be ACTIVE when it is EXHAUSTED, or vice versa.
+//   - no deletion and no release window. Unlike Release (D-027) there is nothing
+//     to undo, because nothing was removed.
+//
+// What it changes is entirely local and entirely about the customer's attention:
+// the VPN sorts last, stops counting toward "Needs attention", and its Usage
+// block stops polling.
+//
+// Ownership is enforced by loadVPN: a VPN the caller cannot see answers
+// ErrNotFound, so ids cannot be probed. `mutate=true` is honest even though no
+// remote state moves — this is still a state-changing request worth the same
+// permission checks as any other.
+//
+// Idempotent: putting an already-dormant VPN to sleep does not move its original
+// timestamp. "Asleep since" is a fact about the first time, and overwriting it on
+// a double-click would quietly reset it.
+func (s *Service) Dormant(ctx context.Context, id int64, p auth.Principal) error {
+	v, err := s.loadVPN(ctx, id, p, true)
+	if err != nil {
+		return err
+	}
+	now := time.Now().Unix()
+	if _, err := s.db.ExecContext(ctx,
+		`UPDATE vpn_instances SET dormant_at = ?, updated_at = ?
+		  WHERE id = ? AND dormant_at IS NULL`, now, now, v.ID); err != nil {
+		return fmt.Errorf("provisioning: put vpn to sleep: %w", err)
+	}
+	_ = s.audit.Record(ctx, audit.Entry{
+		ActorID: p.UserID, Action: audit.ActionVPNDormant, TargetType: "vpn", TargetID: fmt.Sprint(id),
+		Context: map[string]any{
+			// Stated explicitly so a later reader cannot mistake this for a panel
+			// action or a deletion.
+			"panel_client": "untouched",
+			"deleted":      false,
+		},
+	})
+	return nil
+}
+
+// Wake brings a dormant VPN back into view. It clears the flag and nothing else:
+// there is no panel call to make, because Dormant never made one.
+//
+// It does NOT force the VPN's status back to ACTIVE. If the panel still cannot
+// see the client, the honest state is SERVER_UNAVAILABLE and the customer is told
+// so — waking a VPN does not make it work, it only makes it visible again.
+func (s *Service) Wake(ctx context.Context, id int64, p auth.Principal) error {
+	v, err := s.loadVPN(ctx, id, p, true)
+	if err != nil {
+		return err
+	}
+	now := time.Now().Unix()
+	if _, err := s.db.ExecContext(ctx,
+		`UPDATE vpn_instances SET dormant_at = NULL, updated_at = ?
+		  WHERE id = ? AND dormant_at IS NOT NULL`, now, v.ID); err != nil {
+		return fmt.Errorf("provisioning: wake vpn: %w", err)
+	}
+	_ = s.audit.Record(ctx, audit.Entry{
+		ActorID: p.UserID, Action: audit.ActionVPNWake, TargetType: "vpn", TargetID: fmt.Sprint(id),
+	})
+	return nil
+}
+
 func (s *Service) Revoke(ctx context.Context, id int64, p auth.Principal) (domain.VPNStatus, error) {
 	v, err := s.loadVPN(ctx, id, p, true)
 	if err != nil {
@@ -1008,6 +1093,53 @@ func (s *Service) VerifyPanel(ctx context.Context, id int64, p auth.Principal) (
 // It refuses unless the panel confirms the client is absent, so a working VPN
 // can never be dropped by accident; a supported VPN should be revoked instead.
 func (s *Service) RemoveAbsent(ctx context.Context, id int64, p auth.Principal) error {
+	return s.removeRecordAs(ctx, id, p, "", false)
+}
+
+// ErrPurgeNeedsConfirmation refuses a destructive purge that did not repeat the
+// VPN's panel identity back.
+//
+// P-3: the Super Admin could not remove a VPN record at all while the panel still
+// held the client — `ErrVPNStillOnPanel`. That is the right default, because
+// deleting the record orphans a working client and hides it from its owner. But it
+// left no path for the case that actually happens: a record whose panel client must
+// be KEPT (D-027.3: Veylix never deletes a panel client) while the local row is
+// retired, e.g. after the client was re-created under a new slot, or after an
+// operator deliberately handed the panel client to somebody else.
+//
+// A force purge therefore exists, and it is gated on the operator typing the panel
+// email — the VPN's identity — so it cannot be triggered by a mis-clicked row.
+type PurgeConfirmError struct {
+	Want string
+}
+
+func (e *PurgeConfirmError) Error() string {
+	return "provisioning: confirm the panel identity to purge this record"
+}
+
+// RemoveRecord is RemoveAbsent with an optional operator override.
+//
+// `confirmPanelEmail` empty (or the non-force path) keeps the original rule
+// exactly: the panel must positively report the client absent.
+//
+// With `force` set, the panel client is NOT deleted — D-027.3 is unconditional —
+// and the local record may go even while the client lives. What changes is who is
+// warned: the operator must repeat `confirmPanelEmail`, the record is audited as
+// `vpn.force_purge`, and the panel client is left in place so the customer's
+// connection keeps working until something else removes it.
+func (s *Service) RemoveRecord(ctx context.Context, id int64, p auth.Principal, confirmPanelEmail string) error {
+	return s.removeRecordAs(ctx, id, p, confirmPanelEmail, false)
+}
+
+// ForcePurgeRecord is the explicit Super Admin path (P-3).
+func (s *Service) ForcePurgeRecord(ctx context.Context, id int64, p auth.Principal, confirmPanelEmail string) error {
+	if !p.IsSuperAdmin() {
+		return ErrNotPermitted
+	}
+	return s.removeRecordAs(ctx, id, p, confirmPanelEmail, true)
+}
+
+func (s *Service) removeRecordAs(ctx context.Context, id int64, p auth.Principal, confirmPanelEmail string, force bool) error {
 	v, err := s.loadVPN(ctx, id, p, true)
 	if err != nil {
 		return err
@@ -1017,18 +1149,39 @@ func (s *Service) RemoveAbsent(ctx context.Context, id int64, p auth.Principal) 
 		return ErrNotPermitted
 	}
 
+	// A forced purge must prove the operator is looking at THIS VPN. The panel
+	// email is its identity (D-091.4), so it is the natural thing to repeat back.
+	if force {
+		if strings.TrimSpace(confirmPanelEmail) == "" {
+			return &PurgeConfirmError{Want: v.PanelEmail}
+		}
+		if !strings.EqualFold(strings.TrimSpace(confirmPanelEmail), v.PanelEmail) {
+			return &PurgeConfirmError{Want: v.PanelEmail}
+		}
+	}
+
 	client, err := s.factory(ctx, v.ServerID)
 	if err != nil {
-		return ErrPanelFailed
+		if !force {
+			return ErrPanelFailed
+		}
+		// A forced purge may proceed when the panel is unreachable: the record is
+		// local, the panel client is left alone either way, and refusing would make
+		// a dead integration block the owner from cleaning up.
+		client = nil
 	}
-	exists, err := client.ClientExists(ctx, v.PanelEmail)
-	if err != nil {
-		return fmt.Errorf("%w: %v", ErrPanelFailed, sanitiseErr(err))
-	}
-	if exists {
-		// The VPN is alive on the panel: removing the record would orphan a
-		// working client and hide it from its owner. Refuse.
-		return ErrVPNStillOnPanel
+
+	if client != nil {
+		exists, existErr := client.ClientExists(ctx, v.PanelEmail)
+		if existErr != nil && !force {
+			return fmt.Errorf("%w: %v", ErrPanelFailed, sanitiseErr(existErr))
+		}
+		if existErr == nil && exists && !force {
+			// The VPN is alive on the panel: removing the record would orphan a
+			// working client and hide it from its owner. Refuse (P-3 gives the
+			// Super Admin ForcePurgeRecord instead).
+			return ErrVPNStillOnPanel
+		}
 	}
 
 	if err := s.st.Tx(ctx, func(tx *sql.Tx) error {
@@ -1052,14 +1205,27 @@ func (s *Service) RemoveAbsent(ctx context.Context, id int64, p auth.Principal) 
 		return err
 	}
 
-	_ = s.audit.Record(ctx, audit.Entry{
-		ActorID: p.UserID, Action: audit.ActionVPNRemoveAbsent, TargetType: "vpn",
-		TargetID: fmt.Sprint(id),
-		Context: map[string]any{
+	// A forced purge is a different event and says so: the panel client is
+	// deliberately ALIVE (P-3, D-027.3), and the reason is operator-supplied.
+	action := audit.ActionVPNRemoveAbsent
+	ctxMap := map[string]any{
+		"panel_email":       v.PanelEmail,
+		"panel_client_kept": true,
+		"reason":            "panel client verified absent",
+	}
+	if force {
+		action = audit.ActionVPNForcePurge
+		ctxMap = map[string]any{
 			"panel_email":       v.PanelEmail,
 			"panel_client_kept": true,
-			"reason":            "panel client verified absent",
-		},
+			"forced":            true,
+			"reason":            "operator purged the record; the panel client was left in place",
+		}
+	}
+	_ = s.audit.Record(ctx, audit.Entry{
+		ActorID: p.UserID, Action: action, TargetType: "vpn",
+		TargetID: fmt.Sprint(id),
+		Context:  ctxMap,
 	})
 	return nil
 }

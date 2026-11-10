@@ -138,6 +138,11 @@ func (noopVPNService) VerifyPanel(context.Context, int64, auth.Principal) (*prov
 	return nil, errors.New("not used")
 }
 func (noopVPNService) RemoveAbsent(context.Context, int64, auth.Principal) error { return nil }
+func (noopVPNService) ForcePurgeRecord(context.Context, int64, auth.Principal, string) error {
+	return errors.New("not used")
+}
+func (noopVPNService) Dormant(context.Context, int64, auth.Principal) error { return nil }
+func (noopVPNService) Wake(context.Context, int64, auth.Principal) error    { return nil }
 
 // listVPNs calls GET /api/vpns as the given client.
 func (e *listEnv) listVPNs(t *testing.T, c *http.Client, query string) (int, []map[string]any) {

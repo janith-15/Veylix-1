@@ -3,6 +3,7 @@ import { Button, useToast } from '../../components/ui'
 import { api, type ApiHwidDevice } from '../../lib/api'
 import { Smartphone, Trash2, RefreshCw } from 'lucide-react'
 import './device-list.css'
+import { activeTimeZone } from '../../lib/time'
 
 /**
  * DeviceList — the hardware identifiers a VPN has registered against its device
@@ -43,7 +44,7 @@ export function DeviceList({ serverId, panelEmail }: { serverId: number; panelEm
     }
   }, [serverId, panelEmail])
 
-  // Deferred by a tick, the same way PremiumInsights starts its first read:
+  // Deferred by a tick, the same way VpnUsageSection starts its reads:
   // `loading` is already true, so the first paint is honest and the effect
   // performs no synchronous setState.
   useEffect(() => {
@@ -111,7 +112,7 @@ export function DeviceList({ serverId, panelEmail }: { serverId: number; panelEm
                   {[d.deviceModel, d.deviceOs, d.osVersion].filter(Boolean).join(' · ') || '—'}
                 </span>
                 <span className="dl-when">
-                  last seen {d.lastSeen ? new Date(d.lastSeen * 1000).toLocaleString() : '—'}
+                  last seen {d.lastSeen ? new Date(d.lastSeen * 1000).toLocaleString(undefined, { timeZone: activeTimeZone() }) : '—'}
                 </span>
               </div>
               <Button variant="ghost" leading={<Trash2 size={13} />}

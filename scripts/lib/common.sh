@@ -31,6 +31,14 @@ say()  { printf '%s: %s\n' "$VEYLIX_TOOL" "$*"; }
 warn() { printf '%s: WARNING: %s\n' "$VEYLIX_TOOL" "$*" >&2; }
 err()  { printf '%s: ERROR: %s\n' "$VEYLIX_TOOL" "$*" >&2; }
 
+# out MESSAGE - a plain informational line that is NOT an error.
+#
+# install.sh uses it for every "[dry-run] would ..." line. It MUST live here
+# beside say/warn/err: it was referenced nine times and defined nowhere, so under
+# `set -euo pipefail` each --dry-run line aborted the installer with
+# "out: command not found" (exit 127) instead of describing what it would do.
+out() { printf '%s\n' "$*"; }
+
 # die MESSAGE [EXIT_CODE]
 # Exits non-zero. Never prints a stack trace - an operator needs a correction,
 # not a call stack.

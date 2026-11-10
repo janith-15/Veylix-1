@@ -3,6 +3,7 @@ package panel
 import (
 	"context"
 	"encoding/json"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -23,7 +24,18 @@ func newTestClient(t *testing.T, h http.HandlerFunc) (*Client, *httptest.Server)
 	t.Helper()
 	srv := httptest.NewServer(h)
 	t.Cleanup(srv.Close)
-	c, err := New(Options{Target: &Target{BaseURL: srv.URL}, Token: "secret-token-value", Timeout: 3 * time.Second})
+	/*
+	 * `AllowPrivate: true` is required, not a workaround. `httptest.NewServer`
+	 * listens on 127.0.0.1, and the dial-time guard (B-4) refuses loopback —
+	 * which is the whole point of it. The target carries the per-integration
+	 * policy so a test that stands in for a panel on a private network declares
+	 * that policy explicitly, exactly as a real self-hosted deployment does.
+	 */
+	c, err := New(Options{
+		Target:  &Target{BaseURL: srv.URL, AllowPrivate: true},
+		Token:   "secret-token-value",
+		Timeout: 3 * time.Second,
+	})
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -674,4 +686,66 @@ func mustJSON(t *testing.T, v any) []byte {
 		t.Fatalf("marshal: %v", err)
 	}
 	return raw
+}
+
+// TestDialGuardRefusesLoopbackWithoutThePrivatePolicy is the B-4 regression test.
+//
+// `ParseTarget` checks the addresses a host resolves to, but it does that ONCE,
+// at registration. A hostile or compromised DNS server can answer that query with
+// a public address and answer the DIAL query with `127.0.0.1` — classic
+// DNS rebinding. The dial-time guard inspects the address that is actually
+// connected to, so it cannot be raced.
+//
+// This test uses a real loopback listener and asserts that a client WITHOUT the
+// private-network policy cannot reach it, while the SAME target WITH the policy
+// can. The second half matters as much as the first: a guard that refuses
+// everything would also pass a "refuses loopback" test, and would break every
+// self-hosted panel behind an SSH tunnel.
+func TestDialGuardRefusesLoopbackWithoutThePrivatePolicy(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(statusBody))
+	}))
+	defer srv.Close()
+
+	// Same URL, two policies. Only the policy differs.
+	strict, err := New(Options{
+		Target:  &Target{BaseURL: srv.URL}, // AllowPrivate false
+		Token:   "secret-token-value",
+		Timeout: 3 * time.Second,
+	})
+	if err != nil {
+		t.Fatalf("New(strict): %v", err)
+	}
+	if h := strict.Health(context.Background()); h.Status != StatusConnectionUnavailable {
+		t.Fatalf("a client without the private policy reached a loopback panel — status %q, the dial guard is not enforcing", h.Status)
+	} else if h.Err == nil || !strings.Contains(h.Err.Error(), "loopback") {
+		t.Fatalf("refused for the wrong reason: %v", h.Err)
+	}
+
+	relaxed, err := New(Options{
+		Target:  &Target{BaseURL: srv.URL, AllowPrivate: true},
+		Token:   "secret-token-value",
+		Timeout: 3 * time.Second,
+	})
+	if err != nil {
+		t.Fatalf("New(relaxed): %v", err)
+	}
+	if h := relaxed.Health(context.Background()); h.Status != StatusActive {
+		t.Fatalf("a client WITH the private policy could not reach its panel: %q (%v)", h.Status, h.Err)
+	}
+}
+
+// TestDialGuardRefusesCloudMetadataEvenWithThePrivatePolicy pins the one refusal
+// the private-network policy must never lift. IMDS credentials are not panel
+// configuration; a rebinding attack that lands on 169.254.169.254 would otherwise
+// turn an allowed private-network integration into a credential-theft primitive.
+func TestDialGuardRefusesCloudMetadataEvenWithThePrivatePolicy(t *testing.T) {
+	for _, ip := range []net.IP{
+		net.ParseIP("169.254.169.254"), // AWS / GCP / Azure IMDS
+		net.ParseIP("100.100.100.200"), // Alibaba
+	} {
+		if err := checkIP(ip, true); err == nil {
+			t.Fatalf("%s was accepted under the private-network policy — IMDS must never be reachable", ip)
+		}
+	}
 }

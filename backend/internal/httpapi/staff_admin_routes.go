@@ -91,7 +91,13 @@ func staffListHandler(st StaffAdminStore) http.Handler {
 		if page < 1 {
 			page = 1
 		}
-		f.Limit = parseIntDefault(q.Get("limit"), 50)
+		// Same clamp-then-derive order as the client console (B-2): a caller-supplied
+		// `limit` is a request, and an offset computed from an unclamped one describes
+		// a window nobody asked for.
+		f.Limit = parseIntDefault(q.Get("limit"), store.StaffDefaultLimit)
+		if f.Limit < 1 || f.Limit > store.StaffMaxLimit {
+			f.Limit = store.StaffDefaultLimit
+		}
 		f.Offset = (page - 1) * f.Limit
 
 		rows, total, err := st.ListStaff(r.Context(), f)

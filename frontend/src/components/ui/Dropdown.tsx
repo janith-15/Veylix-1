@@ -88,7 +88,17 @@ export function Dropdown({ trigger, children, ariaLabel }: DropdownProps) {
             ref={menuRef}
             className="ui-dropdown__menu"
             role="menu"
-            style={{ top: pos.top, right: pos.right, minWidth: pos.minWidth }}
+            /*
+             * D-059/D-106: the menu is portalled to <body>, so its position is
+             * genuinely runtime data and must be passed per instance. It travels as
+             * CSS custom properties — the one inline form the rule allows — and
+             * `.ui-dropdown__menu` in ui.css consumes them.
+             */
+            style={{
+              ['--dd-top' as string]: `${pos.top}px`,
+              ['--dd-right' as string]: `${pos.right}px`,
+              ['--dd-min-w' as string]: `${pos.minWidth}px`,
+            }}
           >
             {children}
           </div>,

@@ -7,10 +7,8 @@ interface SwitchProps {
 
 export function Switch({ checked, onChange, label, disabled }: SwitchProps) {
   return (
-    <label
-      className="ui-row"
-      style={{ gap: 8, cursor: disabled ? 'not-allowed' : 'pointer' }}
-    >
+    /* D-059: spacing and cursor are shared, so they live in `.ui-switch-row`. */
+    <label className="ui-row ui-switch-row" data-disabled={disabled ? 'true' : undefined}>
       <button
         type="button"
         role="switch"

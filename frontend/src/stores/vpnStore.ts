@@ -80,6 +80,23 @@ export interface ClientVpn {
   offerName: string | null
   /** True once a customer holds it (D-037). */
   assigned: boolean
+  /**
+   * When the customer put this VPN to sleep, or `null` when it is awake (D-094).
+   *
+   * Dormant is a LOCAL preference, not a status: `status` keeps reporting what
+   * the panel says. A dormant VPN is shown last, left out of "Needs attention"
+   * and not polled — but it is never hidden and never deleted, because the
+   * customer has to be able to find it again to wake it.
+   */
+  dormantAt: number | null
+  /**
+   * When this VPN entered its current status (D-098), or null if unknown.
+   *
+   * Shown beside a non-active status so "suspended" becomes "suspended 12 days
+   * ago". A bare status word cannot tell a customer whether something happened
+   * this morning or last quarter, and that gap is what a support call fills.
+   */
+  statusChangedAt: number | null
   /*
    * NO usage fields here, deliberately (D-088.1).
    *
@@ -107,6 +124,10 @@ interface VpnState {
   assignPremium: (offerId: number, clientUserId: number) => Promise<number>
   suspend: (apiId: number) => Promise<void>
   resume: (apiId: number) => Promise<void>
+  /** Puts a VPN to sleep for this customer only — never deletes or touches the panel (D-094). */
+  dormant: (apiId: number) => Promise<void>
+  /** Brings a dormant VPN back into view; it does not repair it (D-094). */
+  wake: (apiId: number) => Promise<void>
   revoke: (apiId: number) => Promise<'REVOKED' | 'REVOCATION_PENDING'>
   loadUsage: (apiId: number) => Promise<ApiVpnUsage>
   /** The panel's connection URIs (step 11). Never cached: a stale credential
@@ -172,6 +193,8 @@ function toRow(v: ApiVpn): ClientVpn {
     kind: toKind(v.offer_kind || v.tag, assigned),
     offerName: v.offer_name ?? null,
     assigned,
+    dormantAt: v.dormant_at ?? null,
+    statusChangedAt: v.status_changed_at ?? null,
   }
 }
 
@@ -226,6 +249,86 @@ export function vpnDisplayName(v: { offerName?: string | null; kind: VpnKind }):
 export function vpnServerLabel(v: { serverName?: string; serverId: number }): string {
   const name = (v.serverName ?? '').trim()
   return name !== '' ? name : `server ${v.serverId}`
+}
+
+/**
+ * The panel email split into what a human can read and what support needs.
+ *
+ * A panel client is named `<account email>_<kind>_<n>` (D-034.1), e.g.
+ * `nimal@gmail.com_paid_2`. That single string is the VPN's NAME and its
+ * identity on the server (D-091.4), but rendered raw it reads as a machine
+ * value. Splitting it lets a screen show a readable label and still hand the
+ * exact string to a copy button — which is the string an operator will search
+ * for on the panel.
+ *
+ * `suffix` is `null` when the name does not follow the scheme (a client created
+ * directly in 3X-UI before it was assigned). That is not an error: the row is
+ * still a VPN, and the screen shows the whole name rather than inventing a
+ * split point.
+ */
+export interface PanelIdentity {
+  /** The exact panel email — what the copy button must copy verbatim. */
+  email: string
+  /** The account part, e.g. `nimal@gmail.com`. Empty when unparseable. */
+  account: string
+  /** `free` / `paid` when the suffix was recognised. */
+  kindLabel: 'Free' | 'Premium' | null
+  /** The 1-based slot, e.g. 2 for `_paid_2`. */
+  slot: number | null
+}
+
+export function panelIdentity(panelEmail: string): PanelIdentity {
+  const email = (panelEmail ?? '').trim()
+  if (email === '') return { email: '', account: '', kindLabel: null, slot: null }
+
+  // Greedy match on the account so an email containing underscores still splits
+  // at the LAST two segments, which is where the scheme puts them.
+  const m = /^(.*)_(free|paid)_(\d+)$/i.exec(email)
+  if (!m) return { email, account: email, kindLabel: null, slot: null }
+
+  return {
+    email,
+    account: m[1],
+    kindLabel: m[2].toLowerCase() === 'free' ? 'Free' : 'Premium',
+    slot: Number(m[3]),
+  }
+}
+
+/**
+ * What to tell a customer when their VPN is not `ACTIVE` (D-091.5).
+ *
+ * One sentence per status, because "SUSPENDED" and "TRAFFIC_DEPLETED" need
+ * different next steps. This is the single source for those sentences: the list,
+ * the quick view and the detail page all read from here, so the three screens
+ * cannot drift into describing the same state three different ways.
+ *
+ * `ACTIVE` has no entry — a healthy VPN needs no explanation.
+ *
+ * An UNKNOWN status falls through to `GENERIC_STATUS_NOTE`. Inventing an
+ * explanation for a state the backend never emitted would be worse than saying
+ * we do not know it, because the customer would act on the invented one.
+ */
+export const NOT_CONNECTABLE: Partial<Record<VpnStatus, string>> = {
+  SUSPENDED: 'Paused by your seller — nothing is deleted and it can be resumed.',
+  TRAFFIC_DEPLETED: 'Your data allowance is used up. Premium packages have their own allowance.',
+  EXPIRED: 'This VPN has expired. A new package is needed to reconnect.',
+  SERVER_UNAVAILABLE:
+    'Veylix cannot see this VPN on its server right now. Nothing has been deleted — it will show again once the server answers.',
+  REVOCATION_PENDING: 'A removal has been requested and is waiting for the server to confirm it.',
+  REVOKED: 'This VPN has been revoked.',
+  RELEASED: 'You released this VPN. It stays undoable for 3 days, then only this record is removed.',
+  REMOVED_FROM_CATALOG: 'This package is no longer offered. The VPN itself still exists.',
+  PENDING: 'Still being set up on the server — this page updates when it finishes.',
+}
+
+/** The sentence for a status we do not recognise. Never an invented cause. */
+export const GENERIC_STATUS_NOTE =
+  'This VPN is not connectable right now. Open it for the current state, or contact your seller.'
+
+/** The explanation for a non-active status; `null` for `ACTIVE`. */
+export function statusNote(status: VpnStatus): string | null {
+  if (status === 'ACTIVE') return null
+  return NOT_CONNECTABLE[status] ?? GENERIC_STATUS_NOTE
 }
 
 function message(err: unknown): string {
@@ -286,6 +389,53 @@ export const useVpnStore = create<VpnState>()((set) => ({
       set((s) => ({
         busy: null,
         vpns: s.vpns.map((v) => (v.apiId === apiId ? { ...v, status: 'ACTIVE' } : v)),
+      }))
+    } catch (err) {
+      set({ busy: null, error: message(err) })
+      throw err
+    }
+  },
+
+  /**
+   * Puts a VPN to sleep (D-094).
+   *
+   * The local flag is set optimistically from the SERVER's answer, not invented:
+   * the call is awaited first, and the row is only changed when it succeeded. A
+   * failure leaves the VPN awake and visible, which is the safe direction — the
+   * customer can retry, and nothing is hidden on the strength of a failed
+   * request.
+   *
+   * `status` is deliberately untouched. Dormancy says nothing about whether the
+   * VPN works, and copying it into status would let a dormant VPN claim to be
+   * healthy.
+   */
+  dormant: async (apiId) => {
+    set({ busy: apiId })
+    try {
+      await api.dormantVpn(apiId)
+      const now = Math.floor(Date.now() / 1000)
+      set((s) => ({
+        busy: null,
+        vpns: s.vpns.map((v) => (v.apiId === apiId ? { ...v, dormantAt: now } : v)),
+      }))
+    } catch (err) {
+      set({ busy: null, error: message(err) })
+      throw err
+    }
+  },
+
+  /**
+   * Wakes a VPN (D-094). Like `dormant`, this changes only the flag: if the
+   * panel still cannot see the client, the status stays SERVER_UNAVAILABLE and
+   * the screen says so. Waking makes a VPN visible again, not working again.
+   */
+  wake: async (apiId) => {
+    set({ busy: apiId })
+    try {
+      await api.wakeVpn(apiId)
+      set((s) => ({
+        busy: null,
+        vpns: s.vpns.map((v) => (v.apiId === apiId ? { ...v, dormantAt: null } : v)),
       }))
     } catch (err) {
       set({ busy: null, error: message(err) })

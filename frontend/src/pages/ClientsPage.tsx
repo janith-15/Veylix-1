@@ -96,6 +96,11 @@ export function ClientsPage() {
       key: 'display_name',
       header: 'Client',
       sortable: true,
+      // Sorted by name, falling back to the email the card shows when there is
+      // no display name.
+      sortValue: (c) => c.display_name || c.email,
+      searchValue: (c) => `${c.display_name ?? ''} ${c.email} ${c.username ?? ''}`,
+      filter: { kind: 'text', getValue: (c) => `${c.display_name ?? ''} ${c.email} ${c.username ?? ''}`, placeholder: 'Name or email…' },
       render: (c) => (
         <Link to={`/clients/${c.id}`} className="cl-cell">
           <span className="app-avatar cl-avatar" aria-hidden="true">
@@ -121,6 +126,15 @@ export function ClientsPage() {
       header: 'Status',
       sortable: true,
       hideOnMobile: true,
+      searchValue: (c) => String(c.status ?? ''),
+      filter: {
+        kind: 'select',
+        options: [
+          { value: 'ACTIVE', label: 'Active' },
+          { value: 'SUSPENDED', label: 'Suspended' },
+          { value: 'DISABLED', label: 'Disabled' },
+        ],
+      },
       render: (c) => <StatusBadge status={c.status} />,
     },
     {
@@ -143,7 +157,14 @@ export function ClientsPage() {
       hideOnMobile: true,
       render: (c) => c.premium_count,
     },
-    { key: 'vpn_count', header: 'VPNs', align: 'center', hideOnMobile: true, render: (c) => c.vpn_count },
+    {
+      key: 'vpn_count',
+      header: 'VPNs',
+      align: 'center',
+      hideOnMobile: true,
+      sortable: true,
+      render: (c) => c.vpn_count,
+    },
     {
       key: 'created_at',
       header: 'Joined',
@@ -155,6 +176,14 @@ export function ClientsPage() {
       key: 'last_login_at',
       header: 'Last sign-in',
       hideOnMobile: true,
+      sortable: true,
+      // Never-signed-in sorts last: it is not "longest ago", it is "unknown".
+      sortValue: (c) => c.last_login_at ?? 0,
+      filter: {
+        kind: 'select',
+        options: [{ value: 'never', label: 'Never signed in' }],
+        getValue: (c) => (c.last_login_at > 0 ? 'yes' : 'never'),
+      },
       render: (c) =>
         c.last_login_at > 0 ? (
           <span className="ui-muted">{relativeTime(c.last_login_at)}</span>
@@ -173,7 +202,19 @@ export function ClientsPage() {
     },
   ]
 
-  const pageCount = Math.max(1, Math.ceil(total / q.values.page))
+  /**
+   * Rows per page. MUST match `useClientAdminStore`'s default `limit`, because the
+   * server returns `total` (the whole filtered set) while only this many rows come
+   * back per request.
+   *
+   * B-1: this used to read `Math.ceil(total / q.values.page)` — dividing by the
+   * page NUMBER instead of the page SIZE. On an account with 6 clients that
+   * rendered **6 pages** (verified live by `verify-clients.mjs`, which saw
+   * pagination buttons `[1,2,3,4,5,6]`), and the error INVERTED as paging
+   * advanced: page 50 of 1250 clients produced 25 entries for a 50-page result.
+   */
+  const PAGE_SIZE = 25
+  const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE))
 
   /**
    * Run the bulk status change one id at a time and count real outcomes.
@@ -212,7 +253,7 @@ export function ClientsPage() {
         title="Client management"
         subtitle="Every customer, their limits, and what they own"
         actions={
-          <div className="ui-row" style={{ gap: 8 }}>
+          <div className="ui-row cl-head-actions">
             {/* Only offered when something is actually filtered, so the control
                 never sits there doing nothing. */}
             {q.isFiltered && (
@@ -335,6 +376,9 @@ export function ClientsPage() {
             data={rows}
             rowKey={(r) => String(r.id)}
             rowLabel={(r) => r.display_name || r.email}
+            searchable
+            searchPlaceholder="Search name, email, username or status…"
+            caption="clients"
             selection={{
               selected,
               onSelectedChange: setSelected,
@@ -374,7 +418,7 @@ export function ClientsPage() {
             </>
           )}
         </p>
-        <div className="ui-row" style={{ justifyContent: 'flex-end', gap: 8 }}>
+        <div className="ui-row cl-dialog-actions">
           <Button variant="ghost" size="sm" onClick={() => setBulkConfirm(null)}>
             Cancel
           </Button>

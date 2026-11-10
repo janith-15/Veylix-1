@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"testing"
 )
@@ -79,6 +80,56 @@ func TestClientSeesAllPremiumPackages(t *testing.T) {
 			if _, ok := p[forbidden]; ok {
 				t.Errorf("package leaked %q to a customer", forbidden)
 			}
+		}
+	}
+}
+
+// D-111 — the operator package list must carry the fields the screen renders.
+//
+// `GET /api/plans` used to serialise `store.Plan` straight out. That struct has
+// no `server_label`, `slots_remaining` or `purchasable` — they are DERIVED — so
+// all three arrived as `undefined` while `ApiPlan` in lib/api.ts declares them
+// required. The Packages screen therefore rendered **"no server"** on every row,
+// including rows whose `server_id` was set correctly, and the slots column fell
+// back to `∞`. TypeScript cannot catch a promise the server does not keep, which
+// is exactly why this is pinned here.
+func TestPlanListCarriesTheRenderedFields(t *testing.T) {
+	env := newAssignEnv(t)
+	env.seedPackage(t, "Premium 50", "PREMIUM", false, 150000)
+
+	var out []map[string]any
+	code := env.getJSON(t, "/api/plans", &out)
+	if code != http.StatusOK {
+		t.Fatalf("GET /api/plans = %d, want 200", code)
+	}
+	if len(out) != 1 {
+		t.Fatalf("plans = %d, want 1", len(out))
+	}
+	p := out[0]
+
+	// The row the screen prints under the package name.
+	label, ok := p["server_label"].(string)
+	if !ok || label == "" {
+		t.Fatalf("server_label = %#v, want a non-empty string — the Packages screen "+
+			"falls back to \"no server\" and the operator cannot tell where it sells from", p["server_label"])
+	}
+	want := fmt.Sprintf("server %d", env.server)
+	if label != want {
+		t.Errorf("server_label = %q, want %q", label, want)
+	}
+
+	// The fields `ApiPlan` declares as required must all be present, so the
+	// declared contract and the wire contract cannot drift apart again.
+	for _, key := range []string{"slots_remaining", "purchasable", "active", "archived"} {
+		if _, present := p[key]; !present {
+			t.Errorf("%q is missing from GET /api/plans — ApiPlan declares it required", key)
+		}
+	}
+
+	// The operator view may carry operator facts; it must never carry a secret.
+	for _, forbidden := range []string{"token_ciphertext", "panel_url", "password_hash"} {
+		if _, leaked := p[forbidden]; leaked {
+			t.Errorf("GET /api/plans leaked %q", forbidden)
 		}
 	}
 }

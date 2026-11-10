@@ -63,6 +63,43 @@ func toPlanFact(p *store.Plan) planFact {
 	return f
 }
 
+// planView is the OPERATOR shape of a plan: everything a staff screen needs to
+// render and manage a package, and nothing a customer may not see.
+//
+// The operator list used to serialise `store.Plan` directly, which dropped the
+// fields that are DERIVED rather than stored — `server_label`,
+// `slots_remaining` and `purchasable` — while `ApiPlan` in `lib/api.ts`
+// declares all three as required. `server_label` therefore arrived as
+// `undefined` and the Packages screen rendered **"no server"** on every row,
+// including rows whose `server_id` was set correctly; `slots_remaining` fell
+// back to `∞` and the purchasable column looked at the wrong list. TypeScript
+// cannot catch this: the declared type is a promise the server was not keeping.
+//
+// It embeds `planFact` for the shared derived fields and adds the operator-only
+// ones (`active`, `archived`, `server_id`, `inbound_id`, owner). `owner_user_id`
+// is an operator fact: a reseller may see their own packages, never another
+// reseller's economics.
+type planView struct {
+	planFact
+	ServerID    int64  `json:"server_id"`
+	InboundID   int64  `json:"inbound_id"`
+	Active      bool   `json:"active"`
+	Archived    bool   `json:"archived"`
+	OwnerUserID *int64 `json:"owner_user_id"`
+}
+
+// toPlanView is toPlanFact plus the operator-only fields.
+func toPlanView(p *store.Plan) planView {
+	return planView{
+		planFact:    toPlanFact(p),
+		ServerID:    p.ServerID,
+		InboundID:   p.InboundID,
+		Active:      p.Active,
+		Archived:    p.Archived,
+		OwnerUserID: p.OwnerUserID,
+	}
+}
+
 // writePlanError maps plan errors to safe responses.
 func writePlanError(w http.ResponseWriter, err error) {
 	switch {
@@ -147,7 +184,14 @@ func PlanRoutes(mux *http.ServeMux, st PlanStore, aud *audit.Logger, authed func
 			WriteError(w, http.StatusInternalServerError, "internal_error", "could not list plans")
 			return
 		}
-		WriteJSON(w, http.StatusOK, plans)
+		// Answer the operator shape, not the raw store row: the derived fields
+		// (`server_label`, `slots_remaining`, `purchasable`) are what the
+		// Packages screen renders, and they do not exist on `store.Plan`.
+		views := make([]planView, 0, len(plans))
+		for i := range plans {
+			views = append(views, toPlanView(&plans[i]))
+		}
+		WriteJSON(w, http.StatusOK, views)
 	})))
 
 	// GET /api/plans/{id}

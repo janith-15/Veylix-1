@@ -120,7 +120,15 @@ func notifyPasswordChanged(r *http.Request, mail EmailSender, p auth.Principal) 
 // mail notifies the account after a password change. It is nil-safe: with no
 // relay the change still succeeds and the response says `outbox`, because a
 // missing notification must never block a security action (D-041).
-func AuthRoutes(mux *http.ServeMux, svc AuthService, sessions SessionManager, authed func(http.Handler) http.Handler, limiter *auth.RateLimiter, mail EmailSender, accounts AccountReader) {
+// AuthRoutes mounts the auth surface. `displayTZ` is the zone every screen must
+// render absolute instants in (D-099). It rides on /api/me because that is the
+// one authenticated call every signed-in page already makes, so publishing it
+// costs no extra request and cannot answer before the caller is known.
+//
+// It is deliberately NOT a per-user setting: two people looking at the same VPN
+// must read the same clock, or a support call becomes an argument about whose
+// screen is wrong.
+func AuthRoutes(mux *http.ServeMux, svc AuthService, sessions SessionManager, authed func(http.Handler) http.Handler, limiter *auth.RateLimiter, mail EmailSender, accounts AccountReader, displayTZ string) {
 	// One sign-up per address per minute, bursts of three. A person does not
 	// register four times in a row; a script does.
 	registerLimiter := limiter
@@ -260,6 +268,18 @@ func AuthRoutes(mux *http.ServeMux, svc AuthService, sessions SessionManager, au
 		// session does not carry.
 		body := map[string]any{
 			"id": p.UserID, "email": p.Email, "role": string(p.Role),
+		}
+		// D-099: the zone every screen must render absolute instants in.
+		//
+		// Sent here rather than from a new endpoint because every signed-in page
+		// already calls /api/me, so the UI gets the fact with no extra request
+		// and no chance of rendering a timestamp before the zone arrives.
+		//
+		// It is the zone NAME ("Asia/Colombo"), not an offset: a browser given
+		// "+05:30" would keep showing the wrong hour if the zone's rules ever
+		// changed, and an offset is exactly the thing that drifts.
+		if displayTZ != "" {
+			body["display_timezone"] = displayTZ
 		}
 		// D1: without this the screen shows the e-mail prefix as the user's name
 		// after every reload. `display_name` is read from the account row, never

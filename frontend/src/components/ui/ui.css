@@ -1,6 +1,6 @@
 ﻿/* ============================================================
    VEYLIX VPN — UI component styles
-   Consumed by components under src/components/ui/*
+   Consumed by components under src/components/ui/
    ============================================================ */
 
 /* ---------- Button ---------- */
@@ -57,8 +57,8 @@
 /* Spinner */
 .ui-spinner {
   display: inline-block;
-  width: 16px;
-  height: 16px;
+  width: var(--ui-spinner-size, 16px);
+  height: var(--ui-spinner-size, 16px);
   border-radius: 50%;
   border: 2px solid currentColor;
   border-top-color: transparent;
@@ -215,6 +215,29 @@ textarea.ui-input { min-height: 90px; resize: vertical; }
   border-bottom: var(--border-weight) solid var(--border);
   white-space: nowrap;
 }
+/*
+ * Column alignment, driven by the `data-align` attribute the Table component
+ * writes from each column definition (D-059).
+ *
+ * This used to be `style={{ textAlign: c.align }}` on every <th> and every <td>,
+ * which put one inline declaration on every cell of every table in the
+ * application — 373 of them on the Super Admin pages alone, measured by
+ * `npm run verify:super-admin`. Alignment is data about the column, so it
+ * belongs here as a rule, not in the markup as a style prop.
+ */
+.ui-table th[data-align='right'],
+.ui-table td[data-align='right'] {
+  text-align: right;
+}
+.ui-table th[data-align='center'],
+.ui-table td[data-align='center'] {
+  text-align: center;
+}
+/* A column that declared a width keeps its header from wrapping to a second
+ * line — the equivalent of the old `width: c.width` inline hint. */
+.ui-table th[data-width='fixed'] {
+  white-space: nowrap;
+}
 .ui-table th {
   background: var(--bg-surface);
   color: var(--text-muted);
@@ -274,6 +297,11 @@ textarea.ui-input { min-height: 90px; resize: vertical; }
   overflow: hidden;
   background: var(--bg-surface);
   border-radius: var(--radius-sm);
+  /* Values arrive as custom properties from the component (D-059), with the
+   * historical defaults preserved so an existing call site is unchanged. */
+  width: var(--ui-skeleton-w, 100%);
+  height: var(--ui-skeleton-h, 16px);
+  border-radius: var(--ui-skeleton-r, var(--radius-sm));
 }
 .ui-skeleton::after {
   content: '';
@@ -315,6 +343,37 @@ textarea.ui-input { min-height: 90px; resize: vertical; }
   margin: 0;
   font-size: inherit;
   line-height: inherit;
+}
+/* D-059: the readable measure for an empty-state description lives here. */
+.ui-empty__desc {
+  max-width: 420px;
+}
+/* ---------- Checkbox / Switch rows (D-059) ---------- */
+.ui-check,
+.ui-switch-row {
+  gap: 8px;
+  cursor: pointer;
+}
+.ui-check[data-disabled='true'],
+.ui-switch-row[data-disabled='true'] {
+  cursor: not-allowed;
+}
+.ui-check__label {
+  font-size: 14px;
+}
+/* ---------- Small shared spacing rules moved out of components (D-059) ------ */
+.ui-pagination__dots {
+  padding: 0 4px;
+}
+.ui-step-progress {
+  gap: 6px;
+  margin-bottom: var(--space-4);
+}
+.ui-saved-views__form {
+  gap: 10px;
+}
+.ui-saved-views__note {
+  margin: 0;
 }
 
 /* ---------- Tabs ---------- */
@@ -510,7 +569,11 @@ textarea.ui-input { min-height: 90px; resize: vertical; }
 .ui-dropdown__menu {
   /* Portal-mounted: fixed so it escapes every ancestor stacking context. */
   position: fixed;
-  min-width: 180px;
+  /* D-106: position and width arrive as custom properties from the component,
+   * because a portalled menu's coordinates are runtime data. */
+  top: var(--dd-top, 0);
+  right: var(--dd-right, 0);
+  min-width: var(--dd-min-w, 180px);
   background: var(--bg-card);
   border: var(--border-weight) solid var(--border-strong);
   border-radius: var(--cmp-radius-button, var(--radius-sm));
@@ -719,6 +782,38 @@ button.ui-metric--link:focus-visible {
 .ui-table__sort-arrow { font-size: 10px; opacity: 0.35; transition: transform var(--dur-fast, 120ms) var(--ease, ease); }
 .ui-table__sort-arrow[data-dir='asc'] { opacity: 1; transform: none; }
 .ui-table__sort-arrow[data-dir='desc'] { opacity: 1; transform: rotate(180deg); }
+
+/* Table toolbar — search, per-column filters and the honest row count.
+ *
+ * Sits above the table inside the same wrapper so it scrolls with the content
+ * it narrows, and wraps on a narrow screen rather than pushing a control off
+ * the edge. */
+.ui-table__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-3) 0;
+}
+.ui-table__search { flex: 1 1 220px; min-width: 160px; }
+.ui-table__filter { flex: 0 1 150px; min-width: 110px; }
+.ui-table__clear {
+  background: none;
+  border: none;
+  padding: 4px 6px;
+  font: inherit;
+  font-size: 12px;
+  color: var(--text-muted);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.ui-table__clear:hover { color: var(--text); }
+.ui-table__count {
+  margin-left: auto;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
 
 /* Skeleton shimmer (sweep instead of blink) */
 .ui-skeleton {

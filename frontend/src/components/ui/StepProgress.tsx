@@ -28,7 +28,7 @@ export function StepProgress({
   const name = steps[safe - 1] ?? ''
 
   return (
-    <div className="ui-col" style={{ gap: 6, marginBottom: 'var(--space-4)' }}>
+    <div className="ui-col ui-step-progress">
       <div className="sell-step-dots" aria-hidden="true">
         {steps.map((_, i) => (
           <span key={i} data-on={safe >= i + 1} />

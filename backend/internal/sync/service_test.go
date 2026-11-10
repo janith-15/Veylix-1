@@ -374,6 +374,56 @@ func TestSyncMarksTrafficDepleted(t *testing.T) {
 	}
 }
 
+// TestSyncLeavesDormantVPNStatusAlone is the dormancy counterpart to the test
+// above (D-094). A dormant VPN's client may really be gone, but the customer
+// explicitly asked to stop being told about it — so the pass must NOT promote it
+// to SERVER_UNAVAILABLE and put it back on the card every tick.
+//
+// What it must still do is be HONEST: the status is left as it was, never
+// upgraded to something cheerful. Waking the VPN lets the next pass record the
+// absence for real, which the second half of this test proves.
+func TestSyncLeavesDormantVPNStatusAlone(t *testing.T) {
+	ctx := context.Background()
+	st, serverID, vpnID := newEnv(t)
+
+	if _, err := st.DB().Exec(
+		`UPDATE vpn_instances SET dormant_at = 1700000000 WHERE id = ?`, vpnID); err != nil {
+		t.Fatalf("mark dormant: %v", err)
+	}
+
+	pf := &fakePanel{total: 1, rows: []panel.ClientRow{clientRow("other@panel.test", 9, 9, 0, true)}}
+	svc := veylixsync.New(st.DB(), st, factoryFor(pf), veylixsync.DefaultConfig())
+	res := svc.RunOnce(ctx, []int64{serverID})
+
+	var status string
+	if err := st.DB().QueryRow(`SELECT status FROM vpn_instances WHERE id = ?`, vpnID).Scan(&status); err != nil {
+		t.Fatalf("read status: %v", err)
+	}
+	if status != "ACTIVE" {
+		t.Errorf("status = %s, want ACTIVE left untouched while dormant", status)
+	}
+	if res.Servers[0].Absent != 0 {
+		t.Errorf("reported absent = %d, want 0 while dormant", res.Servers[0].Absent)
+	}
+
+	// Waking it must let the truth through: the very next pass records the
+	// absence normally. Dormancy defers the alarm, it does not erase it.
+	if _, err := st.DB().Exec(
+		`UPDATE vpn_instances SET dormant_at = NULL WHERE id = ?`, vpnID); err != nil {
+		t.Fatalf("wake: %v", err)
+	}
+	pf2 := &fakePanel{total: 1, rows: []panel.ClientRow{clientRow("other@panel.test", 9, 9, 0, true)}}
+	svc2 := veylixsync.New(st.DB(), st, factoryFor(pf2), veylixsync.DefaultConfig())
+	svc2.RunOnce(ctx, []int64{serverID})
+
+	if err := st.DB().QueryRow(`SELECT status FROM vpn_instances WHERE id = ?`, vpnID).Scan(&status); err != nil {
+		t.Fatalf("read status after wake: %v", err)
+	}
+	if status != "SERVER_UNAVAILABLE" {
+		t.Errorf("status after wake = %s, want SERVER_UNAVAILABLE — dormancy must not hide the absence for ever", status)
+	}
+}
+
 // TestSyncMarksVerifiedAbsentClient proves D-024.5: a VPN whose panel client is
 // *positively* gone becomes SERVER_UNAVAILABLE, and it is never REVOKED (we did
 // not delete it, so we cannot claim a revocation). This replaces the older

@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"path/filepath"
 	"sync"
 	"sync/atomic"
@@ -937,4 +938,89 @@ func mustSeedUser(t *testing.T, h *harness, email, role string) int64 {
 	}
 	id, _ := res.LastInsertId()
 	return id
+}
+
+// TestForcePurgeKeepsThePanelClient is the P-3 regression test.
+//
+// The defect: a VPN record whose panel client still existed could not be removed
+// at all. `RemoveAbsent` refuses with `ErrVPNStillOnPanel`, and that refusal was
+// the ONLY path — so an operator had no way to retire a record while deliberately
+// KEEPING its panel client, which is exactly what D-027.3 requires Veylix to do
+// (never delete a panel client).
+//
+// What is asserted:
+//   - without the panel email repeated back, the purge is refused and NOTHING is
+//     deleted (a mis-clicked row cannot destroy the wrong record);
+//   - with it, the LOCAL record goes;
+//   - the PANEL CLIENT SURVIVES — the fake records every DeleteClient call and the
+//     count must not move;
+//   - a non-Super-Admin cannot force a purge at all;
+//   - the audit entry is `vpn.force_purge`, not `vpn.remove_absent`.
+func TestForcePurgeKeepsThePanelClient(t *testing.T) {
+	h := newHarness(t, 5, "PREMIUM")
+	ctx := context.Background()
+
+	res, _ := h.svc.Create(ctx, CreateInput{OfferID: h.offer, ClientUserID: h.client, Actor: superAdminPrincipal(1), Approved: true})
+
+	delsBefore := atomic.LoadInt32(&h.fake.delCalls)
+
+	// 1. No confirmation → refused, nothing changed.
+	err := h.svc.ForcePurgeRecord(ctx, res.VPNID, superAdminPrincipal(1), "")
+	var pc *PurgeConfirmError
+	if !errors.As(err, &pc) {
+		t.Fatalf("purge without confirmation = %v, want PurgeConfirmError", err)
+	}
+	var n int
+	if err := h.st.DB().QueryRow(`SELECT COUNT(*) FROM vpn_instances WHERE id = ?`, res.VPNID).Scan(&n); err != nil {
+		t.Fatalf("count: %v", err)
+	}
+	if n != 1 {
+		t.Fatal("a refused purge deleted the record")
+	}
+
+	// 2. A WRONG email is refused too — this is the guard against a mis-clicked row.
+	err = h.svc.ForcePurgeRecord(ctx, res.VPNID, superAdminPrincipal(1), "somebody-else@example.com")
+	if !errors.As(err, &pc) {
+		t.Fatalf("purge with the wrong email = %v, want PurgeConfirmError", err)
+	}
+
+	// 3. A reseller cannot force a purge, even with the right email.
+	reseller := auth.Principal{UserID: 2, Role: auth.RoleAdmin}
+	if err := h.svc.ForcePurgeRecord(ctx, res.VPNID, reseller, res.Email); !errors.Is(err, ErrNotPermitted) {
+		t.Fatalf("a reseller's purge = %v, want ErrNotPermitted", err)
+	}
+
+	// 4. The real thing.
+	if err := h.svc.ForcePurgeRecord(ctx, res.VPNID, superAdminPrincipal(1), res.Email); err != nil {
+		t.Fatalf("ForcePurgeRecord: %v", err)
+	}
+	if err := h.st.DB().QueryRow(`SELECT COUNT(*) FROM vpn_instances WHERE id = ?`, res.VPNID).Scan(&n); err != nil {
+		t.Fatalf("count: %v", err)
+	}
+	if n != 0 {
+		t.Fatal("the local row must be gone after a confirmed purge")
+	}
+
+	// 5. The panel client must be UNTOUCHED — the whole point of P-3 is that a
+	//    purge is bookkeeping, not revocation (D-027.3).
+	if got := atomic.LoadInt32(&h.fake.delCalls); got != delsBefore {
+		t.Fatalf("DeleteClient was called %d time(s); a purge must NEVER delete the panel client", got-delsBefore)
+	}
+	h.fake.mu.Lock()
+	_, stillOnPanel := h.fake.existing[res.Email]
+	h.fake.mu.Unlock()
+	if !stillOnPanel {
+		t.Fatal("the panel client disappeared; a purge must leave it in place")
+	}
+
+	// 6. The trail says it was forced.
+	var action string
+	if err := h.st.DB().QueryRow(
+		`SELECT action FROM audit_logs WHERE target_id = ? ORDER BY id DESC LIMIT 1`, fmt.Sprint(res.VPNID),
+	).Scan(&action); err != nil {
+		t.Fatalf("read audit: %v", err)
+	}
+	if action != audit.ActionVPNForcePurge {
+		t.Fatalf("audited as %q, want %q", action, audit.ActionVPNForcePurge)
+	}
 }

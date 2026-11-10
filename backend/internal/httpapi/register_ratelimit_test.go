@@ -35,7 +35,8 @@ func TestRegisterIsRateLimited(t *testing.T) {
 	AuthRoutes(mux, svc, sessions, func(h http.Handler) http.Handler { return h },
 		auth.NewRateLimiter(2, 0.001), // burst of 2, effectively no refill
 		nil,                           // no mail relay
-		nil)                           // no account reader: /api/me falls back to the session
+		nil,                           // no account reader: /api/me falls back to the session
+		"Asia/Colombo")                // D-099 display zone; this test never reads /api/me
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
 

@@ -220,6 +220,67 @@
   padding: var(--space-3) var(--space-4);
   border-top: var(--border-weight) solid var(--border);
 }
+
+/*
+ * The build stamp (D-101): version + source link, at the very bottom.
+ *
+ * Two facts, one quiet line. It is deliberately low-contrast and small — a build
+ * stamp is a reference, not a control — but it must stay readable, because the
+ * whole point is that an operator can quote it in a support thread.
+ */
+.app-sidebar__build {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  font-size: 0.7rem;
+  line-height: 1.3;
+  color: var(--text-muted);
+}
+
+.app-sidebar__build-version {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+
+.app-sidebar__build-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  color: var(--text-muted);
+  text-decoration: none;
+  border-radius: var(--radius-sm);
+  padding: 1px 3px;
+  transition: color var(--dur-fast) var(--ease-out);
+}
+
+.app-sidebar__build-link:hover,
+.app-sidebar__build-link:focus-visible {
+  color: var(--text);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* A long owner/name must truncate rather than wrap the footer to three lines. */
+.app-sidebar__build-repo {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 13ch;
+}
+
+/* Collapsed rail: icons only, stacked, so the nav grid above is not squeezed. */
+.app-sidebar__build--rail {
+  flex-direction: column;
+  gap: 6px;
+  align-items: center;
+  font-size: 0.6rem;
+}
+
+.app-sidebar__build--rail .app-sidebar__build-repo {
+  display: none;
+}
 .app-topbar__spacer { flex: 1; }
 .app-topbar__icon-btn {
   width: 36px;

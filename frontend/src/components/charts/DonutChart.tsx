@@ -46,10 +46,15 @@ export function DonutChart({
   const center = hover !== null && segments[hover] ? share(hover) : centerLabel
 
   return (
-    <div className="ui-chart-root" style={{ width: '100%', minWidth: 0 }}>
+    <div className="ui-chart-root">
       {/* The ring owns its own fixed box; the legend flows underneath it at
           full container width instead of being trapped inside a 132px wrap. */}
-      <div className="ui-chart-wrap" style={{ width: size + 'px', maxWidth: '100%', margin: '0 auto' }}>
+      <div
+        className="ui-chart-wrap ui-chart-wrap--donut"
+        /* D-059: the ring's diameter is a per-call value, so it travels as a
+         * custom property and the stylesheet sizes the wrap. */
+        style={{ ['--donut-size' as string]: `${size}px` }}
+      >
         <svg
           className="ui-chart ui-chart--donut"
           role="img"
@@ -58,8 +63,6 @@ export function DonutChart({
           height={size}
           viewBox={'0 0 ' + size + ' ' + size}
           onMouseLeave={() => setHover(null)}
-          /* Hover grows stroke-width by 3px — keep it inside the viewBox. */
-          style={{ margin: '0 auto', display: 'block', touchAction: 'pan-y', overflow: 'visible', padding: 2 }}
         >
           <circle cx={mid} cy={mid} r={r} fill="none" stroke="var(--chart-grid, rgba(127,127,160,.2))" strokeWidth={thickness} />
           {arcs.map((a, i) => (
@@ -74,7 +77,7 @@ export function DonutChart({
               strokeDasharray={a.len + ' ' + (circ - a.len)}
               strokeDashoffset={a.dashoffset}
               transform={'rotate(-90 ' + mid + ' ' + mid + ')'}
-              style={{ pointerEvents: 'stroke' }}
+              className="ui-chart__arc"
               onMouseEnter={() => setHover(i)}
               opacity={hover === null || hover === i ? 1 : 0.55}
             />
@@ -105,7 +108,11 @@ export function DonutChart({
               onMouseEnter={() => setHover(i)}
               onMouseLeave={() => setHover(null)}
             >
-              <span className="ui-chart-legend__dot" style={{ background: s.color ?? seriesColor(i) }} aria-hidden="true" />
+              <span
+                className="ui-chart-legend__dot"
+                style={{ ['--legend-color' as string]: s.color ?? seriesColor(i) }}
+                aria-hidden="true"
+              />
               {s.label}
               <span className="ui-chart-legend__pct">{share(i)}</span>
             </div>

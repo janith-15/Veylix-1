@@ -36,7 +36,12 @@ export function Sparkline({
       /* `none` stretches strokes when the container is wide — `meet` keeps
          line weight honest. */
       preserveAspectRatio="xMidYMid meet"
-      style={{ width: unit ? width : '100%', height, display: 'block' }}
+      /* D-059: width/height are genuinely per-call, so they travel as custom
+       * properties and the stylesheet consumes them. */
+      style={{
+        ['--ui-spark-w' as string]: unit ? `${width}px` : '100%',
+        ['--ui-spark-h' as string]: `${height}px`,
+      }}
     >
       <path
         d={d}

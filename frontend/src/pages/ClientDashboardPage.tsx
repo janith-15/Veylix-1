@@ -1,16 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import {
   Activity,
   BadgeCheck,
   Bell,
-  BookOpen,
   Clock3,
   Crown,
   ExternalLink,
-  History,
-  LifeBuoy,
-  Package,
   Plus,
   RefreshCw,
   ShieldCheck,
@@ -336,13 +332,6 @@ export function ClientDashboardPage() {
     ? usageValues.reduce((n, u) => n + (u?.limit ?? 0), 0)
     : 0
 
-  /* ---- the one-sentence verdict (U5) ----------------------------------- */
-  const verdict =
-    vpns.length === 0
-      ? 'Nothing is on your account yet - claim a free VPN below or buy a premium package.'
-      : attentionCount > 0
-        ? `${attentionCount} of your ${vpns.length} VPN${vpns.length === 1 ? '' : 's'} need${attentionCount === 1 ? 's' : ''} attention - see the list below.`
-        : `All ${vpns.length} VPN${vpns.length === 1 ? ' is' : 's are'} working normally.`
 
   /* ---- 06: claim ------------------------------------------------------- */
 
@@ -375,24 +364,64 @@ export function ClientDashboardPage() {
 
   const activeOffers = offers.filter((o) => o.active)
   const allowanceKnown = freeUsage !== null && freeUsageServer === freeServerID
-  const claimsLeft =
-    allowanceKnown && freeUsage ? Math.max(0, freeUsage.monthly_limit - freeUsage.used_this_window) : null
-
-  /* ---- 07: quick access ------------------------------------------------
+  /*
+   * Why a free claim would be refused right now, or null when it would not.
    *
-   * Every destination below is a route DECLARED in `App.tsx` (S3 and the S6-S11
-   * outer layer). Nothing here invents a path - a shortcut to a route that does
-   * not exist becomes a silent redirect, which is the defect this redesign
-   * exists to remove.
+   * Derived from the SERVER's two counters, never from the local VPN list: the
+   * holding counter counts claim rows and a released VPN keeps its row while no
+   * longer counting, so a local count would be a different, wrong answer.
+   *
+   * `null` (allowance not read) is deliberately NOT a block - the button stays
+   * enabled and the server remains the authority. Guessing "blocked" from a
+   * failed read would stop a customer doing something they are allowed to do.
+   *
+   * The two sentences differ on purpose, because the next step differs:
+   * a holding block is the customer's to clear, a monthly cap is not.
    */
-  const quickLinks = [
-    { to: '/client/vpns', label: 'My VPNs', icon: <ShieldCheck size={16} /> },
-    { to: '/buy', label: 'Buy premium', icon: <Package size={16} /> },
-    { to: '/history', label: 'Purchase history', icon: <History size={16} /> },
-    { to: '/client/support', label: 'Support & Chat', icon: <LifeBuoy size={16} /> },
-    { to: '/client/notifications', label: 'Notifications', icon: <Bell size={16} /> },
-    { to: '/client/guides', label: 'VPN Guides', icon: <BookOpen size={16} /> },
-  ]
+  const claimBlocked: string | null = (() => {
+    if (!allowanceKnown || !freeUsage) return null
+    if (freeUsage.concurrent >= freeUsage.concurrent_limit) {
+      return `You already hold ${freeUsage.concurrent} of ${freeUsage.concurrent_limit} free VPNs. Release one in My VPNs to claim a different package.`
+    }
+    if (freeUsage.used_this_window >= freeUsage.monthly_limit) {
+      return `You have used all ${freeUsage.monthly_limit} free claims for this period. Premium packages are still available.`
+    }
+    return null
+  })()
+
+  /*
+   * ---- the one-sentence verdict (U5, reframed by the D-092 follow-up) ----
+   *
+   * HONESTY RULE. `attentionCount === 0` proves only that no VPN reported a
+   * fault state. It does not prove the service is being used, and it does not
+   * prove the panel agrees with what we mirrored. The older copy said
+   * "All N VPNs are working normally" on an account where nothing had ever been
+   * measured - a claim the backend cannot support.
+   *
+   * The wording is therefore graded, and the strongest sentence it can say is
+   * "no faults reported". The slot ceiling moves to the front when the customer
+   * is holding it, because that is the fact that stops them acting: they cannot
+   * claim a different free package while every slot is taken.
+   */
+  const holdingCeiling =
+    allowanceKnown && freeUsage !== null && freeUsage.concurrent >= freeUsage.concurrent_limit
+
+  const verdict =
+    vpns.length === 0
+      ? 'Nothing is on your account yet - claim a free VPN below or buy a premium package.'
+      : attentionCount > 0
+        ? `${attentionCount} of your ${vpns.length} VPN${vpns.length === 1 ? '' : 's'} need${attentionCount === 1 ? 's' : ''} attention - see the list below.`
+        : holdingCeiling
+          ? `No faults reported on your ${vpns.length} VPN${vpns.length === 1 ? '' : 's'}. You are holding all ${freeUsage?.concurrent_limit ?? ''} free slots, so release one before claiming a different free package.`
+          : totalUsed === null
+            ? `No faults reported on your ${vpns.length} VPN${vpns.length === 1 ? '' : 's'}, but usage could not be read - open a VPN to see its traffic.`
+            : `No faults reported on your ${vpns.length} VPN${vpns.length === 1 ? '' : 's'}.`
+
+  /* The old two-line verdict, kept only as a reminder of the wording that was
+     removed. It is dead on purpose: nothing reads it. */
+  // REMOVED: `All ${vpns.length} VPN(s) are working normally.`
+
+
 
   const asyncStatus = error ? 'error' : loading && vpns.length === 0 ? 'loading' : 'ready'
 
@@ -652,12 +681,15 @@ export function ClientDashboardPage() {
       <section id="cl-free-claim" className="cl-claim" aria-label="Free VPN claim">
         <div className="cl-h2">
           <h2 className="cl-h2__title">Get a free VPN</h2>
+          {/* The aside points at the meter below instead of restating it:
+              the two numbers already render as ``held`` and ``this month``
+              meters, and a third copy of the same subtraction was the
+              duplicate this line removes. */}
           <span className="cl-h2__aside">
-            {allowanceKnown && claimsLeft !== null
-              ? `${claimsLeft} claim${claimsLeft === 1 ? '' : 's'} left this month`
-              : 'Allowance unavailable'}
+            {allowanceKnown ? 'Two limits, shown below' : 'Allowance unavailable'}
           </span>
         </div>
+
 
         {/*
           The allowance, BEFORE the claim button. Two ceilings, because they
@@ -758,6 +790,16 @@ export function ClientDashboardPage() {
           </p>
         )}
 
+        {/*
+         * One disabled state that must be explained, not just coloured.
+         *
+         * A free claim fails on the server for two different reasons, and the
+         * customer needs to know which: the holding ceiling (release one first) or
+         * the monthly cap (nothing can be done until the window rolls). Leaving the
+         * button enabled made the click the only way to discover it, which is the
+         * defect this block removes. `null` allowance = not read, so the button
+         * stays enabled and the server is the authority.
+         */}
         {activeOffers.length > 0 && (
           <div className="cl-claim__offers">
             {activeOffers.map((o) => (
@@ -776,31 +818,31 @@ export function ClientDashboardPage() {
                 <Button
                   size="sm"
                   leading={<Plus size={14} />}
-                  disabled={claiming}
+                  disabled={claiming || claimBlocked !== null}
+                  title={claimBlocked ?? undefined}
                   onClick={() => void claim(o.apiId)}
                 >
-                  {claiming ? 'Provisioning\u2026' : 'Claim free VPN'}
+                  {claiming ? 'Provisioning\u2026' : claimBlocked ? 'No slot available' : 'Claim free VPN'}
                 </Button>
+                {claimBlocked && <span className="cl-claim__blocked t-sm2">{claimBlocked}</span>}
               </Card>
             ))}
           </div>
         )}
       </section>
-
-      {/* ---------- 07 . QUICK ACCESS ------------------------------------ */}
-      <section aria-label="Quick access">
-        <div className="cl-h2" style={{ marginBottom: 'var(--space-3)' }}>
-          <h2 className="cl-h2__title">Quick access</h2>
-        </div>
-        <nav className="cl-quick" aria-label="Shortcuts">
-          {quickLinks.map((q) => (
-            <Link key={q.to} to={q.to} className="cl-quick__item">
-              <span className="cl-quick__icon">{q.icon}</span>
-              <span className="cl-quick__label">{q.label}</span>
-            </Link>
-          ))}
-        </nav>
-      </section>
+      {/*
+       * 07 . QUICK ACCESS - REMOVED.
+       *
+       * All six shortcuts here duplicated a sidebar destination exactly.
+       * CLIENT_NAV in components/layout/navModel.ts renders the same six
+       * routes in its Main / Get more / Help / Account groups. A second copy
+       * of navigation is not a shortcut - it is a page the customer has to
+       * scroll past to reach the thing this screen is actually for.
+       *
+       * Nothing was dropped from the product: every route stays reachable
+       * from the sidebar, and the in-page actions that DO belong here (claim
+       * a free VPN, open a VPN, buy premium) are already buttons above.
+       */}
     </div>
   )
 }

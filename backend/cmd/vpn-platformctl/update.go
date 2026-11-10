@@ -123,6 +123,9 @@ func cmdUpdate(p paths, args []string) error {
 			*restoreBackup)
 	}
 
+	// `update` keeps its own inline guard so its error text stays the one the
+	// tests and the docs already promise ("refusing to upgrade without a
+	// backup"), and so a failed upgrade never reaches the swap step.
 	step("backup")
 	script := backupScript()
 	if !fileExists(script) {
@@ -333,7 +336,10 @@ func verifyChecksum(artifact, sumsFile, name string) error {
 func cmdRollback(p paths, args []string) error {
 	fs := newFlagSet("rollback")
 	o := addCommonFlags(fs)
-	restoreDir := fs.String("restore", "", "backup directory to restore as part of the rollback")
+	restoreDir := fs.String("restore", "", "backup directory to restore as part of the rollback "+
+		"(default: the backup taken by this rollback)")
+	skipBackup := fs.Bool("skip-backup", false,
+		"do NOT take a backup before rolling back (the replaced state becomes unrecoverable)")
 	rest, err := parseArgs(fs, args)
 	if err != nil {
 		return err
@@ -344,7 +350,7 @@ func cmdRollback(p paths, args []string) error {
 		return fmt.Errorf("no previous binary at %s - nothing to roll back to", p.prevBin())
 	}
 
-	r := runner{dryRun: o.dryRun}
+	r := runner{dryRun: o.dryRun, backupRoot: envOr("VEYLIX_BACKUP_DIR", p.BackupDir)}
 
 	step("current state")
 	before, beforeErr := probeReady(o.base)
@@ -352,6 +358,27 @@ func cmdRollback(p paths, args []string) error {
 		warnf("the running service is not readable: %v", beforeErr)
 	} else {
 		out("running: schema_version=%d ui=%s", before.SchemaVersion, before.UI)
+	}
+
+	// A rollback REPLACES the running state with an older one, so the state being
+	// replaced must be safe first. This step was missing: the command swapped the
+	// binary, then printed "also restore the pre-upgrade backup" - pointing at a
+	// backup it had never taken. Now the backup is taken here, and its directory
+	// becomes the default for --restore.
+	var takenBackup string
+	if *skipBackup {
+		step("backup")
+		warnf("--skip-backup was passed: the state being replaced is NOT backed up")
+	} else {
+		takenBackup, err = takeBackupBefore(r, "roll back", o.dryRun)
+		if err != nil {
+			return err
+		}
+	}
+
+	restoreTarget := strings.TrimSpace(*restoreDir)
+	if restoreTarget == "" {
+		restoreTarget = takenBackup
 	}
 
 	step("swap the previous binary back")
@@ -375,6 +402,11 @@ func cmdRollback(p paths, args []string) error {
 	} else {
 		after, waitErr := waitReady(o.base, 30, pollGap)
 		if waitErr != nil {
+			if restoreTarget != "" {
+				return fmt.Errorf("the previous binary did not become ready: %w\n"+
+					"restore the backup taken by this rollback: vpn-platformctl restore %s",
+					waitErr, restoreTarget)
+			}
 			return fmt.Errorf("the previous binary did not become ready: %w\n"+
 				"restore a backup: vpn-platformctl restore <dir>", waitErr)
 		}
@@ -384,19 +416,25 @@ func cmdRollback(p paths, args []string) error {
 		// Say so plainly rather than declaring success.
 		if beforeErr == nil && after.SchemaVersion > before.SchemaVersion {
 			return fmt.Errorf("the previous binary reports schema %d but the database is at %d; "+
-				"the binary alone is not enough - restore the pre-upgrade backup",
+				"the binary alone is not enough - restore the backup taken by this rollback",
 				after.SchemaVersion, before.SchemaVersion)
 		}
 	}
 
-	if *restoreDir != "" {
-		step("restore the pre-upgrade backup")
-		return cmdRestore(p, []string{"--base", o.base, *restoreDir})
+	if restoreTarget != "" {
+		step("restore the pre-rollback backup")
+		restoreArgs := []string{"--base", o.base}
+		if o.dryRun {
+			restoreArgs = append(restoreArgs, "--dry-run")
+		}
+		restoreArgs = append(restoreArgs, restoreTarget)
+		return cmdRestore(p, restoreArgs)
 	}
 
 	out("")
-	out("rollback complete. If the database was migrated, also restore the pre-upgrade backup:")
-	out("  vpn-platformctl restore %s/<timestamp>", p.BackupDir)
+	out("rollback complete; the previous binary is kept at %s", p.prevBin())
+	out("no backup directory was reported, so nothing was restored. If the database")
+	out("was migrated, restore one explicitly: vpn-platformctl restore %s/<timestamp>", p.BackupDir)
 	return nil
 }
 
