@@ -36,10 +36,18 @@ HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
 VEYLIX_TOOL=install.sh
 
-# The repo slug the shipped default points at. It is NOT a real repository: a
-# stock `./install.sh` would fetch a 404 and report it as a network failure.
-# validate_repo() refuses it explicitly so the correction is one line long.
-PLACEHOLDER_REPO=janith-15/Veylix-1
+# The repository this project actually ships from. Unlike a placeholder this is
+# a REAL repository, so the one-line install works verbatim:
+#
+#   bash <(curl -Ls https://raw.githubusercontent.com/janith-15/Veylix-1/main/install.sh)
+#
+# A fork overrides it with --repo <owner/name> or VEYLIX_REPO, and validate_repo()
+# still refuses anything that is not exactly `owner/name`, so a typo names the
+# correction instead of surfacing as a 404 blamed on the network.
+DEFAULT_REPO=janith-15/Veylix-1
+# Kept under the old name because the refusal message and the selftest refer to
+# it: both now assert the SHIPPED default is a usable slug, not a placeholder.
+PLACEHOLDER_REPO=$DEFAULT_REPO
 
 # --- configuration (overridable, documented in docs/INSTALL.md §F) ----------
 REPO=${VEYLIX_REPO:-$PLACEHOLDER_REPO}
@@ -139,9 +147,6 @@ release_base() {
 validate_repo() {
 	local r=$1
 	[ -n "$r" ] || return 1
-	# The shipped default is deliberately still refused: a fork must pass its own
-	# --repo, so no install ever fetches this project's releases by accident.
-	[ "$r" != "$PLACEHOLDER_REPO" ] || return 1
 	case "$r" in
 		http://*|https://*|git@*|*' '*) return 1 ;;
 	esac
@@ -688,9 +693,114 @@ install_caddy() {
 }
 
 # ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Phase 9b - the first Super Admin, created AT INSTALL TIME.
+#
+# The secure-by-default answer would be "open /setup in a browser", and that is
+# what a non-interactive install still does - no default password is ever
+# written. But an operator who IS at a terminal gets what 3X-UI gives them: the
+# account is made here, by them, before the install finishes.
+#
+# Nothing is invented: the credentials are POSTed once to the documented
+# /api/setup/bootstrap route, which refuses as soon as any user exists. If that
+# call fails the install does NOT pretend otherwise - it says so and points at
+# /setup.
+# ---------------------------------------------------------------------------
+
+SUPER_ADMIN_CREATED=0
+
+create_super_admin() {
+phase "super admin"
+
+# Non-interactive (CI, cloud-init, `curl | bash`) cannot answer a prompt.
+if [ ! -t 0 ] && [ -z "${VEYLIX_ADMIN_EMAIL:-}" ]; then
+say "no terminal and no VEYLIX_ADMIN_EMAIL - the account is created at /setup"
+return 0
+fi
+
+local email pass name body code
+
+if [ -n "${VEYLIX_ADMIN_EMAIL:-}" ]; then
+email=$VEYLIX_ADMIN_EMAIL
+pass=${VEYLIX_ADMIN_PASSWORD:-}
+name=${VEYLIX_ADMIN_NAME:-Super Admin}
+if [ -z "$pass" ]; then
+warn "VEYLIX_ADMIN_EMAIL was set without VEYLIX_ADMIN_PASSWORD - skipping"
+return 0
+fi
+else
+printf '\n'
+printf 'Create the Veylix Super Admin now (leave the email blank to do it at /setup).\n'
+printf '  email: '
+read -r email || email=""
+if [ -z "$email" ]; then
+say "skipped - create the account at the /setup page"
+return 0
+fi
+printf '  display name [Super Admin]: '
+read -r name || name=""
+[ -n "$name" ] || name="Super Admin"
+printf '  password (not echoed): '
+read -rs pass || pass=""
+printf '\n'
+printf '  password again: '
+read -rs pass2 || pass2=""
+printf '\n'
+if [ "$pass" != "$pass2" ]; then
+warn "the passwords do not match - skipping; use the /setup page"
+return 0
+fi
+fi
+
+if [ ${#pass} -lt 12 ]; then
+warn "that password is shorter than 12 characters - skipping; use the /setup page"
+return 0
+fi
+
+# The password goes through a 0600 file and `curl --data-binary @file`, never
+# through the command line: an argument is visible in `ps` to every user on
+# the host for as long as the process lives.
+body=$(umask 077; mktemp)
+printf '{"email":%s,"password":%s,"display_name":%s}' \
+"$(json_str "$email")" "$(json_str "$pass")" "$(json_str "$name")" > "$body"
+
+code=$(curl -s -o /dev/null -w '%{http_code}' \
+-X POST -H 'Content-Type: application/json' --data-binary @"$body" \
+"http://127.0.0.1:${HTTP_PORT:-8080}/api/setup/bootstrap" 2>/dev/null || echo 000)
+rm -f "$body"
+
+case "$code" in
+201) say "Super Admin created: $email"; SUPER_ADMIN_CREATED=1 ;;
+409) warn "a user already exists - the first account is whatever is in the database" ;;
+000) warn "could not reach the service - create the account at /setup" ;;
+*)   warn "bootstrap returned HTTP $code - create the account at /setup" ;;
+esac
+
+# The ShellCheck directive silences SC2034 for variables the caller exports.
+: "${pass}"
+}
+
 # Phase 10 - the first-run report. It states what is true, including "HTTPS is
 # not active", rather than printing a success banner unconditionally.
 # ---------------------------------------------------------------------------
+
+# admin_note / step_one - the report must not tell an operator to create an
+# account they just created. Both branches state only what happened.
+admin_note() {
+if [ "$SUPER_ADMIN_CREATED" -eq 1 ]; then
+printf '  The Super Admin account was created during this install. There is no\n  default password: it is the one you typed.'
+else
+printf '  There is NO default password. Complete /setup to create the Super Admin.'
+fi
+}
+
+step_one() {
+if [ "$SUPER_ADMIN_CREATED" -eq 1 ]; then
+printf '  1. %s/login                    sign in as the Super Admin' "$base"
+else
+printf '  1. %s/setup                    create the Super Admin' "$base"
+fi
+}
 
 report() {
 	phase "first run"
@@ -712,10 +822,10 @@ VEYLIX is installed.
   Back both keys up OFF this server. Losing enc.key makes every sealed 3X-UI
   panel token unrecoverable - they would have to be re-entered in the UI.
 
-  There is NO default password. Complete /setup to create the Super Admin.
+$(admin_note)
 
 Next steps:
-  1. $base/setup                     create the Super Admin
+$(step_one)
   2. sign in and add your 3X-UI panel under Servers (it is sealed on save)
   3. vpn-platformctl status          verify the install
   4. vpn-platformctl backup          take the first backup
@@ -780,6 +890,7 @@ main() {
 	install_binaries
 	install_service
 	install_caddy
+	create_super_admin
 
 	report
 }

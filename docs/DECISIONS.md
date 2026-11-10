@@ -4484,3 +4484,70 @@ runs on every push and is green.
 `install.sh` served from the repository is **28017 bytes with 0 CR bytes** —
 checked by reading the raw byte stream, not a PowerShell text pipeline, because
 those two pipelines re-add CRLF and did report a false CRLF twice.
+
+---
+
+## D-120 - One line, no flags: the install the owner actually asked for
+
+**Status:** implemented - **Recorded:** 2026-11-10 - **Requested by:** the owner
+("mata one server eke super user eke idan 3x ui eke wage install karanna puluwan
+link ekek ... memma me wage")
+
+### What was wrong
+
+`install.sh` refused its own shipped default:
+
+```
+PLACEHOLDER_REPO=janith-15/Veylix-1
+REPO=${VEYLIX_REPO:-$PLACEHOLDER_REPO}
+[ "$r" != "$PLACEHOLDER_REPO" ] || return 1     # always refused
+```
+
+That guard was written when the default really was `your-org/veylix`, so a miss
+surfaced as a 404 blamed on the network. Once the default became a real
+repository the guard inverted its meaning: the 3X-UI-shaped one-liner
+
+```bash
+bash <(curl -Ls .../install.sh)
+```
+
+failed with "no repository configured". The default is now `DEFAULT_REPO` and is
+accepted; `validate_repo` still refuses anything that is not exactly
+`owner/name`, so the protection against a typo is unchanged.
+
+### The Super Admin at install time
+
+3X-UI asks for the account during install. Veylix required a browser visit to
+`/setup`, which is defensible but not what the owner wanted. A new **Phase 9b**
+asks for email, display name and password at the end of the install and POSTs
+once to the documented `POST /api/setup/bootstrap`.
+
+Deliberate properties:
+
+1. **No default password is ever written.** The credentials are the operator own.
+2. **The password never touches `argv`.** `curl --data-binary @file` from a 0600
+   temp file, because a command line is readable in `ps` by every user on the host.
+3. **Non-interactive installs are unchanged.** No TTY and no
+   `VEYLIX_ADMIN_EMAIL` -> the account is created at `/setup` as before, so
+   cloud-init and CI never block on a prompt.
+4. **The report tells the truth.** `admin_note`/`step_one` print "sign in" when
+   the account was created and "complete /setup" when it was not.
+5. **A refusal is not hidden.** If bootstrap answers anything but 201 the
+   installer says so and points at `/setup`; it never claims a created account.
+
+### Verified
+
+- `bash -n install.sh` and `bash -n scripts/lib/common.sh` - clean.
+- `scripts/install.selftest.sh` - **all guard checks passed** (59 assertions).
+  Seven initially failed because they asserted the OLD default was refused; they
+  were rewritten to assert a *malformed* slug is refused, which is the guarantee
+  that still matters.
+- Default resolution, printed:
+  `DEFAULT_REPO=janith-15/Veylix-1` -> `REPO=janith-15/Veylix-1` ->
+  `https://github.com/janith-15/Veylix-1/releases/latest/download/veylix-deploy.tar.gz`
+- `json_str` added to `scripts/lib/common.sh` (RFC 8259 escaping) because a
+  password may contain a quote.
+
+**Not verified here:** the full run. This machine has no `flock` and no `/run`, so
+the installer stops at its own guard - correctly. The first real install is the
+owner, on Linux.

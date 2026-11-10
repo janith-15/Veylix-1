@@ -14,6 +14,26 @@ that is the remaining gap, and §F says so precisely.
 
 ---
 
+## B0. The one-line install (no flags needed)
+
+```bash
+bash <(curl -Ls https://raw.githubusercontent.com/janith-15/Veylix-1/main/install.sh) --domain vpn.example.com
+```
+
+The installer resolves the repository itself; `--repo` is only for a fork. At
+the end it asks for the Super Admin email, display name and password (the
+password is not echoed) and creates the account through
+`POST /api/setup/bootstrap`. The password travels in a 0600 temp file, never in
+`argv`, because arguments are visible in `ps`. Leave the email blank -- or run
+non-interactively with no TTY and no `VEYLIX_ADMIN_EMAIL` -- and the account is
+created at `/setup` instead. No default password is ever written.
+
+Non-interactive:
+
+```bash
+VEYLIX_ADMIN_EMAIL=you@example.com VEYLIX_ADMIN_PASSWORD=secret \
+  bash <(curl -Ls https://raw.githubusercontent.com/janith-15/Veylix-1/main/install.sh) --domain vpn.example.com
+```
 ## B. Install on a Linux server with `install.sh`
 
 ```bash
@@ -241,7 +261,7 @@ Removing Veylix **never** deletes clients from 3X-UI — that is a product invar
 | `deploy/veylix.env.example` | ✅ shipped — install as `/etc/veylix/veylix.env`, mode `0600` |
 | `deploy/veylix-backup.sh` | ✅ shipped — `backup` / `restore` / `verify`, stops the service and verifies the copy |
 | **`veylix-deploy.tar.gz` in every release** | ✅ **shipped (D-093)** — `release.yml` bundles `deploy/` and asserts the unit, Caddyfile and backup script are inside, so a host installed from a release has the templates. `install.sh` resolves: checkout → bundle → `--script-base`. Only `deploy/*` is extracted. |
-| `--repo <owner/name>` | ✅ **shipped (D-093)** — the shipped default is a placeholder and is REFUSED with the exact correction; `VEYLIX_REPO` and `--endpoint` also work |
+| `--repo <owner/name>` | shipped (D-120): the shipped default is the real repository, so a one-line install needs no flags. A malformed slug is still refused with the exact correction; `VEYLIX_REPO` overrides it |
 | `--script-base <url>` | ✅ **shipped** — legacy per-file fallback for the templates |
 | `rollback` takes its own backup | ✅ **shipped (D-093, F-061)** — refuses without the script, and `--restore` defaults to the backup it just took; `--skip-backup` is the only way past, and it warns |
 | **Lifecycle in the UI** | ⛔ **deliberately not built (D-093)** — install/upgrade/rollback/restore stay on the command line: a screen cannot repair the service it depends on |

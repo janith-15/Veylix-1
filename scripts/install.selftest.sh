@@ -270,7 +270,7 @@ for good in acme/veylix difanmax/Veylix-2 a.b/c_d; do
 	fi
 done
 
-for bad_repo in "" "$PLACEHOLDER_REPO" "https://github.com/acme/veylix" \
+for bad_repo in "" "https://github.com/acme/veylix" \
                 "git@github.com:acme/veylix.git" "acme" "acme/" "/veylix" "a/b/c" "ac me/veylix"; do
 	if ( validate_repo "$bad_repo" ); then
 		bad "T9 validate_repo accepted '$bad_repo'"
@@ -287,12 +287,16 @@ REPO="$PLACEHOLDER_REPO"
 parse_args --repo=other/repo
 if [ "$REPO" = "other/repo" ]; then ok "T9 --repo= sets the slug"; else bad "T9 --repo= left REPO=$REPO"; fi
 
-# A placeholder repo must be refused BEFORE anything is downloaded, with exit 2.
-REPO="$PLACEHOLDER_REPO"
+
+# A malformed repo slug must be refused BEFORE anything is downloaded, with exit
+# 2. The shipped default is a real repository, so this uses an explicitly bogus
+# one: the guarantee under test is that a typo names its correction instead of
+# surfacing later as a 404 blamed on the network.
+REPO="acme"
 ( main --domain vpn.example.com --dry-run --skip-dns --skip-ports --skip-caddy ) \
-	>"$WORK/placeholder.log" 2>&1
-expect_rc "T9 a placeholder repo is refused (exit 2)" $? 2
-expect_grep "T9 the refusal names --repo" "--repo" "$WORK/placeholder.log"
+>"$WORK/placeholder.log" 2>&1
+expect_rc "T9 a malformed repo is refused (exit 2)" $? 2
+expect_grep "T9 the refusal names the slug shape" "owner" "$WORK/placeholder.log"
 
 # ---------------------------------------------------------------------------
 # T10 - deployment templates resolve, and only from a trusted source.

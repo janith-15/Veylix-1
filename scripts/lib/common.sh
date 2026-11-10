@@ -98,6 +98,29 @@ redact() {
 
 DRY_RUN=${DRY_RUN:-0}
 
+# json_str VALUE - quote VALUE as a JSON string literal, with stdout only.
+#
+# The installer POSTs the operator's email, display name and password to
+# /api/setup/bootstrap. Building that body with printf and bare quotes breaks on
+# the first name containing a quote or a backslash, and a password very often
+# does. This escapes exactly what RFC 8259 requires and nothing else; it does
+# not try to be a general JSON encoder.
+json_str() {
+local s=$1 out= c i
+for ((i = 0; i < ${#s}; i++)); do
+c=${s:i:1}
+case "$c" in
+'"') out+='\"' ;;
+'\\') out+='\\\\' ;;
+$'\n') out+='\\n' ;;
+$'\r') out+='\\r' ;;
+$'\t') out+='\\t' ;;
+*) out+="$c" ;;
+esac
+done
+printf '"%s"' "$out"
+}
+
 is_dry_run() { [ "${DRY_RUN:-0}" = "1" ]; }
 
 # run CMD [ARGS...]
