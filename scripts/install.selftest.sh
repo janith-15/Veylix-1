@@ -903,25 +903,41 @@ else
 fi
 
 # The rendered site in --http mode: http://, and no HSTS.
+#
+# This used to carry its own copy of the installer's sed, with the old
+# `http://0.0.0.0:80` site address. That is the mistake T17's first draft made:
+# a test that RESTATES the decision cannot detect the decision changing, so it
+# stayed green while install.sh shipped an address Caddy turns into a Host
+# matcher (`{"match":[{"host":["0.0.0.0"]}]}`) that no browser request satisfies -
+# a listening site answering every request with an empty 200.
+#
+# The render itself is now produced by install.sh's own install_caddy(), with
+# only the root/system probes stubbed, so what is asserted is what ships.
 t17_render() {
-	local mode=$1
-	if [ "$mode" = http ]; then
-		# Mirrors the installer's own --http branch. If install.sh changes its
-		# substitution order, this render and the installer's diverge and the
-		# assertions below catch it against the template, not against a copy.
-		sed -e "s|^https://vpn\.example\.com:__HTTPS_PORT__ {|http://0.0.0.0:80 {|" \
-		    -e "s|__HTTPS_PORT__|443|g" -e "s|__HTTP_PORT__|80|g" \
-		    -e "s|__APP_PORT__|8080|g" -e "/Strict-Transport-Security/d" \
-		    "$ROOT/deploy/Caddyfile"
-	else
-		sed -e "s|__HTTPS_PORT__|443|g" -e "s|__HTTP_PORT__|80|g" \
-		    -e "s|__APP_PORT__|8080|g" -e "s|vpn\.example\.com|vpn.acme.com|g" \
-		    "$ROOT/deploy/Caddyfile"
+	local mode out
+	mode=${1:-http}
+	out="$WORK/t17-render-$mode"
+	rm -f "$out" "$out.veylix-new"
+	VEYLIX_T17_MODE=$mode VEYLIX_T17_OUT=$out bash "$ROOT/scripts/t17-render.sh" 2>/dev/null
+	if [ -f "$out.veylix-new" ]; then
+		cat "$out.veylix-new"
+	elif [ -f "$out" ]; then
+		cat "$out"
 	fi
 }
 
 t17_render http >"$WORK/t17http.txt"
-expect_grep "T17 the --http site address is plain http" "http://0.0.0.0:80 {" "$WORK/t17http.txt"
+# `http://:PORT` with a `bind` line - NOT `http://0.0.0.0:PORT`. The host part of
+# a Caddy site address is a Host-header matcher, so 0.0.0.0 matched nothing a
+# browser ever sends and the site returned an empty 200.
+expect_grep "T17 the --http site address has no host part" "http://:80 {" "$WORK/t17http.txt"
+expect_grep "T17 the --http bind names the interface" "bind 0.0.0.0" "$WORK/t17http.txt"
+if grep -qF 'http://0.0.0.0:80 {' "$WORK/t17http.txt"; then
+	bad "T17 the --http site address is not a literal IP" \
+		"0.0.0.0 in a site address becomes a Host matcher that no request satisfies"
+else
+	ok "T17 the --http site address is not a literal IP"
+fi
 if grep -q 'Strict-Transport-Security' "$WORK/t17http.txt"; then
 	bad "T17 --http sends no HSTS header"
 else

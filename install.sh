@@ -1238,11 +1238,23 @@ install_caddy() {
 			# placeholders are unambiguous (leading/trailing double underscore),
 			# so no substitution can collide with another.
 			if [ "$HTTP_MODE" -eq 1 ]; then
-				# Plain HTTP, reached by IP. The site address becomes
-				# `http://<bind>:<port>`: an explicit scheme so Caddy does not
-				# try to obtain a certificate for an address it cannot issue
-				# one for, which is what would otherwise turn an --http install
-				# into a failing ACME loop and a dead site.
+				# Plain HTTP, reached by IP. The site address must be `http://:PORT`
+				# - an address with NO host part.
+				#
+				# `http://0.0.0.0:PORT` looks equivalent and is not: Caddy turns the
+				# host part of a site address into a Host-header matcher, and
+				# `caddy adapt` shows it as {"match":[{"host":["0.0.0.0"]}]}. A
+				# browser sends Host: <the ip or name the user typed>, which never
+				# matches the literal string "0.0.0.0", so the route does not fire
+				# and the request falls through to an empty 200. Measured on a live
+				# host: the app answered 838 bytes on 127.0.0.1:8080 and Caddy
+				# returned Content-Length: 0 on :80 with none of the configured
+				# headers - the site existed, listened, and matched nothing.
+				#
+				# The listening interface is expressed with `bind`, which is what the
+				# caddy warning has been saying all along: "Site block has an
+				# unspecified IP address which only matches requests having that Host
+				# header; you probably want the 'bind' directive".
 				#
 				# The HSTS header is REMOVED in this mode. Sending
 				# Strict-Transport-Security over plaintext would pin a browser
@@ -1252,7 +1264,7 @@ install_caddy() {
 				# still `__HTTPS_PORT__`. Running it after the port substitution
 				# would leave the literal `https://` behind and the site would
 				# keep trying to obtain a certificate.
-				sed -e "s|^https://vpn\.example\.com:__HTTPS_PORT__ {|http://$HTTP_BIND:$HTTP_PORT {|" \
+				sed -e "s|^https://vpn\.example\.com:__HTTPS_PORT__ {|http://:$HTTP_PORT {\n\tbind $HTTP_BIND|" \
 				    -e "s|__HTTPS_PORT__|$HTTPS_PORT|g" \
 				    -e "s|__HTTP_PORT__|$HTTP_PORT|g" \
 				    -e "s|__APP_PORT__|$APP_PORT|g" \
@@ -1301,7 +1313,9 @@ install_caddy() {
 			# mismatched artifact, and saying so is the only honest outcome.
 			local want_addr
 			if [ "$HTTP_MODE" -eq 1 ]; then
-				want_addr="http://$HTTP_BIND:$HTTP_PORT"
+				# `http://:PORT` - the address carries no host, so Caddy installs
+				# no Host matcher and the site answers whatever the browser typed.
+				want_addr="http://:$HTTP_PORT"
 			else
 				want_addr="https://$DOMAIN:$HTTPS_PORT"
 			fi
