@@ -44,6 +44,24 @@ set -euo pipefail
 # checkout never reaches this branch, so local installs are unchanged.
 VEYLIX_RAW_BASE=${VEYLIX_RAW_BASE:-https://raw.githubusercontent.com/janith-15/Veylix-1/main}
 
+# Every network call carries a deadline. A `curl` with no `--max-time` waits
+# forever when the far end accepts the connection and then says nothing, which
+# is what a firewalled or DNS-broken host looks like: the installer produced NO
+# output at all and had to be suspended with ^Z (D-132). 10s to connect and 60s
+# overall is generous for a 50 KB file and still bounded.
+VEYLIX_CONNECT_TIMEOUT=${VEYLIX_CONNECT_TIMEOUT:-10}
+VEYLIX_MAX_TIME=${VEYLIX_MAX_TIME:-60}
+
+# fetch URL DEST -> 0 on success. The single place network deadlines are set, so
+# no later `curl` can forget them.
+fetch() {
+	curl -fsSL \
+		--connect-timeout "$VEYLIX_CONNECT_TIMEOUT" \
+		--max-time "$VEYLIX_MAX_TIME" \
+		--retry 1 \
+		"$1" -o "$2"
+}
+
 # BASH_SOURCE[0] is UNSET under `curl ... | bash` - the script arrives on stdin
 # and bash has no file to name - and it is a /dev/fd/N pipe under process
 # substitution. Both mean the same thing: there is no checkout. Default it to
@@ -73,9 +91,11 @@ if [ -z "$HERE" ] || [ ! -f "$HERE/scripts/lib/common.sh" ]; then
 	mkdir -p "$_veylix_boot/scripts/lib"
 
 	_veylix_url="$VEYLIX_RAW_BASE/scripts/lib/common.sh"
-	if ! curl -fsSL "$_veylix_url" -o "$_veylix_boot/scripts/lib/common.sh" 2>/dev/null; then
+	if ! fetch "$_veylix_url" "$_veylix_boot/scripts/lib/common.sh" 2>/dev/null; then
 		echo "install.sh: ERROR: could not download $_veylix_url" >&2
-		echo "install.sh:        check the network, or clone the repository and run ./install.sh" >&2
+		echo "install.sh:        the host may be offline or blocking github. Either:" >&2
+		echo "install.sh:          - check: curl -m 15 -v $_veylix_url >/dev/null" >&2
+		echo "install.sh:          - or clone the repository and run ./install.sh" >&2
 		exit 1
 	fi
 	[ -s "$_veylix_boot/scripts/lib/common.sh" ] || {
@@ -315,7 +335,7 @@ resolve_deploy_dir() {
 		return 0
 	fi
 
-	if curl -fsSL "$bundle" -o "$stage/veylix-deploy.tar.gz" 2>/dev/null; then
+	if fetch "$bundle" "$stage/veylix-deploy.tar.gz" 2>/dev/null; then
 		# Only deploy/* members. `--force-local` keeps a Windows-style path from
 		# being read as a remote host; the wildcard form is GNU tar, which is what
 		# every supported distribution ships.
@@ -331,7 +351,7 @@ resolve_deploy_dir() {
 	if [ -n "$SCRIPT_BASE" ]; then
 		local name
 		for name in Caddyfile veylixd.service veylix-backup.sh; do
-			if curl -fsSL "$SCRIPT_BASE/veylix-$name" -o "$stage/$name" 2>/dev/null; then
+			if fetch "$SCRIPT_BASE/veylix-$name" "$stage/$name" 2>/dev/null; then
 				say "deployment file: $SCRIPT_BASE/veylix-$name"
 			else
 				warn "no veylix-$name at $SCRIPT_BASE"
@@ -351,7 +371,8 @@ resolve_deploy_dir() {
 	#    it printed a warning and called that success. It refuses now.
 	local name
 	for name in Caddyfile veylixd.service veylix-backup.sh; do
-		curl -fsSL "$VEYLIX_RAW_BASE/deploy/$name" -o "$stage/$name" 2>/dev/null || true
+		curl -fsSL --connect-timeout "$VEYLIX_CONNECT_TIMEOUT" --max-time "$VEYLIX_MAX_TIME" \
+			"$VEYLIX_RAW_BASE/deploy/$name" -o "$stage/$name" 2>/dev/null || true
 	done
 	if [ -s "$stage/veylixd.service" ] && [ -s "$stage/Caddyfile" ]; then
 		DEPLOY_SRC="$stage"
@@ -381,7 +402,8 @@ deploy_file() {
 list_versions() {
 	have curl || die "curl is required to list releases. Install curl and re-run." 2
 	say "releases for $REPO (source: $RELEASE_API)"
-	tags=$(curl -fsSL "$RELEASE_API/repos/$REPO/releases?per_page=100" 2>/dev/null \
+	tags=$(curl -fsSL --connect-timeout "$VEYLIX_CONNECT_TIMEOUT" --max-time "$VEYLIX_MAX_TIME" \
+		"$RELEASE_API/repos/$REPO/releases?per_page=100" 2>/dev/null \
 		| grep -o '"tag_name"[[:space:]]*:[[:space:]]*"[^"]*"' \
 		| sed -E 's/.*"([^"]*)"$/\1/') || true
 	if [ -z "$tags" ]; then
@@ -692,15 +714,15 @@ fetch_artifact() {
 		return 0
 	fi
 
-	curl -fsSL "$base/$bin_name" -o "$BIN_ARTIFACT" \
-		|| die "could not download $base/$bin_name. Check the release exists for $ARCH (and that VEYLIX_REPO is set for a fork)."
-	curl -fsSL "$base/SHA256SUMS" -o "$sums" \
+	fetch "$base/$bin_name" "$BIN_ARTIFACT" \
+		|| die "could not download $base/$bin_name after $VEYLIX_MAX_TIME s. Check the release exists for $ARCH (and that VEYLIX_REPO is set for a fork)."
+	fetch "$base/SHA256SUMS" "$sums" \
 		|| die "could not download $base/SHA256SUMS"
 
 	verify_checksum "$BIN_ARTIFACT" "$sums" "$bin_name"
 
 	CLI_AVAILABLE=0
-	if curl -fsSL "$base/$cli_name" -o "$CLI_ARTIFACT" 2>/dev/null; then
+	if fetch "$base/$cli_name" "$CLI_ARTIFACT" 2>/dev/null; then
 		if verify_checksum "$CLI_ARTIFACT" "$sums" "$cli_name" 2>/dev/null; then
 			CLI_AVAILABLE=1
 		else
@@ -1209,8 +1231,9 @@ printf '{"email":%s,"password":%s,"display_name":%s}' \
 "$(json_str "$email")" "$(json_str "$pass")" "$(json_str "$name")" > "$body"
 
 code=$(curl -s -o /dev/null -w '%{http_code}' \
+--connect-timeout 5 --max-time 20 \
 -X POST -H 'Content-Type: application/json' --data-binary @"$body" \
-"http://127.0.0.1:${HTTP_PORT:-8080}/api/setup/bootstrap" 2>/dev/null || echo 000)
+"http://127.0.0.1:${APP_PORT:-8080}/api/setup/bootstrap" 2>/dev/null || echo 000)
 rm -f "$body"
 
 case "$code" in

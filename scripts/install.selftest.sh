@@ -1072,6 +1072,59 @@ expect_grep "T19 the lock is released on suspension" "TSTP" "$ROOT/scripts/lib/c
 expect_grep "T19 release_lock closes the descriptor" "exec 9>&-" "$ROOT/scripts/lib/common.sh"
 
 
+# ---------------------------------------------------------------------------
+# T20 - every network call is BOUNDED (D-132).
+#
+# The owner's run printed absolutely nothing and had to be suspended with ^Z.
+# The bootstrap's `curl` had no --max-time, and on a host where github accepts
+# the connection and then goes quiet, curl waits forever. An installer that
+# hangs is worse than one that fails: there is no message to act on.
+#
+# A deadline is asserted two ways: the helper exists and carries both flags, and
+# no `curl ... -o` anywhere in the installer or its library is missing one.
+# ---------------------------------------------------------------------------
+expect_grep "T20 a single helper sets the network deadline" "--connect-timeout" "$ROOT/install.sh"
+expect_grep "T20 the helper sets an overall deadline" "--max-time" "$ROOT/install.sh"
+
+T20_unbounded=""
+# Join continuation lines first: `curl ... \` with the deadline on the next line
+# is bounded, and a line-by-line scan would call it unbounded. That false
+# positive is exactly the kind of noise that gets a real gate ignored.
+T20_joined=$(awk '
+	/\\[[:space:]]*$/ { buf = buf $0 " "; next }
+	{ print buf $0; buf = "" }
+	END { if (buf != "") print buf }
+' "$ROOT/install.sh" "$ROOT/scripts/lib/common.sh" 2>/dev/null)
+
+while IFS= read -r line; do
+	[ -n "$line" ] || continue
+	case "$line" in
+	*max-time* | *connect-timeout*) : ;;          # bounded
+	*'# '*) : ;;                                   # a comment
+	*dry-run*) : ;;                                # a printed plan, not a call
+	*fetch*) : ;;                                  # goes through the helper
+	*) T20_unbounded="$T20_unbounded  $line
+" ;;
+	esac
+done <<EOF
+$(printf '%s\n' "$T20_joined" | grep 'curl .*-o ' || true)
+EOF
+if [ -n "$T20_unbounded" ]; then
+	bad "T20 no download can wait forever" "$T20_unbounded"
+else
+	ok "T20 no download can wait forever"
+fi
+
+# The bootstrap download in particular: it runs before anything else can print,
+# so an unbounded one is the silent hang.
+expect_grep "T20 the bootstrap download is bounded" \
+	'fetch "$_veylix_url"' "$ROOT/install.sh"
+
+# A failed bootstrap must explain itself, not exit silently.
+expect_grep "T20 a failed bootstrap names the URL" \
+	"could not download \$_veylix_url" "$ROOT/install.sh"
+
+
 printf '\n'
 if [ "$fail" -eq 0 ]; then
 	printf 'install.sh: all guard checks passed\n'

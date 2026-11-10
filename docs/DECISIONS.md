@@ -5381,6 +5381,88 @@ speaks.
 sockets to probe; the real probe path is exercised only by the host itself. No
 Linux install has run.
 
+---
+
+## D-132 · The installer hung with no output: `curl` had no deadline
+
+**Status:** fixed and pushed. **Reported by:** the owner, whose fifth attempt
+produced this and nothing else:
+
+```
+root@dnj-vm-3:~# bash <(curl -Ls https://raw.githubusercontent.com/.../install.sh)
+
+^Z
+[1]+  Stopped
+```
+
+**The bootstrap `curl` had no `--max-time`.** When the far end accepts the TCP
+connection and then goes quiet — a firewalled host, a DNS server that resolves
+but does not route, a proxy that stalls — `curl` waits **indefinitely**. So did
+`bash`, and so did the operator, who had to suspend it with `^Z` to get their
+prompt back. There was no message, no error, no partial output: the script had
+not reached a single statement that prints.
+
+This is the worst failure shape available to an installer, worse than an
+error. An error tells you what to change. A hang tells you nothing, so the
+operator concludes the tool is broken, or that they did something wrong.
+
+**The fix is one helper and a sweep.**
+
+```bash
+VEYLIX_CONNECT_TIMEOUT=${VEYLIX_CONNECT_TIMEOUT:-10}
+VEYLIX_MAX_TIME=${VEYLIX_MAX_TIME:-60}
+
+fetch() {
+	curl -fsSL \
+		--connect-timeout "$VEYLIX_CONNECT_TIMEOUT" \
+		--max-time "$VEYLIX_MAX_TIME" \
+		--retry 1 \
+		"$1" -o "$2"
+}
+```
+
+Every download now goes through `fetch`. The three calls that stream rather
+than save — the releases API, the deploy-template fetch, and the loopback
+`/api/setup/bootstrap` POST — carry the same two flags inline, because they
+need the pipeline or the response code rather than a file. `reachable_ip`
+already had `--max-time 3`.
+
+A failed bootstrap now also says what happened and what to do, instead of
+exiting quietly:
+
+```
+install.sh: ERROR: could not download <url>
+install.sh:        the host may be offline or blocking github. Either:
+install.sh:          - check: curl -m 15 -v <url> >/dev/null
+install.sh:          - or clone the repository and run ./install.sh
+```
+
+**A second bug found while sweeping.** The Super Admin bootstrap POST was
+addressed to `http://127.0.0.1:${HTTP_PORT}` — the **public** port, where Caddy
+listens — instead of `${APP_PORT}`, where `veylixd` listens. On a port-separated
+install that request went to the wrong service. Only reachable once the ports
+could differ, which D-131 made possible; it would have shipped silently and
+shown up as "the account was created at /setup" every time.
+
+**Evidence.**
+
+| Check | Result |
+|---|---|
+| `install.selftest.sh` | **145 PASS / 0 FAIL** (was 140) |
+| T20, new | 5 checks: helper carries both flags, no unbounded `curl ... -o` anywhere, the bootstrap is bounded, and a failure names the URL |
+| Negative control: restore one plain `curl -o` | **T20 fails by name**, rc 1 |
+| Sweep of every `curl` in `install.sh` + `common.sh` | all bounded |
+
+T20 joins continuation lines before scanning. A `curl ... \` with its flags on
+the next line is bounded, and a line-by-line scan called it unbounded — a false
+positive that would have trained the next reader to ignore the gate.
+
+**Not verified.** The blackholed-host case was not reproduced end to end on this
+machine (Windows intercepts the unroutable address). What is proven is that the
+flags are on every call and that the gate fails when one is removed. A real
+offline host is the only place the timing can be measured.
+
+
 
 
 
