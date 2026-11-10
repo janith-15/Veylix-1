@@ -51,7 +51,26 @@ jobs:
 
       - name: test
         working-directory: backend
-        run: go test ./... -count=1
+        # `-v` and a captured log on purpose: when this failed on the Linux
+        # runner and passed on Windows, the failure was invisible from here —
+        # no log, no line, so any fix would have been a guess. The log is
+        # uploaded either way, so the next failure names itself instead of
+        # costing a round trip.
+        run: |
+          set +e
+          go test ./... -count=1 -v > /tmp/test.log 2>&1
+          rc=$?
+          # Print the failure lines so the run's own log is useful too.
+          grep -E '^(--- FAIL|FAIL|panic:)' /tmp/test.log | head -40
+          exit $rc
+
+      - name: upload the test log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-test-log
+          path: /tmp/test.log
+          if-no-files-found: warn
 
   race:
     name: backend (race detector)
@@ -70,7 +89,23 @@ jobs:
         working-directory: backend
         env:
           CGO_ENABLED: '1'
-        run: go test ./... -race -count=1
+        # Case names and a stack are what a race report is made of; without
+        # `-v` the log says only that something raced. Uploaded below so the
+        # evidence survives the run.
+        run: |
+          set +e
+          go test ./... -race -count=1 -v > /tmp/race.log 2>&1
+          rc=$?
+          grep -E '^(--- FAIL|FAIL|panic:|WARNING: DATA RACE)' /tmp/race.log | head -40
+          exit $rc
+
+      - name: upload the race log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-race-log
+          path: /tmp/race.log
+          if-no-files-found: warn
 
   frontend:
     name: frontend (typecheck · lint · audit · build)
