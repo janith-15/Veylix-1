@@ -142,6 +142,16 @@ jobs:
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
     steps:
+      # A workflow never has a working tree until it explicitly checks one out.
+      #
+      # This step was missing, and the failure was subtle: both `build` jobs
+      # succeeded, `combine checksums` succeeded, and then the deploy-template
+      # bundle died with "the bundle is missing deploy/veylixd.service" — because
+      # `deploy/` had been downloaded from an artifact directory that never
+      # contained it. The error named the wrong cause, so it is spelled out here
+      # rather than left to be rediscovered.
+      - uses: actions/checkout@v4
+
       - uses: actions/download-artifact@v4
         with:
           path: dist
