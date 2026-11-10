@@ -130,6 +130,26 @@ SKIP_CADDY=0
 DRY_RUN=0
 LIST_VERSIONS=0
 
+# --http: serve plain HTTP on a public port, with no certificate and no domain.
+#
+# This is the mode 3X-UI installs in, and the one an operator wants when the
+# thing they are installing is reached by IP address rather than by name. It is
+# NOT the loopback-only --skip-caddy mode: Caddy still fronts the app and still
+# listens on a public interface, it simply serves http:// instead of https://.
+#
+# HTTPS stays reachable afterwards through the control menu:
+#   vey domain-set <domain> --dns-provider cloudflare --cf-token <token>
+# so this is a first step, not a dead end.
+#
+# Traffic is PLAINTEXT until that is done. report() says so in as many words;
+# nothing here may describe such a host as secure.
+HTTP_MODE=0
+
+# The address Caddy binds. Loopback by default, because a normal install is
+# reached through a domain and never needs to expose the listener. --http
+# switches it to all interfaces, which is the whole point of that mode.
+HTTP_BIND=127.0.0.1
+
 # Ports. The defaults are the conventional ones, so an ordinary install on a bare
 # host is unchanged by this feature existing.
 #
@@ -173,6 +193,12 @@ Options:
   --app-port <port>    the loopback port veylixd listens on, behind Caddy
                        (default: 8080). Not reachable from the network.
   --dry-run            print every phase and change nothing
+  --http               serve plain HTTP on --http-port, reached by IP address.
+                       No domain and no certificate are needed. This is the
+                       mode 3X-UI installs in. Traffic is PLAINTEXT until you
+                       add a domain from the menu:
+                         vey domain-set <domain> --dns-provider cloudflare \\
+                           --cf-token <token>
   --skip-dns           skip the DNS A-record check (recorded in the output)
   --skip-ports         skip the port check (recorded in the output)
   --skip-caddy         install without a reverse proxy (loopback only, exit 2)
@@ -203,6 +229,7 @@ parse_args() {
 			--script-base=*) SCRIPT_BASE=${1#*=}; shift ;;
 			--list-versions) LIST_VERSIONS=1; shift ;;
 			--dry-run)    DRY_RUN=1; shift ;;
+			--http)       HTTP_MODE=1; HTTP_BIND=0.0.0.0; shift ;;
 			--skip-dns)   SKIP_DNS=1; shift ;;
 			--skip-ports) SKIP_PORTS=1; shift ;;
 			--skip-caddy) SKIP_CADDY=1; shift ;;
@@ -397,8 +424,8 @@ choose_ports() {
 
 Ports. The defaults suit a server that is not already using 80 and 443.
 
-  1) Standard   - HTTPS on 443, HTTP on 80            (https://<domain>)
-  2) 3X-UI host - HTTPS on 8443, HTTP on 8080         (https://<domain>:8443)
+  1) Standard   - serve on port 80            $(if [ -z "$DOMAIN" ]; then echo "(http://<your-ip>)"; else echo "(https://<domain>)"; fi)
+  2) 3X-UI host - serve on port 8080          $(if [ -z "$DOMAIN" ]; then echo "(http://<your-ip>:8080)"; else echo "(https://<domain>:8443)"; fi)
                   use this when 3X-UI is already on this VPS
   3) Custom     - type your own
 
@@ -409,6 +436,8 @@ EOF
 		choice=""
 	fi
 
+	# With no domain there is no TLS to place, so "HTTPS port" is a meaningless
+	# question and the picker must not pretend otherwise.
 	case "${choice:-1}" in
 	1)
 		HTTP_PORT=80
@@ -422,13 +451,19 @@ EOF
 		# The caveat belongs next to the choice, not only in the docs: with
 		# 3X-UI holding 80 and 443 the certificate cannot be issued without
 		# one of them, and the operator should learn that now.
-		printf '\n  Note: for a certificate, port 80 or 443 must be free unless you use DNS-01.\n' >/dev/tty
-		printf '  If 3X-UI holds both, HTTPS issuance will fail and the installer will say so\n' >/dev/tty
-		printf '  (exit 2) rather than claim success.\n\n' >/dev/tty
+		if [ "$HTTP_MODE" -eq 0 ]; then
+			printf '\n  Note: for a certificate, port 80 or 443 must be free unless you use DNS-01.\n' >/dev/tty
+			printf '  If 3X-UI holds both, HTTPS issuance will fail and the installer will say so\n' >/dev/tty
+			printf '  (exit 2) rather than claim success.\n\n' >/dev/tty
+		fi
 		;;
 	3)
-		ask_one_port "HTTPS port (what customers type)" 443 HTTPS_PORT || return 1
-		ask_one_port "HTTP port (ACME + redirect)" 80 HTTP_PORT || return 1
+		if [ "$HTTP_MODE" -eq 1 ]; then
+			ask_one_port "Port to serve on (reached by IP)" 80 HTTP_PORT || return 1
+		else
+			ask_one_port "HTTPS port (what customers type)" 443 HTTPS_PORT || return 1
+			ask_one_port "HTTP port (ACME + redirect)" 80 HTTP_PORT || return 1
+		fi
 		ask_one_port "App port (loopback only)" 8080 APP_PORT || return 1
 		;;
 	*)
@@ -577,7 +612,9 @@ preflight() {
 		say "ports: $HTTP_PORT and $HTTPS_PORT are free"
 	fi
 
-	if [ "$SKIP_CADDY" -eq 1 ]; then
+	if [ "$HTTP_MODE" -eq 1 ]; then
+		skip "dns" "--http was used; there is no domain and no certificate to issue"
+	elif [ "$SKIP_CADDY" -eq 1 ]; then
 		skip "dns" "--skip-caddy was passed; there will be no HTTPS"
 	elif [ "$SKIP_DNS" -eq 1 ]; then
 		skip "dns" "--skip-dns was passed; certificate issuance will fail if the record is wrong"
@@ -767,9 +804,25 @@ render_config() {
 		echo "VEYLIX_SESSION_KEY=$sess"
 		echo "VEYLIX_SYNC_INTERVAL=5m"
 		echo "VEYLIX_SYNC_TIMEOUT=60s"
-		echo "VEYLIX_INSECURE_COOKIES=0"
+		if [ "$HTTP_MODE" -eq 1 ] && [ "$SKIP_CADDY" -eq 0 ]; then
+			# Plain HTTP in front. A Secure cookie is never sent back over
+			# http://, so the login would return 200 and every call after it
+			# would answer 401 - F-013, seen for real. The override is safe
+			# HERE because veylixd still binds 127.0.0.1 (above): the cookie
+			# never crosses a network interface unencrypted, it only skips the
+			# Secure flag over a loopback hop. config.resolveSecureCookies
+			# already refuses this combination for a non-loopback bind, so this
+			# line cannot weaken a networked listener.
+			echo "VEYLIX_INSECURE_COOKIES=1"
+		else
+			echo "VEYLIX_INSECURE_COOKIES=0"
+		fi
 		if [ -n "$DOMAIN" ] && [ "$SKIP_CADDY" -eq 0 ]; then
 			echo "VEYLIX_PUBLIC_BASE_URL=https://$DOMAIN"
+		elif [ "$HTTP_MODE" -eq 1 ] && [ "$SKIP_CADDY" -eq 0 ]; then
+			# Plain HTTP by IP. The backend uses this for cookie/CSRF origin
+			# checks, so it must match what the browser actually shows.
+			echo "VEYLIX_PUBLIC_BASE_URL=http://$(reachable_ip):$HTTP_PORT"
 		fi
 	} >"$env"
 
@@ -790,7 +843,12 @@ install_binaries() {
 
 	if is_dry_run; then
 		out "[dry-run] install -m 0755 $BIN_ARTIFACT $BIN_DIR/veylixd"
-		[ "${CLI_AVAILABLE:-0}" -eq 1 ] && out "[dry-run] install -m 0755 $CLI_ARTIFACT $BIN_DIR/vpn-platformctl"
+		# `if`, not `[ ] && out`: a false test as a bare command aborts the
+		# script under `set -e`, and CLI_AVAILABLE is 0 on every dry run that
+		# did not download the CLI - so this ended every --dry-run early (D-130).
+		if [ "${CLI_AVAILABLE:-0}" -eq 1 ]; then
+			out "[dry-run] install -m 0755 $CLI_ARTIFACT $BIN_DIR/vpn-platformctl"
+		fi
 		return 0
 	fi
 
@@ -969,11 +1027,34 @@ install_caddy() {
 			# Ports first, then the domain. Order matters only in that the
 			# placeholders are unambiguous (leading/trailing double underscore),
 			# so no substitution can collide with another.
-			sed -e "s|__HTTPS_PORT__|$HTTPS_PORT|g" \
-			    -e "s|__HTTP_PORT__|$HTTP_PORT|g" \
-			    -e "s|__APP_PORT__|$APP_PORT|g" \
-			    -e "s|vpn\.example\.com|$DOMAIN|g" \
-			    "$CADDY_SRC" >"$CADDYFILE.veylix-new"
+			if [ "$HTTP_MODE" -eq 1 ]; then
+				# Plain HTTP, reached by IP. The site address becomes
+				# `http://<bind>:<port>`: an explicit scheme so Caddy does not
+				# try to obtain a certificate for an address it cannot issue
+				# one for, which is what would otherwise turn an --http install
+				# into a failing ACME loop and a dead site.
+				#
+				# The HSTS header is REMOVED in this mode. Sending
+				# Strict-Transport-Security over plaintext would pin a browser
+				# to https:// on a host that cannot serve it, which breaks the
+				# one thing the operator installed.
+				# The site line is rewritten FIRST, while the placeholder is
+				# still `__HTTPS_PORT__`. Running it after the port substitution
+				# would leave the literal `https://` behind and the site would
+				# keep trying to obtain a certificate.
+				sed -e "s|^https://vpn\.example\.com:__HTTPS_PORT__ {|http://$HTTP_BIND:$HTTP_PORT {|" \
+				    -e "s|__HTTPS_PORT__|$HTTPS_PORT|g" \
+				    -e "s|__HTTP_PORT__|$HTTP_PORT|g" \
+				    -e "s|__APP_PORT__|$APP_PORT|g" \
+				    -e "/Strict-Transport-Security/d" \
+				    "$CADDY_SRC" >"$CADDYFILE.veylix-new"
+			else
+				sed -e "s|__HTTPS_PORT__|$HTTPS_PORT|g" \
+				    -e "s|__HTTP_PORT__|$HTTP_PORT|g" \
+				    -e "s|__APP_PORT__|$APP_PORT|g" \
+				    -e "s|vpn\.example\.com|$DOMAIN|g" \
+				    "$CADDY_SRC" >"$CADDYFILE.veylix-new"
+			fi
 
 			# The rendered file must contain no placeholder. A typo in the
 			# template would otherwise reach the live config as the literal text
@@ -1016,6 +1097,26 @@ install_caddy() {
 	fi
 
 	run systemctl reload caddy || run systemctl restart caddy
+
+	if [ "$HTTP_MODE" -eq 1 ]; then
+		say "caddy reloaded: serving plain HTTP on $HTTP_BIND:$HTTP_PORT"
+
+		if is_dry_run; then
+			out "[dry-run] would GET http://127.0.0.1:$HTTP_PORT/api/ready"
+			return 0
+		fi
+		# No certificate is involved, so readiness is immediate. Check the real
+		# listener rather than assuming the reload took.
+		if wait_for_ready "http://127.0.0.1:$HTTP_PORT/api/ready" 15 1; then
+			say "HTTP is active on port $HTTP_PORT (no TLS - see the security note)"
+		else
+			warn "the site did not answer on http://127.0.0.1:$HTTP_PORT/api/ready"
+			warn "Check: journalctl -u caddy -n 50 --no-pager"
+			INCOMPLETE=1
+		fi
+		return 0
+	fi
+
 	say "caddy reloaded for $DOMAIN"
 
 	if is_dry_run; then
@@ -1233,11 +1334,52 @@ public_url() {
 	fi
 }
 
+# reachable_ip - the address an operator should type in a browser.
+#
+# The address on the default route (`local_ip`) is the PRIVATE one on a NAT'd
+# host, so printing it would send the operator to an address that only exists
+# inside the datacentre. A public address is preferred, and if none can be
+# determined the function says so rather than inventing one - a wrong URL in
+# the final report is worse than an honest placeholder.
+reachable_ip() {
+	local pub=""
+	# Ask the host's own view of its public address first: no third party, and
+	# it already knows its own NAT mapping if it has one.
+	if have curl; then
+		pub=$(curl -fsS --max-time 3 https://api.ipify.org 2>/dev/null || true)
+	fi
+	case "$pub" in
+		"" | *[!0-9.]*) pub="" ;;
+	esac
+	if [ -n "$pub" ]; then
+		printf '%s' "$pub"
+		return 0
+	fi
+	pub=$(local_ip 2>/dev/null || true)
+	if [ -n "$pub" ]; then
+		printf '%s' "$pub"
+		return 0
+	fi
+	printf '%s' "<this-host-ip>"
+}
+
+
 report() {
 	phase "first run"
 
 	local base="http://127.0.0.1:$APP_PORT"
-	[ -n "$DOMAIN" ] && [ "$INCOMPLETE" -eq 0 ] && base=$(public_url)
+	# NOTE: `if`, not `[ … ] && …`. Under `set -e` a failing `&&` chain as a
+	# bare command aborts the script - the same shape as D-129. With no domain
+	# the first test is false on every --http install.
+	if [ -n "$DOMAIN" ] && [ "$INCOMPLETE" -eq 0 ]; then
+		base=$(public_url)
+	fi
+	# --http: the app is reachable from the network, but over plaintext. Name the
+	# reachable address so the operator is not told to open localhost on a
+	# machine they are not sitting at.
+	if [ "$HTTP_MODE" -eq 1 ]; then
+		base="http://$(reachable_ip):$HTTP_PORT"
+	fi
 
 	cat <<EOF
 
@@ -1256,9 +1398,9 @@ VEYLIX is installed.
 $(admin_note)
 
 Ports:
-  Caddy HTTP   :$HTTP_PORT   (ACME challenge + redirect to HTTPS)
-  Caddy HTTPS  :$HTTPS_PORT   <- the port customers type
-  veylixd      :$APP_PORT   (loopback 127.0.0.1 only, never reachable from outside)
+  Caddy HTTP   :$HTTP_PORT   $(if [ "$HTTP_MODE" -eq 1 ]; then echo "<- the port customers type (PLAIN HTTP)"; else echo "(ACME challenge + redirect to HTTPS)"; fi)
+  Caddy HTTPS  :$HTTPS_PORT   $(if [ "$HTTP_MODE" -eq 1 ]; then echo "(not in use - --http was chosen)"; else echo "<- the port customers type"; fi)
+  veylixd      :$APP_PORT   (loopback only, never reachable from outside)
 
 Next steps:
 $(step_one)
@@ -1283,6 +1425,26 @@ EOF
 
 	control_menu
 
+	# --http is honest about what it is. Saying "installed" without saying
+	# "plaintext" would be the same lie as reporting HTTPS that is not there.
+	if [ "$HTTP_MODE" -eq 1 ]; then
+		cat <<EOF
+SECURITY - THIS HOST SERVES PLAIN HTTP.
+  Everything sent to $base travels unencrypted, including the Super Admin
+  password on the setup page. Do not let this host carry real customers yet.
+
+  Add TLS when you are ready. A Cloudflare DNS-01 challenge needs no inbound
+  port, so it works beside a 3X-UI that already holds 80 and 443:
+
+    sudo vey domain-set <your-domain> --dns-provider cloudflare --cf-token <token>
+
+  Then check it:
+
+    sudo vey cert
+
+EOF
+	fi
+
 	if [ "$INCOMPLETE" -eq 1 ]; then
 		cat <<EOF
 INSTALL INCOMPLETE - the service is running on http://127.0.0.1:$APP_PORT but
@@ -1302,8 +1464,28 @@ main() {
 		exit 0
 	fi
 
-	[ -n "$DOMAIN" ] || { usage >&2; die "--domain is required" 2; }
-	validate_domain "$DOMAIN" || die "'$DOMAIN' is not a valid public hostname. Certificates need an FQDN such as vpn.example.com" 2
+	# No domain is not an error. It means the operator wants the 3X-UI shape: a
+	# host reached by IP on plain HTTP, with HTTPS added later from the control
+	# menu. Refusing here (D-129's neighbour) was what made the documented
+	# one-liner unusable on a fresh server.
+	#
+	# Asking for --http AND a domain is a contradiction: the domain would be
+	# written into an http:// site address and never obtain a certificate. Name
+	# the conflict instead of silently dropping one of the two.
+	if [ -z "$DOMAIN" ]; then
+		if [ "$HTTP_MODE" -eq 0 ]; then
+			HTTP_MODE=1
+			HTTP_BIND=0.0.0.0
+			say "no --domain given: installing for plain HTTP on port $HTTP_PORT"
+			say "  add a domain and a certificate later: vey domain-set <domain>"
+		fi
+	elif [ "$HTTP_MODE" -eq 1 ]; then
+		die "--http and --domain both given. --http serves plain HTTP and does not use a domain; drop --http to get HTTPS on the domain, or drop --domain to stay on IP over HTTP." 2
+	fi
+
+	if [ -n "$DOMAIN" ]; then
+		validate_domain "$DOMAIN" || die "'$DOMAIN' is not a valid public hostname. Certificates need an FQDN such as vpn.example.com" 2
+	fi
 
 	# Ask about ports when the operator is at a terminal and did not pass flags.
 	# It runs BEFORE validation so the answer is what gets validated, and before

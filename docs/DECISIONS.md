@@ -5211,6 +5211,96 @@ non-zero; and `parse_args` itself must return 0 when given nothing.
 **Not verified.** Still no Linux end-to-end install. The no-argument path is now
 proven to *speak*, which is all this change claims.
 
+---
+
+## D-130 · `--domain` was never required: the install the owner asked for is HTTP by IP
+
+**Status:** implemented. **Asked for by:** the owner, in one sentence.
+
+> "install from the first link, reached over HTTP by IP; the menu already has
+> the Cloudflare certificate step to make it HTTPS later."
+
+That is the 3X-UI shape, and it is what the product should have installed from
+the start. With no `--domain` the installer **refused**:
+
+```
+install.sh: ERROR: --domain is required
+```
+
+So the documented one-liner could not install anything on a server that has no
+domain yet — which is every server before the first one.
+
+**Why `--domain` was required at all.** The Caddyfile template's site address is
+`https://vpn.example.com:__HTTPS_PORT__`. With no domain to substitute, the
+render would produce `https://:443`, Caddy would refuse it, and the install
+would stop at the proxy phase. Requiring a domain avoided that dead end by
+refusing earlier — which fixed the symptom and removed the use case.
+
+**The mode.** `--http` serves the app over plain HTTP and needs no domain:
+
+| | `--domain example.com` (unchanged) | `--http` (new) |
+|---|---|---|
+| Caddy site | `https://example.com:443` | `http://0.0.0.0:80` |
+| Certificate | ACME, automatic | none |
+| Listens on | loopback (reached via Caddy) | all interfaces, reached by IP |
+| HSTS header | yes | **removed** |
+| DNS preflight | resolves the A record | skipped — there is nothing to resolve |
+| `VEYLIX_PUBLIC_BASE_URL` | `https://example.com` | `http://<ip>:80` |
+
+**No domain now means HTTP mode, not an error.** `--http` and `--domain`
+together is a **conflict** and is refused by name: the domain would be written
+into an `http://` site address and would never obtain a certificate, so silently
+dropping one of the two would be the installer guessing.
+
+**HSTS is deleted in this mode, deliberately.** Sending
+`Strict-Transport-Security` over plaintext pins a browser to `https://` on a host
+that cannot serve it. That would break the one thing the operator just installed.
+
+**`VEYLIX_INSECURE_COOKIES` is set to 1 in this mode, and only in this mode.**
+Without it the session cookie is `Secure`, a browser never sends it back over
+`http://`, and the login returns 200 followed by 401 on every call — F-013,
+seen for real before. It is safe *here* because `veylixd` still binds
+`127.0.0.1`: the cookie skips the Secure flag over a **loopback** hop, never over
+a network interface. `config.resolveSecureCookies` already refuses this
+combination for a non-loopback bind, so the flag cannot weaken a networked
+listener.
+
+**The report tells the truth.** A `--http` install ends with:
+
+```
+SECURITY - THIS HOST SERVES PLAIN HTTP.
+  Everything sent to http://<ip>:80 travels unencrypted, including the Super
+  Admin password on the setup page. Do not let this host carry real customers yet.
+```
+
+and then the exact command that fixes it. An install that said only
+"installed" would be the same lie as reporting HTTPS that is not there.
+
+**Evidence.**
+
+| Check | Result |
+|---|---|
+| `bash install.sh` (no args) | selects HTTP mode, reaches preflight, no `--domain` demand |
+| `bash install.sh --http --domain x` | refused, names the conflict |
+| `bash install.sh --domain x` | unchanged: `https://x:443`, HSTS kept |
+| Caddy site, `--http` | `http://0.0.0.0:80 {`, HSTS absent, no leftover placeholder |
+| Caddy site, `--domain` | `https://vpn.acme.com:443 {`, HSTS present |
+| `install.selftest.sh` | **131 PASS / 0 FAIL** (was 119) |
+| Negative control | restoring the `--domain is required` refusal fails T17 by name, rc 1 |
+
+**A note on how T17 was written.** The first version of T17 re-implemented the
+mode decision inside the test and asserted against that copy. Reintroducing the
+bug left it **green** — a gate that restates the logic it checks proves only that
+the test agrees with itself. That is the same mistake as D-127, D-128 and D-129.
+T17 now calls the real `main()` with only the platform probes stubbed, and
+asserts on what the installer prints. The negative control above is against that
+version.
+
+**Not verified.** No Linux install has run. The Caddy render is checked against
+the template, not against `caddy validate` on a live host, and nothing here
+proves that a browser reaches port 80 through an external firewall.
+
+
 
 
 

@@ -17,33 +17,60 @@ that is the remaining gap, and §F says so precisely.
 
 ## B0. The one-line install (no flags needed)
 
-**Pick the form that matches your privileges.** This matters: two of the four
-obvious invocations cannot work, for reasons that have nothing to do with
-Veylix.
+**You do not need a domain.** With no options the installer serves the app over
+**plain HTTP on port 80, reached by IP address** — the same shape 3X-UI installs
+in. Add TLS later from the control menu.
 
 ```bash
 # As root already (the usual case: `sudo -i` first)
-bash <(curl -Ls https://raw.githubusercontent.com/janith-15/Veylix-1/main/install.sh) --domain vpn.example.com
+bash <(curl -Ls https://raw.githubusercontent.com/janith-15/Veylix-1/main/install.sh)
 ```
 
 ```bash
 # As a normal user with sudo: download, then run the file.
 curl -Ls https://raw.githubusercontent.com/janith-15/Veylix-1/main/install.sh -o /tmp/veylix.sh
-sudo bash /tmp/veylix.sh --domain vpn.example.com
+sudo bash /tmp/veylix.sh
 ```
+
+Afterwards it prints the address to open, and this warning, in full:
+
+```
+SECURITY - THIS HOST SERVES PLAIN HTTP.
+  Everything sent to http://<ip>:80 travels unencrypted, including the Super
+  Admin password on the setup page. Do not let this host carry real customers yet.
+```
+
+**Make it HTTPS when you are ready** — no inbound port required, so it works
+beside a 3X-UI that already holds 80 and 443:
+
+```bash
+sudo vey domain-set <your-domain> --dns-provider cloudflare --cf-token <token>
+sudo vey cert
+```
+
+### Which form works
 
 | Form | Works? | Why |
 |---|---|---|
 | `sudo bash install.sh` | **yes** | a real file on disk |
 | `sudo -i` then `bash <(curl …)` | **yes** | process substitution runs in root's own shell |
 | `curl … -o /tmp/x.sh` then `sudo bash /tmp/x.sh` | **yes** | a real file on disk |
-| `bash <(curl …)` as a **non-root** user | starts, then refuses | `need_root` — it must run as root |
+| `curl … \| sudo bash` | **NO** | inherits the `sudo` problem below |
 | `sudo bash <(curl …)` | **NO** | `sudo` is a separate process and does not inherit your shell's `/dev/fd/N`, so `bash` cannot open the script: `bash: /dev/fd/63: No such file or directory` |
-| `curl … \| bash` | **yes** (since D-128) | `BASH_SOURCE[0]` is unset when the script arrives on stdin; the installer now tolerates that |
-| `curl … \| sudo bash` | **NO** | inherits the `sudo` problem above |
+| `curl … \| bash` | **yes** (since D-128) | `BASH_SOURCE[0]` is unset when the script arrives on stdin; the installer tolerates that |
 
-If you are already root, the first form is the shortest. If you are not, the
-second is the one to copy.
+### Modes at a glance
+
+| You pass | You get | Needs |
+|---|---|---|
+| nothing | **HTTP on :80, by IP** | nothing |
+| `--http` | same, said explicitly | nothing |
+| `--domain example.com` | HTTPS on :443 with a real certificate | a domain whose A record points here, and free 80/443 |
+| `--domain … --http-port 8090 --https-port 9443` | HTTPS on 9443 | those ports free |
+| `--skip-caddy` | loopback only, no proxy | nothing — for a host where another proxy already exists |
+
+`--http` together with `--domain` is **refused**, not silently resolved: they
+describe different things and the installer will not guess which you meant.
 
 The installer resolves the repository itself; `--repo` is only for a fork. At
 the end it asks for the Super Admin email, display name and password (the

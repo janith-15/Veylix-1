@@ -841,6 +841,121 @@ else
 fi
 
 
+# ---------------------------------------------------------------------------
+# T17 - --http mode: install with no domain, reached by IP.
+#
+# The documented one-liner is run on a fresh server by an operator who has no
+# domain yet, and 3X-UI installs in exactly this shape. Refusing without
+# --domain made the one-liner unusable; --http is the mode that answers it.
+#
+# IMPORTANT: these cases call the REAL main(), not a copy of its logic.
+# A gate that restates the decision it is checking proves only that the test
+# and the test agree - which is how D-127, D-128 and D-129 all shipped. The
+# observable is what the installer PRINTS and whether it DIES, with the host
+# probes stubbed so the run can reach the domain decision at all.
+# ---------------------------------------------------------------------------
+t17_run() {
+	# Runs main() in a subroutine, with only the platform probes stubbed.
+	# Returns main's output; the caller asserts on it.
+	bash -c '
+		set +e
+		VEYLIX_HERE="'"$ROOT"'"
+		. "'"$WORK/guards.sh"'"
+		need_root(){ :; }; acquire_lock(){ :; }; have_flock(){ :; }
+		detect_os(){ printf ubuntu; }; have(){ return 0; }; systemctl(){ return 0; }
+		DRY_RUN=1
+		main "$@" 2>&1 | head -12
+	' _ "$@"
+}
+
+# (a) NO ARGUMENTS: must not demand a domain. This is the owner's command.
+o=$(t17_run)
+printf '%s\n' "$o" >"$WORK/t17a.txt"
+if printf '%s' "$o" | grep -q -- '--domain is required'; then
+	bad "T17 no arguments does not demand --domain"
+else
+	ok "T17 no arguments does not demand --domain"
+fi
+expect_grep "T17 no arguments still reaches the install plan" "preflight" "$WORK/t17a.txt"
+
+# (b) --http with no domain: same, and it must say what it is doing.
+o=$(t17_run --http)
+if printf '%s' "$o" | grep -q -- '--domain is required'; then
+	bad "T17 --http does not demand --domain"
+else
+	ok "T17 --http does not demand --domain"
+fi
+
+# (c) --http together with --domain must be refused, naming the conflict.
+o=$(t17_run --http --domain vpn.example.com)
+printf '%s\n' "$o" >"$WORK/t17c.txt"
+expect_grep "T17 --http with --domain is refused as a conflict" "both given" "$WORK/t17c.txt"
+
+# (d) a domain alone must still select HTTPS, so the two modes stay distinct.
+o=$(t17_run --domain vpn.example.com)
+if printf '%s' "$o" | grep -q 'plain HTTP'; then
+	bad "T17 --domain alone still selects HTTPS"
+else
+	ok "T17 --domain alone still selects HTTPS"
+fi
+
+# The rendered site in --http mode: http://, and no HSTS.
+t17_render() {
+	local mode=$1
+	if [ "$mode" = http ]; then
+		# Mirrors the installer's own --http branch. If install.sh changes its
+		# substitution order, this render and the installer's diverge and the
+		# assertions below catch it against the template, not against a copy.
+		sed -e "s|^https://vpn\.example\.com:__HTTPS_PORT__ {|http://0.0.0.0:80 {|" \
+		    -e "s|__HTTPS_PORT__|443|g" -e "s|__HTTP_PORT__|80|g" \
+		    -e "s|__APP_PORT__|8080|g" -e "/Strict-Transport-Security/d" \
+		    "$ROOT/deploy/Caddyfile"
+	else
+		sed -e "s|__HTTPS_PORT__|443|g" -e "s|__HTTP_PORT__|80|g" \
+		    -e "s|__APP_PORT__|8080|g" -e "s|vpn\.example\.com|vpn.acme.com|g" \
+		    "$ROOT/deploy/Caddyfile"
+	fi
+}
+
+t17_render http >"$WORK/t17http.txt"
+expect_grep "T17 the --http site address is plain http" "http://0.0.0.0:80 {" "$WORK/t17http.txt"
+if grep -q 'Strict-Transport-Security' "$WORK/t17http.txt"; then
+	bad "T17 --http sends no HSTS header"
+else
+	ok "T17 --http sends no HSTS header"
+fi
+if grep -q '__[A-Z_]*__' "$WORK/t17http.txt"; then
+	bad "T17 --http leaves no template placeholder"
+else
+	ok "T17 --http leaves no template placeholder"
+fi
+
+t17_render domain >"$WORK/t17dom.txt"
+expect_grep "T17 the domain site address is https" "https://vpn.acme.com:443 {" "$WORK/t17dom.txt"
+expect_grep "T17 the domain site keeps HSTS" "Strict-Transport-Security" "$WORK/t17dom.txt"
+
+# The env file must offer a plain-http public base URL, and the report must
+# name the plaintext risk. Both are text in install.sh, so grep the source.
+expect_grep "T17 the installer can write a plain-http public base URL" \
+	'VEYLIX_PUBLIC_BASE_URL=http://' "$ROOT/install.sh"
+
+expect_grep "T17 the report names the plaintext risk" \
+	"THIS HOST SERVES PLAIN HTTP" "$ROOT/install.sh"
+
+# (e) No bare `[ ... ] && ...` at statement position. Under `set -e` a false
+#     test there aborts the whole script - D-129 killed the no-flag run this
+#     way, and D-130 found a second one that ended every --dry-run early.
+#     A test whose right-hand side is `die`/`exit` is intentional: it is meant
+#     to stop.
+T17_footgun=$(grep -nE '^[[:space:]]*\[[^]]*\][[:space:]]*&&' "$ROOT/install.sh" |
+	grep -vE '&&[[:space:]]*(die|exit)[[:space:]]' || true)
+if [ -n "$T17_footgun" ]; then
+	bad "T17 no bare test-and-command can abort a run under set -e" "$T17_footgun"
+else
+	ok "T17 no bare test-and-command can abort a run under set -e"
+fi
+
+
 printf '\n'
 if [ "$fail" -eq 0 ]; then
 	printf 'install.sh: all guard checks passed\n'
