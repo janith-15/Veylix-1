@@ -51,14 +51,13 @@ export VEYLIX_REPO="example/veylix"
 printf 'install.sh self-test (throwaway root: %s)\n\n' "$WORK"
 
 # Load the installer's functions without running main(). `main "$@"` is the last
-# line, so sourcing would execute it; the copy drops that line and pins HERE to
-# the real repository so the copied script still finds scripts/lib/common.sh.
+# line, so sourcing would execute it; the copy drops that line and pins the
+# location with VEYLIX_HERE, which install.sh honours before BASH_SOURCE. The
+# copy lives in $WORK, so BASH_SOURCE alone would point at the wrong tree.
 GUARDS="$WORK/guards.sh"
-sed -e '/^main "\$@"$/d' \
-    -e "s|^HERE=.*|HERE=\"$ROOT\"|" \
-    "$ROOT/install.sh" >"$GUARDS"
+sed -e '/^main "\$@"$/d' "$ROOT/install.sh" >"$GUARDS"
 # shellcheck source=/dev/null
-. "$GUARDS"
+VEYLIX_HERE="$ROOT" . "$GUARDS"
 
 # install.sh sets `set -euo pipefail` for the real run. This harness EXPECTS
 # non-zero returns (a refusal is the pass case), so -e must come off here or the
@@ -165,9 +164,10 @@ FAKE_ROOT="$WORK/fakeroot.sh"
 cat >"$FAKE_ROOT" <<'EOS'
 # Source install.sh's functions, then call main with root bypassed.
 HERE="${VEYLIX_TEST_ROOT}"
+VEYLIX_HERE="$HERE"
 . "$HERE/scripts/lib/common.sh"
 VEYLIX_TOOL=install.sh
-sed -e '/^main "\$@"$/d' -e "s|^HERE=.*|HERE=\"$HERE\"|" "$HERE/install.sh" >"$VEYLIX_TEST_GUARDS"
+sed -e '/^main "\$@"$/d' "$HERE/install.sh" >"$VEYLIX_TEST_GUARDS"
 . "$VEYLIX_TEST_GUARDS"
 set +e
 need_root() { :; }
@@ -736,6 +736,57 @@ expect_grep "T14 the menu offer names sudo vey" 'Run "sudo vey"' "$ROOT/install.
 # `menu` must be a dispatched verb: the launcher relies on it existing, and the
 # Go side registers it in init() to avoid an initialization cycle.
 expect_grep "T14 the menu verb is registered" 'dispatchTable["menu"] = cmdMenu' "$ROOT/backend/cmd/vpn-platformctl/main.go"
+
+
+# ---------------------------------------------------------------------------
+# T15 - every documented invocation form can actually start the installer.
+#
+# D-127 and D-128 both shipped because this selftest invoked install.sh AS A
+# FILE. That is one of the four forms a user may paste, and it is the only one
+# for which $HERE is correct. The documented forms are exercised here, so a
+# change that breaks one fails the gate instead of failing on a customer's VPS.
+# ---------------------------------------------------------------------------
+runs_cli() {
+	printf '%s' "$1" | grep -q 'VEYLIX installer' &&
+		! printf '%s' "$1" | grep -qE 'unbound variable|No such file'
+}
+
+# (a) as a file
+o=$(bash "$ROOT/install.sh" --help 2>&1 | head -20)
+if runs_cli "$o"; then ok "T15 a file run reaches the CLI"; else bad "T15 a file run failed: $(printf '%s' "$o" | head -1)"; fi
+
+# (b) process substitution - the form the owner first reported
+o=$(bash <(cat "$ROOT/install.sh") --help 2>&1 | head -20)
+if runs_cli "$o"; then ok "T15 bash <(cat install.sh) reaches the CLI"; else bad "T15 process substitution failed: $(printf '%s' "$o" | head -1)"; fi
+
+# (c) stdin pipe - BASH_SOURCE[0] is unset here (D-128)
+o=$(cat "$ROOT/install.sh" | bash -s -- --help 2>&1 | head -20)
+if runs_cli "$o"; then ok "T15 cat install.sh | bash -s -- reaches the CLI"; else bad "T15 the stdin pipe failed: $(printf '%s' "$o" | head -1)"; fi
+
+# (d) the script must not assume BASH_SOURCE is set under `set -u`
+expect_grep "T15 the self path tolerates an unset BASH_SOURCE" 'BASH_SOURCE[0]:-' "$ROOT/install.sh"
+
+# (e) no doc may present `sudo bash <(curl ...)` as a command to run. Any
+#     occurrence must sit on a line that also warns against it.
+T15_bad=0
+while IFS= read -r line; do
+	case "$line" in
+		*"**NO**"*) : ;;                        # the table row that forbids it
+		*"Do not use"*) : ;;                    # an explicit warning
+		*"You used"*) : ;;                      # troubleshooting, naming the mistake
+		*"runs a **separate process**"*) : ;;   # the explanation
+		*) T15_bad=$((T15_bad + 1)) ;;
+	esac
+done <<EOF
+$(grep -h 'sudo bash <(curl' "$ROOT/docs/INSTALL.md" "$ROOT/docs/PUSH_GUIDE.md" 2>/dev/null || true)
+EOF
+if [ "$T15_bad" -gt 0 ]; then
+	bad "T15 the docs do not recommend sudo with process substitution ($T15_bad line(s))"
+else
+	ok "T15 the docs do not recommend sudo with process substitution"
+fi
+
+
 
 
 printf '\n'

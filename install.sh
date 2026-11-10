@@ -44,7 +44,24 @@ set -euo pipefail
 # checkout never reaches this branch, so local installs are unchanged.
 VEYLIX_RAW_BASE=${VEYLIX_RAW_BASE:-https://raw.githubusercontent.com/janith-15/Veylix-1/main}
 
-HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd) || HERE=""
+# BASH_SOURCE[0] is UNSET under `curl ... | bash` - the script arrives on stdin
+# and bash has no file to name - and it is a /dev/fd/N pipe under process
+# substitution. Both mean the same thing: there is no checkout. Default it to
+# empty and let the bootstrap below take over, because `set -u` would otherwise
+# kill the installer outright at this line (D-128).
+#
+# VEYLIX_HERE pins the location explicitly. The selftest uses it (its copy of
+# this script is written to a temp dir, so BASH_SOURCE would point there), and
+# an operator can use it to install from a tree at an unusual path.
+_veylix_self=${BASH_SOURCE[0]:-}
+if [ -n "${VEYLIX_HERE:-}" ]; then
+	HERE=$VEYLIX_HERE
+else
+	HERE=""
+	if [ -n "$_veylix_self" ]; then
+		HERE=$(cd "$(dirname "$_veylix_self")" 2>/dev/null && pwd) || HERE=""
+	fi
+fi
 
 if [ -z "$HERE" ] || [ ! -f "$HERE/scripts/lib/common.sh" ]; then
 	_veylix_boot=$(mktemp -d) || {

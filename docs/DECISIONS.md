@@ -5062,4 +5062,78 @@ Linux end-to-end run remains outstanding, as it was under D-120 to D-126.
 the way the documentation tells a user to. Any test that only runs the file
 directly cannot see this class of defect.
 
+---
+
+## D-128 · `sudo bash <(curl …)` cannot work, and `curl … | bash` crashed
+
+**Status:** fixed and pushed. **Reported by:** the owner, immediately after D-127.
+
+Two independent failures, both in how the installer is *invoked* rather than in
+what it does.
+
+**1. `sudo bash <(curl …)` — `bash: /dev/fd/63: No such file or directory`.**
+
+`sudo` runs a separate process. It does not inherit the calling shell's open
+`/dev/fd/N`, so the `bash` that sudo starts cannot open the script. This is a
+property of `sudo`, not of Veylix, and no change to `install.sh` can rescue it.
+
+**It was our documentation that was wrong.** `docs/PUSH_GUIDE.md` told the owner
+to run exactly that, in two places. `docs/INSTALL.md` had the correct form, so
+two documents disagreed and the wrong one was followed. The guide now downloads
+first and runs the file, and `INSTALL.md` B0 carries a table of every form with
+the reason it does or does not work — `sudo bash <(curl …)` is listed as **NO**
+with the error it produces, so the next reader recognises it immediately.
+
+**2. `curl … | bash` — `bash: line 47: BASH_SOURCE[0]: unbound variable`.**
+
+Found while testing form 1. When the script arrives on stdin, `BASH_SOURCE[0]`
+is **unset**, and `set -u` aborted the installer at the path lookup — before a
+single phase ran. `2>/dev/null` hid the message but not the death.
+
+The fix defaults the self-path instead of assuming it:
+
+```bash
+_veylix_self=${BASH_SOURCE[0]:-}
+if [ -n "${VEYLIX_HERE:-}" ]; then
+	HERE=$VEYLIX_HERE
+else
+	HERE=""
+	if [ -n "$_veylix_self" ]; then
+		HERE=$(cd "$(dirname "$_veylix_self")" 2>/dev/null && pwd) || HERE=""
+	fi
+fi
+```
+
+An empty `HERE` falls through to the D-127 bootstrap, which is the correct
+behaviour for a run with no checkout. `VEYLIX_HERE` was added at the same time:
+the selftest writes its copy of `install.sh` to a temp directory, so
+`BASH_SOURCE` there points at the wrong tree, and a sed rewrite of `HERE` no
+longer works now that `HERE` is computed conditionally.
+
+**The structural fix, which matters more than either patch.** T15 now runs
+`install.sh` through **each documented form** — as a file, through process
+substitution, and through a stdin pipe — and fails by name if any of them stops
+reaching the CLI. It also asserts that no document presents
+`sudo bash <(curl …)` as a command. D-127 and D-128 both shipped for one reason:
+the selftest only ever ran the file form. That gap is now closed.
+
+**Evidence.**
+
+| Check | Result |
+|---|---|
+| `install.selftest.sh` | **115 PASS / 0 FAIL** (was 110) |
+| `cat install.sh \| bash -s -- --help` | reaches the CLI (was: unbound variable) |
+| `bash <(cat install.sh) --help` | reaches the CLI |
+| `bash install.sh --help` | reaches the CLI |
+| Negative control: revert `:-` on `BASH_SOURCE[0]` | T15 fails 2 checks by name, rc 1 |
+| `install.forms.sh` (standalone probe) | 6 PASS / 1 FAIL — the FAIL is the un-pushed `main` |
+
+**Not verified.** `sudo`'s fd behaviour cannot be exercised on this Windows
+machine; it is documented from the owner's error and from how `sudo` works, not
+from a test here. The four non-sudo forms are tested.
+
+**Still outstanding.** No Linux end-to-end install has run. D-120 through D-128
+are all Windows-verified against a real host only at the "does it start" level.
+
+
 

@@ -17,9 +17,33 @@ that is the remaining gap, and §F says so precisely.
 
 ## B0. The one-line install (no flags needed)
 
+**Pick the form that matches your privileges.** This matters: two of the four
+obvious invocations cannot work, for reasons that have nothing to do with
+Veylix.
+
 ```bash
+# As root already (the usual case: `sudo -i` first)
 bash <(curl -Ls https://raw.githubusercontent.com/janith-15/Veylix-1/main/install.sh) --domain vpn.example.com
 ```
+
+```bash
+# As a normal user with sudo: download, then run the file.
+curl -Ls https://raw.githubusercontent.com/janith-15/Veylix-1/main/install.sh -o /tmp/veylix.sh
+sudo bash /tmp/veylix.sh --domain vpn.example.com
+```
+
+| Form | Works? | Why |
+|---|---|---|
+| `sudo bash install.sh` | **yes** | a real file on disk |
+| `sudo -i` then `bash <(curl …)` | **yes** | process substitution runs in root's own shell |
+| `curl … -o /tmp/x.sh` then `sudo bash /tmp/x.sh` | **yes** | a real file on disk |
+| `bash <(curl …)` as a **non-root** user | starts, then refuses | `need_root` — it must run as root |
+| `sudo bash <(curl …)` | **NO** | `sudo` is a separate process and does not inherit your shell's `/dev/fd/N`, so `bash` cannot open the script: `bash: /dev/fd/63: No such file or directory` |
+| `curl … \| bash` | **yes** (since D-128) | `BASH_SOURCE[0]` is unset when the script arrives on stdin; the installer now tolerates that |
+| `curl … \| sudo bash` | **NO** | inherits the `sudo` problem above |
+
+If you are already root, the first form is the shortest. If you are not, the
+second is the one to copy.
 
 The installer resolves the repository itself; `--repo` is only for a fork. At
 the end it asks for the Super Admin email, display name and password (the
@@ -717,29 +741,45 @@ sudo chmod 600 /etc/veylix/*.key
 
 ## G. Troubleshooting
 
-### G.1 `bash <(curl …)` — `/dev/fd/scripts/lib/common.sh: No such file or directory`
+### G.1 The one-liner fails before it installs anything
 
-Seen on a real host:
+Three different messages, three different causes. Match the one you saw.
 
-```
-/dev/fd/63: line 35: /dev/fd/scripts/lib/common.sh: No such file or directory
-```
+**a. `bash: /dev/fd/63: No such file or directory`**
 
-This was a defect in the installer (**D-127**), fixed in `main`. The one-liner
-gives bash a **pipe**, so `BASH_SOURCE[0]` is `/dev/fd/63` and the installer used
-to build every sibling path from `/dev/fd`, which holds no checkout.
-
-The current `install.sh` detects this and bootstraps itself from
-`$VEYLIX_RAW_BASE` (default `https://raw.githubusercontent.com/janith-15/Veylix-1/main`).
-Check which version you are getting:
+You used `sudo bash <(curl …)`. `sudo` runs a **separate process** and does not
+inherit your shell's `/dev/fd/N`, so the inner `bash` cannot open the script.
+Nothing is wrong with the installer. Use one of these instead:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/janith-15/Veylix-1/main/install.sh \
-  | wc -c          # 47,000+ means D-127 is included; ~31,800 is the old one
+# already root
+bash <(curl -Ls https://raw.githubusercontent.com/janith-15/Veylix-1/main/install.sh) --domain vpn.example.com
+
+# normal user with sudo
+curl -Ls https://raw.githubusercontent.com/janith-15/Veylix-1/main/install.sh -o /tmp/veylix.sh
+sudo bash /tmp/veylix.sh --domain vpn.example.com
 ```
 
-If it still fails, the raw URL is unreachable from the host. Install from a
-checkout instead — the same script, no network bootstrap:
+**b. `/dev/fd/scripts/lib/common.sh: No such file or directory`**
+
+You ran an older `install.sh` (before **D-127**). `bash <(curl …)` gives bash a
+pipe, so `BASH_SOURCE[0]` was `/dev/fd/63` and every sibling path was built from
+`/dev/fd`. The current script bootstraps itself instead. Confirm which version
+your URL serves:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/janith-15/Veylix-1/main/install.sh | wc -c
+# 49,000+ means D-127 and D-128 are included; ~31,800 is the old one
+```
+
+**c. `bash: line 47: BASH_SOURCE[0]: unbound variable`**
+
+You used `curl … | bash` against a version before **D-128**. When the script
+arrives on stdin, `BASH_SOURCE[0]` is unset and `set -u` aborted the installer.
+Fixed; the same length check above tells you whether you have it.
+
+**Still failing?** The install does not need the network to fetch `install.sh`
+itself — clone and run the file:
 
 ```bash
 git clone https://github.com/janith-15/Veylix-1 /tmp/veylix
