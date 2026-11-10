@@ -956,14 +956,38 @@ expect_grep "T17 the report names the plaintext risk" \
 #     compound command exit 1 and die never runs - so nothing is printed and the
 #     installer dies in silence right after "ready: schema_version=29".
 #
-#     There is no safe `&&` form. The deliberate-stop idiom is `[ test ] || die`,
-#     which runs die when the test FAILS. So the gate now flags every bare
-#     test-and-command, with no exceptions.
-T17_footgun=$(grep -nE '^[[:space:]]*\[[^]]*\][[:space:]]*&&' "$ROOT/install.sh" || true)
+#     There is no safe bare `&&` form. The deliberate-stop idiom is
+#     `[ test ] || die`, which runs when the test FAILS. So the gate flags a
+#     test-and-command that has NO `||` anywhere on the line: that is the shape
+#     whose false branch ends the statement at status 1 under set -e.
+#
+#     Scanned across common.sh as well as install.sh. The first version only
+#     read install.sh, so the library install.sh sources was unchecked - and it
+#     still contained this shape in three places.
+T17_footgun=$(grep -nE '^[[:space:]]*\[[^]]*\][[:space:]]*&&' \
+	"$ROOT/install.sh" "$ROOT/scripts/lib/common.sh" 2>/dev/null \
+	| grep -v '||' || true)
 if [ -n "$T17_footgun" ]; then
 	bad "T17 no bare test-and-command can abort a run under set -e" "$T17_footgun"
 else
 	ok "T17 no bare test-and-command can abort a run under set -e"
+fi
+
+# (f) No helper may hardcode the app port in CODE. install.sh chooses it (8080,
+#     then 18080 when that is taken), so a library default of :8080 silently
+#     polls the wrong port on exactly the hosts where the port moved. Traced
+#     live: ready_field read :8080 while the app ran on :18080, returned "", and
+#     the install died one line after printing "ready".
+#
+#     Comments are excluded. The first version flagged the explanatory comment
+#     that documents the very bug, which would have trained the next reader to
+#     stop explaining.
+T17_port=$(grep -nE '127\.0\.0\.1:8080' "$ROOT/scripts/lib/common.sh" 2>/dev/null \
+	| grep -vE '^[0-9]+:[[:space:]]*#' || true)
+if [ -n "$T17_port" ]; then
+	bad "T17 no helper hardcodes the app port" "$T17_port"
+else
+	ok "T17 no helper hardcodes the app port"
 fi
 
 

@@ -320,7 +320,15 @@ wait_for_ready() {
 	local i=0
 	while [ "$i" -lt "$attempts" ]; do
 		code=$(http_status "$url" 3)
-		[ "$code" = "200" ] && { say "ready: $url"; return 0; }
+		# `if`, not `[ ... ] && { ...; return 0; }`. As a bare &&-chain the
+		# false case leaves the compound command at status 1, and under `set -e`
+		# inside a sourced library that aborts the CALLER - the installer - with
+		# no message. Same shape as D-129/D-130/D-136, now gated by T17 across
+		# this file too.
+		if [ "$code" = "200" ]; then
+			say "ready: $url"
+			return 0
+		fi
 		i=$((i + 1))
 		sleep "$sleep_s"
 	done
@@ -329,8 +337,17 @@ wait_for_ready() {
 
 # ready_field FIELD [URL] -> one key from /api/ready as plain text.
 # An absent key prints an empty string; never a fabricated default.
+#
+# The URL default is deliberately EMPTY. It used to default to
+# http://127.0.0.1:8080/api/ready, and install.sh calls it with no URL - so on
+# any install where the app port is not 8080 (the installer picks 18080 when
+# 8080 is busy) this polled the wrong port, returned "", and the caller then
+# compared "" against a sentinel. Traced on a live host: the install reached
+# "ready: http://127.0.0.1:18080/api/ready" and died in silence one line later.
+# A caller that wants a probe must name it.
 ready_field() {
-	local field=$1 url=${2:-http://127.0.0.1:8080/api/ready}
+	local field=$1 url=${2:-}
+	[ -n "$url" ] || return 0
 	curl -s --max-time 5 "$url" 2>/dev/null |
 		sed -n 's/.*"'"$field"'"[[:space:]]*:[[:space:]]*"\{0,1\}\([^",}]*\)"\{0,1\}.*/\1/p'
 }
@@ -359,7 +376,13 @@ detect_os() {
 	if [ -r /etc/os-release ]; then
 		local id
 		id=$(sed -n 's/^ID=["]*\([^"]*\)["]*$/\1/p' /etc/os-release | head -n1)
-		[ -n "$id" ] && { printf '%s' "$id"; return; }
+		# `if`, not `[ -n "$id" ] && { ...; return; }`: when the ID is empty the
+		# &&-chain leaves the compound at status 1, and this file is sourced into
+		# install.sh under `set -e`, so the CALLER aborts with no message.
+		if [ -n "$id" ]; then
+			printf '%s' "$id"
+			return 0
+		fi
 	fi
 	if [ -r /etc/alpine-release ]; then
 		printf 'alpine'
@@ -465,8 +488,19 @@ local_ip() {
 # a cron job) would sit at a prompt nobody is watching. install.selftest.sh sets
 # it; so does any CI.
 has_tty() {
-	[ "${VEYLIX_NONINTERACTIVE:-0}" = "1" ] && return 1
-	[ -r /dev/tty ] && ( : </dev/tty ) 2>/dev/null
+	# Written as `if`, not `[ ... ] && return 1`. The &&-form is CORRECT here
+	# (a predicate may return 1), but it is indistinguishable from the footgun
+	# that silently aborted the installer three times, and a gate that has to
+	# special-case predicates is a gate that will eventually excuse a real bug.
+	# Say the same thing in a shape the gate can check without exceptions.
+	if [ "${VEYLIX_NONINTERACTIVE:-0}" = "1" ]; then
+		return 1
+	fi
+	if [ -r /dev/tty ]; then
+		( : </dev/tty ) 2>/dev/null
+		return $?
+	fi
+	return 1
 }
 
 # read_tty VARNAME -> reads one line from the terminal into VARNAME.

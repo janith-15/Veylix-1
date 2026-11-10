@@ -1066,16 +1066,17 @@ EOF
 	fi
 
 	local ui schema
-	ui=$(ready_field ui)
-	schema=$(ready_field schema_version)
+	ui=$(ready_field ui "http://127.0.0.1:$APP_PORT/api/ready")
+	schema=$(ready_field schema_version "http://127.0.0.1:$APP_PORT/api/ready")
 	say "ready: schema_version=$schema ui=$ui"
-	# `||`, never `&&`. As `[ test ] && die`, a FALSE test makes the compound
-	# command exit 1, and under `set -e` that aborts the installer with no
-	# message - die never runs. This exact line killed the install immediately
-	# after printing "ready: schema_version=29 ui=embedded:114_files", which
-	# looks like a successful phase and is followed by total silence. That is the
-	# third instance of this shape (D-129, D-130) and the first one that got
-	# THROUGH the gate, because the gate excused `&& die`.
+	# An EMPTY ui is a failed read, not a pass. The previous shape
+	# (`[ "$ui" = "not_embedded" ] && die ...`) treated "" as fine and then died
+	# on set -e without printing anything, which is why the install stopped
+	# silently right after announcing readiness. Both the empty case and the
+	# wrong-artifact case are refusals, and each says which one it is.
+	if [ -z "$ui" ]; then
+		die "the readiness probe answered but did not report the UI. Run: vpn-platformctl doctor"
+	fi
 	if [ "$ui" = "not_embedded" ]; then
 		die "this binary has no embedded UI; the wrong artifact was installed"
 	fi
