@@ -21,13 +21,13 @@ Super Admin password changed.
   sessions: 0 revoked
 
 Sign in at https://vpn.example.com/login
---- PASS: TestResetAdminChangesThePassword (0.78s)
+--- PASS: TestResetAdminChangesThePassword (0.99s)
 === RUN   TestResetAdminDryRunChangesNothing
-[dry-run] would set a new password for the Super Admin in /tmp/TestResetAdminDryRunChangesNothing1807679294/001/lib/veylix.db
+[dry-run] would set a new password for the Super Admin in /tmp/TestResetAdminDryRunChangesNothing407042505/001/lib/veylix.db
 [dry-run] would revoke every existing session
---- PASS: TestResetAdminDryRunChangesNothing (0.33s)
+--- PASS: TestResetAdminDryRunChangesNothing (0.34s)
 === RUN   TestResetAdminRejectsAWeakPassword
---- PASS: TestResetAdminRejectsAWeakPassword (0.32s)
+--- PASS: TestResetAdminRejectsAWeakPassword (0.20s)
 === RUN   TestResetAdminMatchesEmailCaseInsensitively
 
 ==> [3] reset the password
@@ -39,31 +39,31 @@ Super Admin password changed.
   sessions: 0 revoked
 
 Sign in at https:///login
---- PASS: TestResetAdminMatchesEmailCaseInsensitively (0.35s)
+--- PASS: TestResetAdminMatchesEmailCaseInsensitively (0.43s)
 === RUN   TestResetAdminRefusesAnEmailThatIsNotTheSuperAdmin
---- PASS: TestResetAdminRefusesAnEmailThatIsNotTheSuperAdmin (0.26s)
+--- PASS: TestResetAdminRefusesAnEmailThatIsNotTheSuperAdmin (0.30s)
 === RUN   TestResetAdminRefusesWithoutADatabase
 --- PASS: TestResetAdminRefusesWithoutADatabase (0.00s)
 === RUN   TestDNSProviderFor
 --- PASS: TestDNSProviderFor (0.00s)
 === RUN   TestValidateCloudflareToken
-=== RUN   TestValidateCloudflareToken/a_slash
-=== RUN   TestValidateCloudflareToken/a_colon
 === RUN   TestValidateCloudflareToken/non-ascii
 === RUN   TestValidateCloudflareToken/bearer_token
 === RUN   TestValidateCloudflareToken/empty
 === RUN   TestValidateCloudflareToken/too_short
 === RUN   TestValidateCloudflareToken/too_long
 === RUN   TestValidateCloudflareToken/a_space
+=== RUN   TestValidateCloudflareToken/a_slash
+=== RUN   TestValidateCloudflareToken/a_colon
 --- PASS: TestValidateCloudflareToken (0.00s)
-    --- PASS: TestValidateCloudflareToken/a_slash (0.00s)
-    --- PASS: TestValidateCloudflareToken/a_colon (0.00s)
     --- PASS: TestValidateCloudflareToken/non-ascii (0.00s)
     --- PASS: TestValidateCloudflareToken/bearer_token (0.00s)
     --- PASS: TestValidateCloudflareToken/empty (0.00s)
     --- PASS: TestValidateCloudflareToken/too_short (0.00s)
     --- PASS: TestValidateCloudflareToken/too_long (0.00s)
     --- PASS: TestValidateCloudflareToken/a_space (0.00s)
+    --- PASS: TestValidateCloudflareToken/a_slash (0.00s)
+    --- PASS: TestValidateCloudflareToken/a_colon (0.00s)
 === RUN   TestRenderDNSChallenge
 --- PASS: TestRenderDNSChallenge (0.00s)
 === RUN   TestRenderDNSChallengeWithoutASiteBlock
@@ -81,9 +81,9 @@ Sign in at https:///login
 === RUN   TestFingerprintNeverRevealsTheValue
 --- PASS: TestFingerprintNeverRevealsTheValue (0.00s)
 === RUN   TestStatusReportsNotInstalledWithoutWritingAnything
-status:      NOT INSTALLED (/tmp/TestStatusReportsNotInstalledWithoutWritingAnything1432652607/001/bin/veylixd)
+status:      NOT INSTALLED (/tmp/TestStatusReportsNotInstalledWithoutWritingAnything1238527292/001/bin/veylixd)
              run install.sh to install, or check VEYLIX_BIN_DIR
---- PASS: TestStatusReportsNotInstalledWithoutWritingAnything (0.02s)
+--- PASS: TestStatusReportsNotInstalledWithoutWritingAnything (0.01s)
 === RUN   TestStatusJSONCarriesEveryField
 --- PASS: TestStatusJSONCarriesEveryField (0.00s)
 === RUN   TestReadinessWordHasNoFourthState
@@ -94,15 +94,15 @@ status:      NOT INSTALLED (/tmp/TestStatusReportsNotInstalledWithoutWritingAnyt
 [dry-run] systemctl disable --now veylixd
 
 ==> [6] remove unit and binaries
-[dry-run] rm -f /tmp/TestDryRunUninstallDeletesNothing3947060174/001/etc/veylixd.service
-[dry-run] rm -f /tmp/TestDryRunUninstallDeletesNothing3947060174/001/bin/veylixd
+[dry-run] rm -f /tmp/TestDryRunUninstallDeletesNothing792757415/001/etc/veylixd.service
+[dry-run] rm -f /tmp/TestDryRunUninstallDeletesNothing792757415/001/bin/veylixd
 [dry-run] systemctl daemon-reload
 
 ==> [7] done
 Service removed. Preserved:
-  /tmp/TestDryRunUninstallDeletesNothing3947060174/001/lib  (database + keys)
-  /tmp/TestDryRunUninstallDeletesNothing3947060174/001/etc
-  /tmp/TestDryRunUninstallDeletesNothing3947060174/001/backups  (backups)
+  /tmp/TestDryRunUninstallDeletesNothing792757415/001/lib  (database + keys)
+  /tmp/TestDryRunUninstallDeletesNothing792757415/001/etc
+  /tmp/TestDryRunUninstallDeletesNothing792757415/001/backups  (backups)
 
 Re-install with install.sh; it refuses while the database exists.
 To delete everything, including the data: vpn-platformctl uninstall --purge-data
@@ -111,10 +111,10 @@ Removing Veylix never deletes a 3X-UI client (D-027.3).
 === RUN   TestDryRunPurgeDeletesNothing
 
 This will PERMANENTLY DELETE:
-  /tmp/TestDryRunPurgeDeletesNothing1178955454/001/lib  (the database)
-  /tmp/TestDryRunPurgeDeletesNothing1178955454/001/etc  (both keys)
-  /tmp/TestDryRunPurgeDeletesNothing1178955454/001/backups  (every backup)
-  the "vpn.example.com" block in /tmp/TestDryRunPurgeDeletesNothing1178955454/001/etc/Caddyfile
+  /tmp/TestDryRunPurgeDeletesNothing1904493334/001/lib  (the database)
+  /tmp/TestDryRunPurgeDeletesNothing1904493334/001/etc  (both keys)
+  /tmp/TestDryRunPurgeDeletesNothing1904493334/001/backups  (every backup)
+  the "vpn.example.com" block in /tmp/TestDryRunPurgeDeletesNothing1904493334/001/etc/Caddyfile
   the veylix service account
 It will NOT delete any client from 3X-UI.
 
@@ -127,14 +127,14 @@ It will NOT delete any client from 3X-UI.
 [dry-run] systemctl daemon-reload
 
 ==> [10] purge data
-[dry-run] rm -rf /tmp/TestDryRunPurgeDeletesNothing1178955454/001/lib
-[dry-run] rm -rf /tmp/TestDryRunPurgeDeletesNothing1178955454/001/etc
+[dry-run] rm -rf /tmp/TestDryRunPurgeDeletesNothing1904493334/001/lib
+[dry-run] rm -rf /tmp/TestDryRunPurgeDeletesNothing1904493334/001/etc
 
 ==> [11] purge backups
-[dry-run] rm -rf /tmp/TestDryRunPurgeDeletesNothing1178955454/001/backups
+[dry-run] rm -rf /tmp/TestDryRunPurgeDeletesNothing1904493334/001/backups
 
 ==> [12] remove the caddy block
-vpn-platformctl: SKIPPED: remove the caddy block - no Caddyfile at /tmp/TestDryRunPurgeDeletesNothing1178955454/001/etc/Caddyfile
+vpn-platformctl: SKIPPED: remove the caddy block - no Caddyfile at /tmp/TestDryRunPurgeDeletesNothing1904493334/001/etc/Caddyfile
 
 ==> [13] remove the service account
 [dry-run] userdel veylix ; groupdel veylix
@@ -167,22 +167,22 @@ vpn-platformctl: WARNING: could not stop veylixd: systemctl disable --now veylix
 Failed to disable unit: Access denied as the requested operation requires interactive authentication. However, interactive authentication has not been enabled by the calling program.
 
 ==> [16] remove unit and binaries
-removed /tmp/TestUninstallPreservesDataByDefault2287586123/001/etc/veylixd.service
-removed /tmp/TestUninstallPreservesDataByDefault2287586123/001/bin/veylixd
-removed /tmp/TestUninstallPreservesDataByDefault2287586123/001/bin/veylixd.prev
+removed /tmp/TestUninstallPreservesDataByDefault2016793723/001/etc/veylixd.service
+removed /tmp/TestUninstallPreservesDataByDefault2016793723/001/bin/veylixd
+removed /tmp/TestUninstallPreservesDataByDefault2016793723/001/bin/veylixd.prev
 vpn-platformctl: WARNING: daemon-reload failed: systemctl daemon-reload: exit status 1
 Reload daemon failed: Access denied as the requested operation requires interactive authentication. However, interactive authentication has not been enabled by the calling program.
 
 ==> [17] done
 Service removed. Preserved:
-  /tmp/TestUninstallPreservesDataByDefault2287586123/001/lib  (database + keys)
-  /tmp/TestUninstallPreservesDataByDefault2287586123/001/etc
-  /tmp/TestUninstallPreservesDataByDefault2287586123/001/backups  (backups)
+  /tmp/TestUninstallPreservesDataByDefault2016793723/001/lib  (database + keys)
+  /tmp/TestUninstallPreservesDataByDefault2016793723/001/etc
+  /tmp/TestUninstallPreservesDataByDefault2016793723/001/backups  (backups)
 
 Re-install with install.sh; it refuses while the database exists.
 To delete everything, including the data: vpn-platformctl uninstall --purge-data
 Removing Veylix never deletes a 3X-UI client (D-027.3).
---- PASS: TestUninstallPreservesDataByDefault (0.15s)
+--- PASS: TestUninstallPreservesDataByDefault (0.12s)
 === RUN   TestPurgeRefusesWithoutAConfiguredDomain
 --- PASS: TestPurgeRefusesWithoutAConfiguredDomain (0.00s)
 === RUN   TestVerifyChecksumAcceptsAndRejects
@@ -199,9 +199,9 @@ checksum ok: veylixd-linux-amd64 (a11a4045c89f...)
 === RUN   TestRepairDryRunTouchesNothing
 
 ==> [18] configuration
-environment file present: /tmp/TestRepairDryRunTouchesNothing1096141118/001/etc/veylix.env
-vpn-platformctl: WARNING: /tmp/TestRepairDryRunTouchesNothing1096141118/001/etc/veylixd.service is missing; re-install the unit with install.sh
-repair does not write to /tmp/TestRepairDryRunTouchesNothing1096141118/001/lib or /tmp/TestRepairDryRunTouchesNothing1096141118/001/etc
+environment file present: /tmp/TestRepairDryRunTouchesNothing660211149/001/etc/veylix.env
+vpn-platformctl: WARNING: /tmp/TestRepairDryRunTouchesNothing660211149/001/etc/veylixd.service is missing; re-install the unit with install.sh
+repair does not write to /tmp/TestRepairDryRunTouchesNothing660211149/001/lib or /tmp/TestRepairDryRunTouchesNothing660211149/001/etc
 
 ==> [19] systemd reload
 [dry-run] systemctl daemon-reload
@@ -226,10 +226,10 @@ vpn-platformctl: WARNING: the running service is not readable: cannot reach http
 vpn-platformctl: WARNING: the running service is not readable: cannot reach http://127.0.0.1:1: Get "http://127.0.0.1:1/api/ready": dial tcp 127.0.0.1:1: connect: connection refused
 
 ==> [24] backup
-[dry-run] bash /tmp/TestRollbackDryRunPrintsTheBackupAndChangesNothing180887500/002/veylix-backup.sh backup
+[dry-run] bash /tmp/TestRollbackDryRunPrintsTheBackupAndChangesNothing4085846004/002/veylix-backup.sh backup
 
 ==> [25] swap the previous binary back
-[dry-run] install -m 0755 /tmp/TestRollbackDryRunPrintsTheBackupAndChangesNothing180887500/001/bin/veylixd.prev /tmp/TestRollbackDryRunPrintsTheBackupAndChangesNothing180887500/001/bin/veylixd
+[dry-run] install -m 0755 /tmp/TestRollbackDryRunPrintsTheBackupAndChangesNothing4085846004/001/bin/veylixd.prev /tmp/TestRollbackDryRunPrintsTheBackupAndChangesNothing4085846004/001/bin/veylixd
 
 ==> [26] restart
 [dry-run] systemctl restart veylixd
@@ -237,9 +237,9 @@ vpn-platformctl: WARNING: the running service is not readable: cannot reach http
 ==> [27] readiness
 [dry-run] would wait for http://127.0.0.1:1/api/ready
 
-rollback complete; the previous binary is kept at /tmp/TestRollbackDryRunPrintsTheBackupAndChangesNothing180887500/001/bin/veylixd.prev
+rollback complete; the previous binary is kept at /tmp/TestRollbackDryRunPrintsTheBackupAndChangesNothing4085846004/001/bin/veylixd.prev
 no backup directory was reported, so nothing was restored. If the database
-was migrated, restore one explicitly: vpn-platformctl restore /tmp/TestRollbackDryRunPrintsTheBackupAndChangesNothing180887500/001/backups/<timestamp>
+was migrated, restore one explicitly: vpn-platformctl restore /tmp/TestRollbackDryRunPrintsTheBackupAndChangesNothing4085846004/001/backups/<timestamp>
 --- PASS: TestRollbackDryRunPrintsTheBackupAndChangesNothing (0.00s)
 === RUN   TestRollbackBackupFailureStopsBeforeTheSwap
 
@@ -255,10 +255,10 @@ veylix-backup: disk full
 vpn-platformctl: WARNING: the running service is not readable: cannot reach http://127.0.0.1:1: Get "http://127.0.0.1:1/api/ready": dial tcp 127.0.0.1:1: connect: connection refused
 
 ==> [31] backup
-[dry-run] bash /tmp/TestRollbackRestoreDefaultsToTheBackupItJustTook4147858150/002/veylix-backup.sh backup
+[dry-run] bash /tmp/TestRollbackRestoreDefaultsToTheBackupItJustTook4091523846/002/veylix-backup.sh backup
 
 ==> [32] swap the previous binary back
-[dry-run] install -m 0755 /tmp/TestRollbackRestoreDefaultsToTheBackupItJustTook4147858150/001/bin/veylixd.prev /tmp/TestRollbackRestoreDefaultsToTheBackupItJustTook4147858150/001/bin/veylixd
+[dry-run] install -m 0755 /tmp/TestRollbackRestoreDefaultsToTheBackupItJustTook4091523846/001/bin/veylixd.prev /tmp/TestRollbackRestoreDefaultsToTheBackupItJustTook4091523846/001/bin/veylixd
 
 ==> [33] restart
 [dry-run] systemctl restart veylixd
@@ -266,9 +266,9 @@ vpn-platformctl: WARNING: the running service is not readable: cannot reach http
 ==> [34] readiness
 [dry-run] would wait for http://127.0.0.1:1/api/ready
 
-rollback complete; the previous binary is kept at /tmp/TestRollbackRestoreDefaultsToTheBackupItJustTook4147858150/001/bin/veylixd.prev
+rollback complete; the previous binary is kept at /tmp/TestRollbackRestoreDefaultsToTheBackupItJustTook4091523846/001/bin/veylixd.prev
 no backup directory was reported, so nothing was restored. If the database
-was migrated, restore one explicitly: vpn-platformctl restore /tmp/TestRollbackRestoreDefaultsToTheBackupItJustTook4147858150/001/backups/<timestamp>
+was migrated, restore one explicitly: vpn-platformctl restore /tmp/TestRollbackRestoreDefaultsToTheBackupItJustTook4091523846/001/backups/<timestamp>
 --- PASS: TestRollbackRestoreDefaultsToTheBackupItJustTook (0.00s)
 === RUN   TestRollbackSkipBackupIsDeliberateAndAllowed
 
@@ -279,7 +279,7 @@ vpn-platformctl: WARNING: the running service is not readable: cannot reach http
 vpn-platformctl: WARNING: --skip-backup was passed: the state being replaced is NOT backed up
 
 ==> [37] swap the previous binary back
-[dry-run] install -m 0755 /tmp/TestRollbackSkipBackupIsDeliberateAndAllowed2525889876/001/bin/veylixd.prev /tmp/TestRollbackSkipBackupIsDeliberateAndAllowed2525889876/001/bin/veylixd
+[dry-run] install -m 0755 /tmp/TestRollbackSkipBackupIsDeliberateAndAllowed3020792360/001/bin/veylixd.prev /tmp/TestRollbackSkipBackupIsDeliberateAndAllowed3020792360/001/bin/veylixd
 
 ==> [38] restart
 [dry-run] systemctl restart veylixd
@@ -287,9 +287,9 @@ vpn-platformctl: WARNING: --skip-backup was passed: the state being replaced is 
 ==> [39] readiness
 [dry-run] would wait for http://127.0.0.1:1/api/ready
 
-rollback complete; the previous binary is kept at /tmp/TestRollbackSkipBackupIsDeliberateAndAllowed2525889876/001/bin/veylixd.prev
+rollback complete; the previous binary is kept at /tmp/TestRollbackSkipBackupIsDeliberateAndAllowed3020792360/001/bin/veylixd.prev
 no backup directory was reported, so nothing was restored. If the database
-was migrated, restore one explicitly: vpn-platformctl restore /tmp/TestRollbackSkipBackupIsDeliberateAndAllowed2525889876/001/backups/<timestamp>
+was migrated, restore one explicitly: vpn-platformctl restore /tmp/TestRollbackSkipBackupIsDeliberateAndAllowed3020792360/001/backups/<timestamp>
 --- PASS: TestRollbackSkipBackupIsDeliberateAndAllowed (0.00s)
 === RUN   TestBackupDirFromOutputOnlyTrustsTheConfiguredRoot
 --- PASS: TestBackupDirFromOutputOnlyTrustsTheConfiguredRoot (0.00s)
@@ -457,10 +457,10 @@ version: v1.3.0
 === RUN   TestDryRunPurgeTouchesNothingOutsideTheTree
 
 This will PERMANENTLY DELETE:
-  /tmp/TestDryRunPurgeTouchesNothingOutsideTheTree4280470605/001/lib  (the database)
-  /tmp/TestDryRunPurgeTouchesNothingOutsideTheTree4280470605/001/etc  (both keys)
-  /tmp/TestDryRunPurgeTouchesNothingOutsideTheTree4280470605/001/backups  (every backup)
-  the "vpn.example.com" block in /tmp/TestDryRunPurgeTouchesNothingOutsideTheTree4280470605/001/etc/Caddyfile
+  /tmp/TestDryRunPurgeTouchesNothingOutsideTheTree1117350215/001/lib  (the database)
+  /tmp/TestDryRunPurgeTouchesNothingOutsideTheTree1117350215/001/etc  (both keys)
+  /tmp/TestDryRunPurgeTouchesNothingOutsideTheTree1117350215/001/backups  (every backup)
+  the "vpn.example.com" block in /tmp/TestDryRunPurgeTouchesNothingOutsideTheTree1117350215/001/etc/Caddyfile
   the veylix service account
 It will NOT delete any client from 3X-UI.
 
@@ -473,14 +473,14 @@ It will NOT delete any client from 3X-UI.
 [dry-run] systemctl daemon-reload
 
 ==> [53] purge data
-[dry-run] rm -rf /tmp/TestDryRunPurgeTouchesNothingOutsideTheTree4280470605/001/lib
-[dry-run] rm -rf /tmp/TestDryRunPurgeTouchesNothingOutsideTheTree4280470605/001/etc
+[dry-run] rm -rf /tmp/TestDryRunPurgeTouchesNothingOutsideTheTree1117350215/001/lib
+[dry-run] rm -rf /tmp/TestDryRunPurgeTouchesNothingOutsideTheTree1117350215/001/etc
 
 ==> [54] purge backups
-[dry-run] rm -rf /tmp/TestDryRunPurgeTouchesNothingOutsideTheTree4280470605/001/backups
+[dry-run] rm -rf /tmp/TestDryRunPurgeTouchesNothingOutsideTheTree1117350215/001/backups
 
 ==> [55] remove the caddy block
-[dry-run] would delete the "vpn.example.com" block from /tmp/TestDryRunPurgeTouchesNothingOutsideTheTree4280470605/001/etc/Caddyfile
+[dry-run] would delete the "vpn.example.com" block from /tmp/TestDryRunPurgeTouchesNothingOutsideTheTree1117350215/001/etc/Caddyfile
 [dry-run] caddy validate + systemctl reload caddy
 
 ==> [56] remove the service account
@@ -510,10 +510,10 @@ It will NOT delete any client from 3X-UI.
 === RUN   TestPurgeRemovesBackupsToo
 
 This will PERMANENTLY DELETE:
-  /tmp/TestPurgeRemovesBackupsToo1198222525/001/lib  (the database)
-  /tmp/TestPurgeRemovesBackupsToo1198222525/001/etc  (both keys)
-  /tmp/TestPurgeRemovesBackupsToo1198222525/001/backups  (every backup)
-  the "vpn.example.com" block in /tmp/TestPurgeRemovesBackupsToo1198222525/001/etc/Caddyfile
+  /tmp/TestPurgeRemovesBackupsToo3414641001/001/lib  (the database)
+  /tmp/TestPurgeRemovesBackupsToo3414641001/001/etc  (both keys)
+  /tmp/TestPurgeRemovesBackupsToo3414641001/001/backups  (every backup)
+  the "vpn.example.com" block in /tmp/TestPurgeRemovesBackupsToo3414641001/001/etc/Caddyfile
   the veylix service account
 It will NOT delete any client from 3X-UI.
 
@@ -526,14 +526,14 @@ It will NOT delete any client from 3X-UI.
 [dry-run] systemctl daemon-reload
 
 ==> [60] purge data
-[dry-run] rm -rf /tmp/TestPurgeRemovesBackupsToo1198222525/001/lib
-[dry-run] rm -rf /tmp/TestPurgeRemovesBackupsToo1198222525/001/etc
+[dry-run] rm -rf /tmp/TestPurgeRemovesBackupsToo3414641001/001/lib
+[dry-run] rm -rf /tmp/TestPurgeRemovesBackupsToo3414641001/001/etc
 
 ==> [61] purge backups
-[dry-run] rm -rf /tmp/TestPurgeRemovesBackupsToo1198222525/001/backups
+[dry-run] rm -rf /tmp/TestPurgeRemovesBackupsToo3414641001/001/backups
 
 ==> [62] remove the caddy block
-vpn-platformctl: SKIPPED: remove the caddy block - no Caddyfile at /tmp/TestPurgeRemovesBackupsToo1198222525/001/etc/Caddyfile
+vpn-platformctl: SKIPPED: remove the caddy block - no Caddyfile at /tmp/TestPurgeRemovesBackupsToo3414641001/001/etc/Caddyfile
 
 ==> [63] remove the service account
 [dry-run] userdel veylix ; groupdel veylix
@@ -616,7 +616,7 @@ Reload daemon failed: Access denied as the requested operation requires interact
 === RUN   TestPublicURL
 --- PASS: TestPublicURL (0.00s)
 PASS
-ok  	veylix/backend/cmd/vpn-platformctl	2.280s
+ok  	veylix/backend/cmd/vpn-platformctl	2.466s
 ?   	veylix/backend/cmd/vpnprobe	[no test files]
 === RUN   TestSignInFailureIsNotNotified
 --- PASS: TestSignInFailureIsNotNotified (0.00s)
@@ -625,7 +625,7 @@ ok  	veylix/backend/cmd/vpn-platformctl	2.280s
 === RUN   TestSummariseNeverEchoesTheReadersOwnID
 --- PASS: TestSummariseNeverEchoesTheReadersOwnID (0.00s)
 PASS
-ok  	veylix/backend/internal/audit	0.006s
+ok  	veylix/backend/internal/audit	0.004s
 === RUN   TestClientIP
 === RUN   TestClientIP/direct_peer,_no_header
 === RUN   TestClientIP/non-loopback_peer_ignores_spoofed_header
@@ -675,15 +675,15 @@ ok  	veylix/backend/internal/audit	0.006s
 === RUN   TestHashPasswordRejectsShortPassword
 --- PASS: TestHashPasswordRejectsShortPassword (0.00s)
 === RUN   TestHashPasswordProducesArgon2id
---- PASS: TestHashPasswordProducesArgon2id (0.22s)
+--- PASS: TestHashPasswordProducesArgon2id (0.32s)
 === RUN   TestVerifyPassword
---- PASS: TestVerifyPassword (0.52s)
+--- PASS: TestVerifyPassword (0.58s)
 === RUN   TestHashPasswordIsSalted
---- PASS: TestHashPasswordIsSalted (0.14s)
+--- PASS: TestHashPasswordIsSalted (0.26s)
 === RUN   TestVerifyPasswordRejectsMalformedHash
 --- PASS: TestVerifyPasswordRejectsMalformedHash (0.00s)
 === RUN   TestNeedsRehashDetectsWeakerParameters
---- PASS: TestNeedsRehashDetectsWeakerParameters (0.05s)
+--- PASS: TestNeedsRehashDetectsWeakerParameters (0.07s)
 === RUN   TestValidatePasswordPolicyRejectsGuessableValues
 --- PASS: TestValidatePasswordPolicyRejectsGuessableValues (0.00s)
 === RUN   TestValidatePasswordPolicyAcceptsStrongPassword
@@ -705,11 +705,11 @@ ok  	veylix/backend/internal/audit	0.006s
 === RUN   TestUnknownPatternIsRefused
 --- PASS: TestUnknownPatternIsRefused (0.00s)
 === RUN   TestUnverifiedAccountCannotSignIn
---- PASS: TestUnverifiedAccountCannotSignIn (0.40s)
+--- PASS: TestUnverifiedAccountCannotSignIn (0.32s)
 === RUN   TestPortalsAreSeparate
---- PASS: TestPortalsAreSeparate (0.39s)
+--- PASS: TestPortalsAreSeparate (0.53s)
 === RUN   TestUsernameLoginAndLastSeen
---- PASS: TestUsernameLoginAndLastSeen (0.14s)
+--- PASS: TestUsernameLoginAndLastSeen (0.21s)
 === RUN   TestRateLimiterAllowsBurstThenBlocks
 --- PASS: TestRateLimiterAllowsBurstThenBlocks (0.00s)
 === RUN   TestRateLimiterIsPerKey
@@ -755,66 +755,66 @@ ok  	veylix/backend/internal/audit	0.006s
 === RUN   TestHashTokenIsStableAndIrreversible
 --- PASS: TestHashTokenIsStableAndIrreversible (0.00s)
 === RUN   TestRegisterCreatesClientOnly
---- PASS: TestRegisterCreatesClientOnly (0.07s)
+--- PASS: TestRegisterCreatesClientOnly (0.10s)
 === RUN   TestRegisterRejectsDuplicateEmail
---- PASS: TestRegisterRejectsDuplicateEmail (0.15s)
+--- PASS: TestRegisterRejectsDuplicateEmail (0.19s)
 === RUN   TestRegisterRejectsBadEmailAndWeakPassword
 --- PASS: TestRegisterRejectsBadEmailAndWeakPassword (0.01s)
 === RUN   TestAuthenticateSucceedsAndFails
---- PASS: TestAuthenticateSucceedsAndFails (0.22s)
+--- PASS: TestAuthenticateSucceedsAndFails (0.26s)
 === RUN   TestAuthenticateSuspendedUserIsForbidden
---- PASS: TestAuthenticateSuspendedUserIsForbidden (0.15s)
+--- PASS: TestAuthenticateSuspendedUserIsForbidden (0.18s)
 === RUN   TestLoginRateLimitBlocksAfterBurst
---- PASS: TestLoginRateLimitBlocksAfterBurst (0.96s)
+--- PASS: TestLoginRateLimitBlocksAfterBurst (0.90s)
 === RUN   TestBootstrapOnlyRunsOnce
---- PASS: TestBootstrapOnlyRunsOnce (0.07s)
+--- PASS: TestBootstrapOnlyRunsOnce (0.11s)
 === RUN   TestBootstrapForbiddenAfterAnyUserExists
---- PASS: TestBootstrapForbiddenAfterAnyUserExists (0.08s)
+--- PASS: TestBootstrapForbiddenAfterAnyUserExists (0.09s)
 === RUN   TestChangePasswordRotatesCredential
---- PASS: TestChangePasswordRotatesCredential (0.49s)
+--- PASS: TestChangePasswordRotatesCredential (0.44s)
 === RUN   TestChangePasswordRejectsWrongCurrentPassword
---- PASS: TestChangePasswordRejectsWrongCurrentPassword (0.65s)
+--- PASS: TestChangePasswordRejectsWrongCurrentPassword (0.35s)
 === RUN   TestChangePasswordEnforcesPolicyOnTheNewValue
---- PASS: TestChangePasswordEnforcesPolicyOnTheNewValue (0.19s)
+--- PASS: TestChangePasswordEnforcesPolicyOnTheNewValue (0.34s)
 === RUN   TestChangePasswordForUnknownUserIsUnauthenticated
 --- PASS: TestChangePasswordForUnknownUserIsUnauthenticated (0.01s)
 === RUN   TestChangePasswordFirstSetNeedsNoCurrent
---- PASS: TestChangePasswordFirstSetNeedsNoCurrent (0.34s)
+--- PASS: TestChangePasswordFirstSetNeedsNoCurrent (0.41s)
 === RUN   TestOnlyOneSuperAdminCanExist
---- PASS: TestOnlyOneSuperAdminCanExist (0.20s)
+--- PASS: TestOnlyOneSuperAdminCanExist (0.24s)
 === RUN   TestDemotingTheOwnerIsAllowedOnceOnly
     service_test.go:427: a plain admin demoting the owner = <nil> (forbidden, as expected)
---- PASS: TestDemotingTheOwnerIsAllowedOnceOnly (0.17s)
+--- PASS: TestDemotingTheOwnerIsAllowedOnceOnly (0.23s)
 === RUN   TestSessionLifecycle
 --- PASS: TestSessionLifecycle (0.01s)
 === RUN   TestSessionStoresOnlyFingerprint
 --- PASS: TestSessionStoresOnlyFingerprint (0.01s)
 === RUN   TestExpiredSessionIsRejectedAndPurged
---- PASS: TestExpiredSessionIsRejectedAndPurged (0.01s)
+--- PASS: TestExpiredSessionIsRejectedAndPurged (0.02s)
 === RUN   TestSuspendedUserSessionIsRejected
---- PASS: TestSuspendedUserSessionIsRejected (0.01s)
+--- PASS: TestSuspendedUserSessionIsRejected (0.02s)
 === RUN   TestEmptyTokenIsUnauthenticated
 --- PASS: TestEmptyTokenIsUnauthenticated (0.01s)
 === RUN   TestRevokeAllForUser
---- PASS: TestRevokeAllForUser (0.01s)
+--- PASS: TestRevokeAllForUser (0.03s)
 PASS
-ok  	veylix/backend/internal/auth	6.302s
+ok  	veylix/backend/internal/auth	6.876s
 === RUN   TestVerifyIDTokenAcceptsAValidToken
---- PASS: TestVerifyIDTokenAcceptsAValidToken (0.05s)
+--- PASS: TestVerifyIDTokenAcceptsAValidToken (0.24s)
 === RUN   TestVerifyIDTokenRefusesBadTokens
---- PASS: TestVerifyIDTokenRefusesBadTokens (0.15s)
+--- PASS: TestVerifyIDTokenRefusesBadTokens (0.16s)
 === RUN   TestVerifyIDTokenRefusesAlgorithmDowngrades
---- PASS: TestVerifyIDTokenRefusesAlgorithmDowngrades (0.16s)
+--- PASS: TestVerifyIDTokenRefusesAlgorithmDowngrades (0.22s)
 === RUN   TestUnconfiguredClientRefusesEverything
 --- PASS: TestUnconfiguredClientRefusesEverything (0.00s)
 === RUN   TestHandshakeIsRandomAndChallengesCorrectly
---- PASS: TestHandshakeIsRandomAndChallengesCorrectly (0.12s)
+--- PASS: TestHandshakeIsRandomAndChallengesCorrectly (0.07s)
 === RUN   TestAuthCodeURLCarriesTheNonce
 --- PASS: TestAuthCodeURLCarriesTheNonce (0.00s)
 PASS
-ok  	veylix/backend/internal/auth/google	0.480s
+ok  	veylix/backend/internal/auth/google	0.703s
 === RUN   TestLoadAppliesDefaults
---- PASS: TestLoadAppliesDefaults (0.03s)
+--- PASS: TestLoadAppliesDefaults (0.01s)
 === RUN   TestLoadFailsClosedWithoutEncryptionKey
 --- PASS: TestLoadFailsClosedWithoutEncryptionKey (0.00s)
 === RUN   TestLoadRejectsShortKey
@@ -846,7 +846,7 @@ ok  	veylix/backend/internal/auth/google	0.480s
 === RUN   TestDisplayZoneIsIndependentOfHostZone
 --- PASS: TestDisplayZoneIsIndependentOfHostZone (0.00s)
 === RUN   TestUnloadableDisplayZoneFallsBackToUTC
-2026/11/10 22:27:40 WARN config: display timezone could not be loaded; falling back to UTC requested=Mars/Olympus_Mons note="timestamps are stored as UTC epoch either way"
+2026/11/10 23:26:29 WARN config: display timezone could not be loaded; falling back to UTC requested=Mars/Olympus_Mons note="timestamps are stored as UTC epoch either way"
 --- PASS: TestUnloadableDisplayZoneFallsBackToUTC (0.00s)
 === RUN   TestLoadPublishesTheDisplayZone
     display_timezone_test.go:72: config needs secrets to load in this environment
@@ -856,7 +856,7 @@ ok  	veylix/backend/internal/auth/google	0.480s
 === RUN   TestLoadDefaultsLifecycleToOff
 --- PASS: TestLoadDefaultsLifecycleToOff (0.00s)
 PASS
-ok  	veylix/backend/internal/config	0.040s
+ok  	veylix/backend/internal/config	0.020s
 === RUN   TestSeverOutageNeverProducesRevoked
 --- PASS: TestSeverOutageNeverProducesRevoked (0.00s)
 === RUN   TestSeverOutageKeepsTerminalStates
@@ -906,11 +906,11 @@ ok  	veylix/backend/internal/config	0.040s
 === RUN   TestQuoteRefusesAboveCeiling
 --- PASS: TestQuoteRefusesAboveCeiling (0.00s)
 PASS
-ok  	veylix/backend/internal/domain	0.010s
+ok  	veylix/backend/internal/domain	0.011s
 === RUN   TestAssignedVPNIsVisibleToItsClientAsPremium
---- PASS: TestAssignedVPNIsVisibleToItsClientAsPremium (0.09s)
+--- PASS: TestAssignedVPNIsVisibleToItsClientAsPremium (0.12s)
 === RUN   TestUnassignedPanelClientIsTheOnlyUntaggedRow
---- PASS: TestUnassignedPanelClientIsTheOnlyUntaggedRow (0.07s)
+--- PASS: TestUnassignedPanelClientIsTheOnlyUntaggedRow (0.10s)
 === RUN   TestOwnedPanelClientIsAlwaysAssigned
 === RUN   TestOwnedPanelClientIsAlwaysAssigned/panel_could_not_resolve_the_owner
 === RUN   TestOwnedPanelClientIsAlwaysAssigned/panel_confirms_the_owner
@@ -918,43 +918,43 @@ ok  	veylix/backend/internal/domain	0.010s
     --- PASS: TestOwnedPanelClientIsAlwaysAssigned/panel_could_not_resolve_the_owner (0.00s)
     --- PASS: TestOwnedPanelClientIsAlwaysAssigned/panel_confirms_the_owner (0.00s)
 === RUN   TestAssignPanelClientRoute
-2026/11/10 22:27:41 INFO http method=POST path=/api/auth/login status=200 bytes=109 ms=150
-2026/11/10 22:27:41 INFO http method=POST path=/api/panel-clients/1/direct-3xui-1/assign status=201 bytes=117 ms=1
---- PASS: TestAssignPanelClientRoute (0.39s)
+2026/11/10 23:26:29 INFO http method=POST path=/api/auth/login status=200 bytes=109 ms=206
+2026/11/10 23:26:29 INFO http method=POST path=/api/panel-clients/1/direct-3xui-1/assign status=201 bytes=117 ms=1
+--- PASS: TestAssignPanelClientRoute (0.56s)
 === RUN   TestAssignRouteRefusesFreeKind
-2026/11/10 22:27:41 INFO http method=POST path=/api/auth/login status=200 bytes=109 ms=108
-2026/11/10 22:27:41 WARN http method=POST path=/api/panel-clients/1/direct-3xui-9/assign status=422 bytes=140 ms=0
---- PASS: TestAssignRouteRefusesFreeKind (0.33s)
+2026/11/10 23:26:30 INFO http method=POST path=/api/auth/login status=200 bytes=109 ms=94
+2026/11/10 23:26:30 WARN http method=POST path=/api/panel-clients/1/direct-3xui-9/assign status=422 bytes=140 ms=0
+--- PASS: TestAssignRouteRefusesFreeKind (0.31s)
 === RUN   TestAssignRenameWhenAsked
-2026/11/10 22:27:41 INFO http method=POST path=/api/auth/login status=200 bytes=109 ms=73
-2026/11/10 22:27:41 INFO http method=POST path=/api/panel-clients/1/direct-3xui-2/assign status=201 bytes=125 ms=1
---- PASS: TestAssignRenameWhenAsked (0.25s)
+2026/11/10 23:26:30 INFO http method=POST path=/api/auth/login status=200 bytes=109 ms=99
+2026/11/10 23:26:30 INFO http method=POST path=/api/panel-clients/1/direct-3xui-2/assign status=201 bytes=125 ms=1
+--- PASS: TestAssignRenameWhenAsked (0.28s)
 === RUN   TestAssignRouteRefusesNonClient
-2026/11/10 22:27:41 INFO http method=POST path=/api/auth/login status=200 bytes=109 ms=107
-2026/11/10 22:27:41 WARN http method=POST path=/api/panel-clients/1/direct-3xui-2/assign status=422 bytes=93 ms=0
-2026/11/10 22:27:41 WARN http method=POST path=/api/panel-clients/1/direct-3xui-2/assign status=422 bytes=78 ms=0
---- PASS: TestAssignRouteRefusesNonClient (0.27s)
+2026/11/10 23:26:30 INFO http method=POST path=/api/auth/login status=200 bytes=109 ms=103
+2026/11/10 23:26:30 WARN http method=POST path=/api/panel-clients/1/direct-3xui-2/assign status=422 bytes=93 ms=0
+2026/11/10 23:26:30 WARN http method=POST path=/api/panel-clients/1/direct-3xui-2/assign status=422 bytes=78 ms=0
+--- PASS: TestAssignRouteRefusesNonClient (0.31s)
 === RUN   TestAssignRouteKeepsNameWhenRenameFails
-2026/11/10 22:27:42 INFO http method=POST path=/api/auth/login status=200 bytes=109 ms=59
-2026/11/10 22:27:42 INFO http method=POST path=/api/panel-clients/1/direct-3xui-3/assign status=201 bytes=189 ms=0
---- PASS: TestAssignRouteKeepsNameWhenRenameFails (0.23s)
+2026/11/10 23:26:30 INFO http method=POST path=/api/auth/login status=200 bytes=109 ms=59
+2026/11/10 23:26:30 INFO http method=POST path=/api/panel-clients/1/direct-3xui-3/assign status=201 bytes=189 ms=1
+--- PASS: TestAssignRouteKeepsNameWhenRenameFails (0.21s)
 === RUN   TestAssignRouteRefusesDoubleAssign
-2026/11/10 22:27:42 INFO http method=POST path=/api/auth/login status=200 bytes=109 ms=45
-2026/11/10 22:27:42 INFO http method=POST path=/api/panel-clients/1/direct-3xui-4/assign status=201 bytes=117 ms=0
-2026/11/10 22:27:42 WARN http method=POST path=/api/panel-clients/1/direct-3xui-4/assign status=409 bytes=104 ms=0
---- PASS: TestAssignRouteRefusesDoubleAssign (0.14s)
+2026/11/10 23:26:31 INFO http method=POST path=/api/auth/login status=200 bytes=109 ms=58
+2026/11/10 23:26:31 INFO http method=POST path=/api/panel-clients/1/direct-3xui-4/assign status=201 bytes=117 ms=0
+2026/11/10 23:26:31 WARN http method=POST path=/api/panel-clients/1/direct-3xui-4/assign status=409 bytes=104 ms=0
+--- PASS: TestAssignRouteRefusesDoubleAssign (0.19s)
 === RUN   TestClientDeleteLocksTheAccountOut
---- PASS: TestClientDeleteLocksTheAccountOut (0.47s)
+--- PASS: TestClientDeleteLocksTheAccountOut (0.27s)
 === RUN   TestClientDeleteIsTerminal
---- PASS: TestClientDeleteIsTerminal (0.18s)
+--- PASS: TestClientDeleteIsTerminal (0.31s)
 === RUN   TestClientDeleteRefusesWhileVPNsExist
---- PASS: TestClientDeleteRefusesWhileVPNsExist (0.19s)
+--- PASS: TestClientDeleteRefusesWhileVPNsExist (0.23s)
 === RUN   TestClientDeleteIsIdempotent
---- PASS: TestClientDeleteIsIdempotent (0.20s)
+--- PASS: TestClientDeleteIsIdempotent (0.25s)
 === RUN   TestSuperAdminCanResetAClientPassword
---- PASS: TestSuperAdminCanResetAClientPassword (0.42s)
+--- PASS: TestSuperAdminCanResetAClientPassword (0.54s)
 === RUN   TestClientResetRefusesSelf
---- PASS: TestClientResetRefusesSelf (0.15s)
+--- PASS: TestClientResetRefusesSelf (0.19s)
 === RUN   TestSameOriginCSRF
 === RUN   TestSameOriginCSRF/same-origin_allowed
 === RUN   TestSameOriginCSRF/cross-origin_blocked
@@ -984,15 +984,15 @@ ok  	veylix/backend/internal/domain	0.010s
 === RUN   TestStatusWriterStillStreams
 --- PASS: TestStatusWriterStillStreams (0.00s)
 === RUN   TestOrderTimeline
---- PASS: TestOrderTimeline (0.44s)
+--- PASS: TestOrderTimeline (0.42s)
 === RUN   TestOrderProofChannelOverHTTP
---- PASS: TestOrderProofChannelOverHTTP (0.39s)
+--- PASS: TestOrderProofChannelOverHTTP (0.37s)
 === RUN   TestPaymentMethodExposesChannels
---- PASS: TestPaymentMethodExposesChannels (0.28s)
+--- PASS: TestPaymentMethodExposesChannels (0.32s)
 === RUN   TestBlockWithoutVPNIsRefused
---- PASS: TestBlockWithoutVPNIsRefused (0.60s)
+--- PASS: TestBlockWithoutVPNIsRefused (0.29s)
 === RUN   TestOrderMethodChangeOverHTTP
---- PASS: TestOrderMethodChangeOverHTTP (0.34s)
+--- PASS: TestOrderMethodChangeOverHTTP (0.56s)
 === RUN   TestOverviewRefusesResellersAndClients
 === RUN   TestOverviewRefusesResellersAndClients/client
 === RUN   TestOverviewRefusesResellersAndClients/admin
@@ -1010,11 +1010,11 @@ ok  	veylix/backend/internal/domain	0.010s
 === RUN   TestOverviewWithoutAStoreSays503
 --- PASS: TestOverviewWithoutAStoreSays503 (0.00s)
 === RUN   TestClientSeesAllPremiumPackages
---- PASS: TestClientSeesAllPremiumPackages (0.27s)
+--- PASS: TestClientSeesAllPremiumPackages (0.32s)
 === RUN   TestPlanListCarriesTheRenderedFields
---- PASS: TestPlanListCarriesTheRenderedFields (0.30s)
+--- PASS: TestPlanListCarriesTheRenderedFields (0.29s)
 === RUN   TestResellerCannotOwnCustom
---- PASS: TestResellerCannotOwnCustom (0.23s)
+--- PASS: TestResellerCannotOwnCustom (0.29s)
 === RUN   TestPanelCacheServesRepeatedReadsFromOnePanelCall
 --- PASS: TestPanelCacheServesRepeatedReadsFromOnePanelCall (0.00s)
 === RUN   TestPanelCacheRefetchesAfterTTL
@@ -1066,39 +1066,39 @@ ok  	veylix/backend/internal/domain	0.010s
 === RUN   TestPasswordChangeWithoutRelayReportsOutbox
 --- PASS: TestPasswordChangeWithoutRelayReportsOutbox (0.00s)
 === RUN   TestForgotReportsOutboxWithoutRelay
---- PASS: TestForgotReportsOutboxWithoutRelay (0.23s)
+--- PASS: TestForgotReportsOutboxWithoutRelay (0.25s)
 === RUN   TestForgotReportsSMTPSWhenDelivered
---- PASS: TestForgotReportsSMTPSWhenDelivered (0.25s)
+--- PASS: TestForgotReportsSMTPSWhenDelivered (0.24s)
 === RUN   TestForgotReportsOutboxOnWireOnlyWhenNoRelay
---- PASS: TestForgotReportsOutboxOnWireOnlyWhenNoRelay (0.23s)
+--- PASS: TestForgotReportsOutboxOnWireOnlyWhenNoRelay (0.30s)
 === RUN   TestForgotDeliveryIsSameForUnknownAccount
---- PASS: TestForgotDeliveryIsSameForUnknownAccount (0.22s)
+--- PASS: TestForgotDeliveryIsSameForUnknownAccount (0.33s)
 === RUN   TestForgotDoesNotRevealAccounts
---- PASS: TestForgotDoesNotRevealAccounts (0.22s)
+--- PASS: TestForgotDoesNotRevealAccounts (0.37s)
 === RUN   TestResetCodeIsSingleUse
---- PASS: TestResetCodeIsSingleUse (0.33s)
+--- PASS: TestResetCodeIsSingleUse (0.63s)
 === RUN   TestResetCodeBurnsAfterMaxAttempts
---- PASS: TestResetCodeBurnsAfterMaxAttempts (0.59s)
+--- PASS: TestResetCodeBurnsAfterMaxAttempts (0.73s)
 === RUN   TestResetCodeExpires
---- PASS: TestResetCodeExpires (0.18s)
+--- PASS: TestResetCodeExpires (0.22s)
 === RUN   TestResetRevokesEverySession
---- PASS: TestResetRevokesEverySession (0.26s)
+--- PASS: TestResetRevokesEverySession (0.36s)
 === RUN   TestResetEnforcesPasswordPolicy
---- PASS: TestResetEnforcesPasswordPolicy (0.36s)
+--- PASS: TestResetEnforcesPasswordPolicy (0.37s)
 === RUN   TestQuoteFromRatesOverHTTP
---- PASS: TestQuoteFromRatesOverHTTP (0.16s)
+--- PASS: TestQuoteFromRatesOverHTTP (0.17s)
 === RUN   TestQuoteRefusesOutOfRangeOverHTTP
---- PASS: TestQuoteRefusesOutOfRangeOverHTTP (0.18s)
+--- PASS: TestQuoteRefusesOutOfRangeOverHTTP (0.21s)
 === RUN   TestQuoteRefusesBeforeRatesExist
---- PASS: TestQuoteRefusesBeforeRatesExist (0.14s)
+--- PASS: TestQuoteRefusesBeforeRatesExist (0.22s)
 === RUN   TestPricingReadRequiresOperator
---- PASS: TestPricingReadRequiresOperator (0.16s)
+--- PASS: TestPricingReadRequiresOperator (0.21s)
 === RUN   TestRegisterIsRateLimited
---- PASS: TestRegisterIsRateLimited (0.17s)
+--- PASS: TestRegisterIsRateLimited (0.19s)
 === RUN   TestRegisterSendsVerificationLink
 --- PASS: TestRegisterSendsVerificationLink (0.12s)
 === RUN   TestRegisterSurvivesVerificationFailure
---- PASS: TestRegisterSurvivesVerificationFailure (0.09s)
+--- PASS: TestRegisterSurvivesVerificationFailure (0.10s)
 === RUN   TestUnverifiedLoginMentionsTheLink
 --- PASS: TestUnverifiedLoginMentionsTheLink (0.00s)
 === RUN   TestLoginRefusesGoogleOnlyAccountWithItsOwnCode
@@ -1108,31 +1108,31 @@ ok  	veylix/backend/internal/domain	0.010s
 === RUN   TestAssignmentReusesThePlatformCarrier
 --- PASS: TestAssignmentReusesThePlatformCarrier (0.05s)
 === RUN   TestOfferCreateRefusesMissingInbound
---- PASS: TestOfferCreateRefusesMissingInbound (0.17s)
+--- PASS: TestOfferCreateRefusesMissingInbound (0.18s)
 === RUN   TestProtocolSurvivesMissingInbound
---- PASS: TestProtocolSurvivesMissingInbound (0.19s)
+--- PASS: TestProtocolSurvivesMissingInbound (0.18s)
 === RUN   TestRegisterDoesNotIssueASessionForAnUnverifiedAccount
---- PASS: TestRegisterDoesNotIssueASessionForAnUnverifiedAccount (0.15s)
+--- PASS: TestRegisterDoesNotIssueASessionForAnUnverifiedAccount (0.19s)
 === RUN   TestMonthlyLimitHonoursThePerClientOverride
---- PASS: TestMonthlyLimitHonoursThePerClientOverride (0.05s)
+--- PASS: TestMonthlyLimitHonoursThePerClientOverride (0.06s)
 === RUN   TestRaisedLimitAllowsTheNextClaim
---- PASS: TestRaisedLimitAllowsTheNextClaim (0.06s)
+--- PASS: TestRaisedLimitAllowsTheNextClaim (0.07s)
 === RUN   TestAdminCanChangeAClientsEmailThroughTheCode
---- PASS: TestAdminCanChangeAClientsEmailThroughTheCode (0.25s)
+--- PASS: TestAdminCanChangeAClientsEmailThroughTheCode (0.32s)
 === RUN   TestAdminEmailChangeRefusesAWrongCode
---- PASS: TestAdminEmailChangeRefusesAWrongCode (0.26s)
+--- PASS: TestAdminEmailChangeRefusesAWrongCode (0.31s)
 === RUN   TestAdminEmailChangeRefusesATakenAddress
---- PASS: TestAdminEmailChangeRefusesATakenAddress (0.15s)
+--- PASS: TestAdminEmailChangeRefusesATakenAddress (0.18s)
 === RUN   TestAdminEmailChangeRequiresClientManage
---- PASS: TestAdminEmailChangeRequiresClientManage (0.27s)
+--- PASS: TestAdminEmailChangeRequiresClientManage (0.31s)
 === RUN   TestUnverifiedAccountCanRequestANewLink
---- PASS: TestUnverifiedAccountCanRequestANewLink (0.09s)
+--- PASS: TestUnverifiedAccountCanRequestANewLink (0.12s)
 === RUN   TestResendAnswersTheSameForUnknownAndVerified
---- PASS: TestResendAnswersTheSameForUnknownAndVerified (0.05s)
+--- PASS: TestResendAnswersTheSameForUnknownAndVerified (0.06s)
 === RUN   TestResendIsGenericWithNoRelay
---- PASS: TestResendIsGenericWithNoRelay (0.13s)
+--- PASS: TestResendIsGenericWithNoRelay (0.12s)
 === RUN   TestOperatorIssuedCodeRedeems
---- PASS: TestOperatorIssuedCodeRedeems (2.48s)
+--- PASS: TestOperatorIssuedCodeRedeems (2.95s)
 === RUN   TestHealthIsIndependentOfDatabase
 --- PASS: TestHealthIsIndependentOfDatabase (0.00s)
 === RUN   TestReadyReportsSchemaVersion
@@ -1264,19 +1264,19 @@ ok  	veylix/backend/internal/domain	0.010s
 === RUN   TestSystemRoutesAreBehindAuth
 --- PASS: TestSystemRoutesAreBehindAuth (0.00s)
 === RUN   TestTransferRouteMovesVPN
---- PASS: TestTransferRouteMovesVPN (0.12s)
+--- PASS: TestTransferRouteMovesVPN (0.17s)
 === RUN   TestTransferRouteRefusesSelf
---- PASS: TestTransferRouteRefusesSelf (0.14s)
+--- PASS: TestTransferRouteRefusesSelf (0.15s)
 === RUN   TestTransferRouteRefusesNonClient
---- PASS: TestTransferRouteRefusesNonClient (0.12s)
+--- PASS: TestTransferRouteRefusesNonClient (0.15s)
 === RUN   TestTransferRouteRefusesUnknownVPN
---- PASS: TestTransferRouteRefusesUnknownVPN (0.12s)
+--- PASS: TestTransferRouteRefusesUnknownVPN (0.15s)
 === RUN   TestTransferRouteRequiresTarget
---- PASS: TestTransferRouteRequiresTarget (0.13s)
+--- PASS: TestTransferRouteRequiresTarget (0.14s)
 === RUN   TestTransferRouteHistory
---- PASS: TestTransferRouteHistory (0.12s)
+--- PASS: TestTransferRouteHistory (0.17s)
 === RUN   TestTransferRouteAuditsTheMove
---- PASS: TestTransferRouteAuditsTheMove (0.12s)
+--- PASS: TestTransferRouteAuditsTheMove (0.15s)
 === RUN   TestAdminVPNSummaryBuckets
 --- PASS: TestAdminVPNSummaryBuckets (0.00s)
 === RUN   TestTransferDoesNotDuplicateTheVPN
@@ -1298,85 +1298,85 @@ ok  	veylix/backend/internal/domain	0.010s
 === RUN   TestAdminSortPutsUnassignedFirst
 --- PASS: TestAdminSortPutsUnassignedFirst (0.00s)
 === RUN   TestSQLVPNListerNamesServerAndSeller
---- PASS: TestSQLVPNListerNamesServerAndSeller (0.06s)
+--- PASS: TestSQLVPNListerNamesServerAndSeller (0.05s)
 === RUN   TestSQLVPNListerHasNoSellerWhenNoneAssigned
---- PASS: TestSQLVPNListerHasNoSellerWhenNoneAssigned (0.04s)
+--- PASS: TestSQLVPNListerHasNoSellerWhenNoneAssigned (0.05s)
 === RUN   TestSQLVPNListerClientSeesOwnVPNs
---- PASS: TestSQLVPNListerClientSeesOwnVPNs (0.04s)
+--- PASS: TestSQLVPNListerClientSeesOwnVPNs (0.05s)
 === RUN   TestSQLVPNListerAdminNeverSeesUntagged
---- PASS: TestSQLVPNListerAdminNeverSeesUntagged (0.04s)
+--- PASS: TestSQLVPNListerAdminNeverSeesUntagged (0.05s)
 === RUN   TestQuotaMeForReseller
---- PASS: TestQuotaMeForReseller (0.20s)
+--- PASS: TestQuotaMeForReseller (0.24s)
 === RUN   TestQuotaMeForClientIsZeroNotForbidden
---- PASS: TestQuotaMeForClientIsZeroNotForbidden (0.11s)
+--- PASS: TestQuotaMeForClientIsZeroNotForbidden (0.15s)
 === RUN   TestQuotaMeRequiresAuth
---- PASS: TestQuotaMeRequiresAuth (0.04s)
+--- PASS: TestQuotaMeRequiresAuth (0.05s)
 === RUN   TestAdminRoutesRequireSuperAdmin
---- PASS: TestAdminRoutesRequireSuperAdmin (0.24s)
+--- PASS: TestAdminRoutesRequireSuperAdmin (0.29s)
 === RUN   TestCreateAdminRejectsWeakPasswordAndClients
---- PASS: TestCreateAdminRejectsWeakPasswordAndClients (0.16s)
+--- PASS: TestCreateAdminRejectsWeakPasswordAndClients (0.23s)
 === RUN   TestSuspendAdminRevokesLiveSession
---- PASS: TestSuspendAdminRevokesLiveSession (0.24s)
+--- PASS: TestSuspendAdminRevokesLiveSession (0.30s)
 === RUN   TestSuperAdminCannotSuspendSelf
---- PASS: TestSuperAdminCannotSuspendSelf (0.08s)
+--- PASS: TestSuperAdminCannotSuspendSelf (0.09s)
 === RUN   TestSetQuotaLimitOnNonAdminIsNotFound
---- PASS: TestSetQuotaLimitOnNonAdminIsNotFound (0.19s)
+--- PASS: TestSetQuotaLimitOnNonAdminIsNotFound (0.15s)
 === RUN   TestAssignServersGivesResellerScope
 --- PASS: TestAssignServersGivesResellerScope (0.25s)
 === RUN   TestAssignServersIsReplaceNotMerge
 --- PASS: TestAssignServersIsReplaceNotMerge (0.24s)
 === RUN   TestAssignServersRejectsNonAdmin
---- PASS: TestAssignServersRejectsNonAdmin (0.18s)
+--- PASS: TestAssignServersRejectsNonAdmin (0.15s)
 === RUN   TestAssignServersRejectsUnknownServer
---- PASS: TestAssignServersRejectsUnknownServer (0.42s)
+--- PASS: TestAssignServersRejectsUnknownServer (0.24s)
 === RUN   TestAssignServersRequiresSuperAdmin
---- PASS: TestAssignServersRequiresSuperAdmin (0.37s)
+--- PASS: TestAssignServersRequiresSuperAdmin (0.24s)
 === RUN   TestAssignServersAnonymousIs401
---- PASS: TestAssignServersAnonymousIs401 (0.38s)
+--- PASS: TestAssignServersAnonymousIs401 (0.05s)
 === RUN   TestClientsVisibilityIsRoleScoped
---- PASS: TestClientsVisibilityIsRoleScoped (0.71s)
+--- PASS: TestClientsVisibilityIsRoleScoped (0.51s)
 === RUN   TestClientsShowsSellerScope
---- PASS: TestClientsShowsSellerScope (0.24s)
+--- PASS: TestClientsShowsSellerScope (0.39s)
 === RUN   TestAuditKindFilterIsServerSide
---- PASS: TestAuditKindFilterIsServerSide (0.08s)
+--- PASS: TestAuditKindFilterIsServerSide (0.41s)
 === RUN   TestAuditRefusesAnUnknownKind
---- PASS: TestAuditRefusesAnUnknownKind (0.08s)
+--- PASS: TestAuditRefusesAnUnknownKind (0.22s)
 === RUN   TestAuditActorAndSearchFilters
---- PASS: TestAuditActorAndSearchFilters (0.08s)
+--- PASS: TestAuditActorAndSearchFilters (0.30s)
 === RUN   TestAuditTimeWindowBounds
---- PASS: TestAuditTimeWindowBounds (0.08s)
+--- PASS: TestAuditTimeWindowBounds (0.31s)
 === RUN   TestAuditPaginationEchoesItsWindow
---- PASS: TestAuditPaginationEchoesItsWindow (0.09s)
+--- PASS: TestAuditPaginationEchoesItsWindow (0.28s)
 === RUN   TestAuthFlowEndToEnd
---- PASS: TestAuthFlowEndToEnd (0.08s)
+--- PASS: TestAuthFlowEndToEnd (0.22s)
 === RUN   TestLoginRejectsWrongPassword
---- PASS: TestLoginRejectsWrongPassword (0.11s)
+--- PASS: TestLoginRejectsWrongPassword (0.34s)
 === RUN   TestBootstrapThenLoginAsSuperAdmin
---- PASS: TestBootstrapThenLoginAsSuperAdmin (0.16s)
+--- PASS: TestBootstrapThenLoginAsSuperAdmin (0.32s)
 === RUN   TestChangePasswordRotatesSessions
---- PASS: TestChangePasswordRotatesSessions (0.34s)
+--- PASS: TestChangePasswordRotatesSessions (0.44s)
 === RUN   TestChangePasswordRequiresAuthentication
---- PASS: TestChangePasswordRequiresAuthentication (0.06s)
+--- PASS: TestChangePasswordRequiresAuthentication (0.05s)
 === RUN   TestSetupStatusReflectsBootstrap
---- PASS: TestSetupStatusReflectsBootstrap (0.08s)
+--- PASS: TestSetupStatusReflectsBootstrap (0.12s)
 === RUN   TestSuperAdminCreatesAdminWhoCanLogin
---- PASS: TestSuperAdminCreatesAdminWhoCanLogin (0.20s)
+--- PASS: TestSuperAdminCreatesAdminWhoCanLogin (0.27s)
 === RUN   TestForgedSessionCookieIsRejected
---- PASS: TestForgedSessionCookieIsRejected (0.04s)
+--- PASS: TestForgedSessionCookieIsRejected (0.05s)
 === RUN   TestCrossOriginPostIsBlocked
---- PASS: TestCrossOriginPostIsBlocked (0.04s)
+--- PASS: TestCrossOriginPostIsBlocked (0.05s)
 === RUN   TestNotificationsArePrivateToTheirOwner
---- PASS: TestNotificationsArePrivateToTheirOwner (0.16s)
+--- PASS: TestNotificationsArePrivateToTheirOwner (0.24s)
 === RUN   TestPaymentLifecycleIsGuarded
---- PASS: TestPaymentLifecycleIsGuarded (0.12s)
+--- PASS: TestPaymentLifecycleIsGuarded (0.16s)
 === RUN   TestPaymentWithoutAnAccountIsRefused
---- PASS: TestPaymentWithoutAnAccountIsRefused (0.04s)
+--- PASS: TestPaymentWithoutAnAccountIsRefused (0.05s)
 === RUN   TestDirectoryScopesWhoCanBeAddressed
---- PASS: TestDirectoryScopesWhoCanBeAddressed (0.41s)
+--- PASS: TestDirectoryScopesWhoCanBeAddressed (0.50s)
 === RUN   TestChatAccessIsParticipantOnly
---- PASS: TestChatAccessIsParticipantOnly (0.48s)
+--- PASS: TestChatAccessIsParticipantOnly (0.59s)
 === RUN   TestChatMessageLifecycle
---- PASS: TestChatMessageLifecycle (0.30s)
+--- PASS: TestChatMessageLifecycle (0.36s)
 === RUN   TestHwidRoutesAreRegistered
 --- PASS: TestHwidRoutesAreRegistered (0.00s)
 === RUN   TestHwidRoutesRejectBadIDs
@@ -1386,29 +1386,29 @@ ok  	veylix/backend/internal/domain	0.010s
 === RUN   TestHwidRoutesRequireAPrincipal
 --- PASS: TestHwidRoutesRequireAPrincipal (0.00s)
 === RUN   TestMeReturnsDisplayNameAndCreatedAt
---- PASS: TestMeReturnsDisplayNameAndCreatedAt (0.08s)
+--- PASS: TestMeReturnsDisplayNameAndCreatedAt (0.10s)
 === RUN   TestMePublishesTheDisplayTimezone
---- PASS: TestMePublishesTheDisplayTimezone (0.08s)
+--- PASS: TestMePublishesTheDisplayTimezone (0.10s)
 === RUN   TestMeStaysUsableWhenTheAccountCannotBeRead
---- PASS: TestMeStaysUsableWhenTheAccountCannotBeRead (0.08s)
+--- PASS: TestMeStaysUsableWhenTheAccountCannotBeRead (0.09s)
 === RUN   TestLogoutOthersKeepsThisSession
---- PASS: TestLogoutOthersKeepsThisSession (0.16s)
+--- PASS: TestLogoutOthersKeepsThisSession (0.20s)
 === RUN   TestLogoutOthersRequiresASession
 --- PASS: TestLogoutOthersRequiresASession (0.05s)
 === RUN   TestAuditFansOutIntoTheInbox
---- PASS: TestAuditFansOutIntoTheInbox (0.08s)
+--- PASS: TestAuditFansOutIntoTheInbox (0.10s)
 === RUN   TestClientSeesPremiumCatalogueButNotInFreeList
---- PASS: TestClientSeesPremiumCatalogueButNotInFreeList (0.08s)
+--- PASS: TestClientSeesPremiumCatalogueButNotInFreeList (0.10s)
 === RUN   TestPremiumCatalogueIsAuthenticated
 --- PASS: TestPremiumCatalogueIsAuthenticated (0.05s)
 === RUN   TestOffersClientSeesOnlyFree
---- PASS: TestOffersClientSeesOnlyFree (0.08s)
+--- PASS: TestOffersClientSeesOnlyFree (0.10s)
 === RUN   TestOffersSuperAdminSeesBoth
---- PASS: TestOffersSuperAdminSeesBoth (0.16s)
+--- PASS: TestOffersSuperAdminSeesBoth (0.10s)
 === RUN   TestOffersAnonymousIs401
---- PASS: TestOffersAnonymousIs401 (0.04s)
+--- PASS: TestOffersAnonymousIs401 (0.05s)
 === RUN   TestOffersCreateRequiresSuperAdmin
---- PASS: TestOffersCreateRequiresSuperAdmin (0.08s)
+--- PASS: TestOffersCreateRequiresSuperAdmin (0.09s)
 === RUN   TestOffersCreateValidates
 === RUN   TestOffersCreateValidates/bad_kind
 === RUN   TestOffersCreateValidates/blank_name
@@ -1420,65 +1420,65 @@ ok  	veylix/backend/internal/domain	0.010s
     --- PASS: TestOffersCreateValidates/no_server (0.00s)
     --- PASS: TestOffersCreateValidates/negative_limit (0.00s)
 === RUN   TestOffersCreateAndPatch
---- PASS: TestOffersCreateAndPatch (0.08s)
+--- PASS: TestOffersCreateAndPatch (0.10s)
 === RUN   TestOffersPatchUnknownIs404
---- PASS: TestOffersPatchUnknownIs404 (0.09s)
+--- PASS: TestOffersPatchUnknownIs404 (0.10s)
 === RUN   TestOffersDeactivateHidesFromClient
---- PASS: TestOffersDeactivateHidesFromClient (0.13s)
+--- PASS: TestOffersDeactivateHidesFromClient (0.15s)
 === RUN   TestSuperAdminTagsPanelClient
---- PASS: TestSuperAdminTagsPanelClient (0.08s)
+--- PASS: TestSuperAdminTagsPanelClient (0.09s)
 === RUN   TestRetaggingIsAllowedWhileUnissued
---- PASS: TestRetaggingIsAllowedWhileUnissued (0.08s)
+--- PASS: TestRetaggingIsAllowedWhileUnissued (0.11s)
 === RUN   TestTagIsRefusedOnceIssued
---- PASS: TestTagIsRefusedOnceIssued (0.09s)
+--- PASS: TestTagIsRefusedOnceIssued (0.10s)
 === RUN   TestTagRejectsUnknownValue
---- PASS: TestTagRejectsUnknownValue (0.09s)
+--- PASS: TestTagRejectsUnknownValue (0.12s)
 === RUN   TestTaggingRequiresSuperAdmin
---- PASS: TestTaggingRequiresSuperAdmin (0.23s)
+--- PASS: TestTaggingRequiresSuperAdmin (0.24s)
 === RUN   TestPaymentsEnvelopeStatesTruncation
---- PASS: TestPaymentsEnvelopeStatesTruncation (0.19s)
+--- PASS: TestPaymentsEnvelopeStatesTruncation (0.13s)
 === RUN   TestPingScopeFromQuery
 --- PASS: TestPingScopeFromQuery (0.00s)
 === RUN   TestReleaseGraceAndLocalOnlyRemoval
---- PASS: TestReleaseGraceAndLocalOnlyRemoval (0.38s)
+--- PASS: TestReleaseGraceAndLocalOnlyRemoval (0.25s)
 === RUN   TestPurgeRouteRefusesResellersAndAnonymous
---- PASS: TestPurgeRouteRefusesResellersAndAnonymous (0.50s)
+--- PASS: TestPurgeRouteRefusesResellersAndAnonymous (0.43s)
 === RUN   TestSuperAdminReleaseRequiresAReason
---- PASS: TestSuperAdminReleaseRequiresAReason (0.43s)
+--- PASS: TestSuperAdminReleaseRequiresAReason (0.15s)
 === RUN   TestUsageHourlyBucketsD000
---- PASS: TestUsageHourlyBucketsD000 (0.12s)
+--- PASS: TestUsageHourlyBucketsD000 (0.10s)
 === RUN   TestSpeedHistoryDerivesRateFromCounters
---- PASS: TestSpeedHistoryDerivesRateFromCounters (0.18s)
+--- PASS: TestSpeedHistoryDerivesRateFromCounters (0.11s)
 === RUN   TestNewUsageRoutesRefuseStrangers
 === RUN   TestNewUsageRoutesRefuseStrangers/stranger/usage/hourly
 === RUN   TestNewUsageRoutesRefuseStrangers/anonymous/usage/hourly
 === RUN   TestNewUsageRoutesRefuseStrangers/stranger/speed-history
 === RUN   TestNewUsageRoutesRefuseStrangers/anonymous/speed-history
---- PASS: TestNewUsageRoutesRefuseStrangers (0.13s)
+--- PASS: TestNewUsageRoutesRefuseStrangers (0.10s)
     --- PASS: TestNewUsageRoutesRefuseStrangers/stranger/usage/hourly (0.00s)
     --- PASS: TestNewUsageRoutesRefuseStrangers/anonymous/usage/hourly (0.00s)
     --- PASS: TestNewUsageRoutesRefuseStrangers/stranger/speed-history (0.00s)
     --- PASS: TestNewUsageRoutesRefuseStrangers/anonymous/speed-history (0.00s)
 === RUN   TestNewUsageRoutesRefuseMisspelledRange
---- PASS: TestNewUsageRoutesRefuseMisspelledRange (0.14s)
+--- PASS: TestNewUsageRoutesRefuseMisspelledRange (0.10s)
 === RUN   TestPingHistoryRequiresSampleStore
---- PASS: TestPingHistoryRequiresSampleStore (0.23s)
+--- PASS: TestPingHistoryRequiresSampleStore (0.10s)
 === RUN   TestVPNUsageAgainstCapacity
---- PASS: TestVPNUsageAgainstCapacity (0.20s)
+--- PASS: TestVPNUsageAgainstCapacity (0.11s)
 === RUN   TestUsageLimitComesFromPanelNotCreateTime
---- PASS: TestUsageLimitComesFromPanelNotCreateTime (0.30s)
+--- PASS: TestUsageLimitComesFromPanelNotCreateTime (0.09s)
 === RUN   TestUsageHistoryOwnerReadsOwnVPN
---- PASS: TestUsageHistoryOwnerReadsOwnVPN (0.22s)
+--- PASS: TestUsageHistoryOwnerReadsOwnVPN (0.10s)
 === RUN   TestUsageHistoryHidesAnotherUsersVPN
---- PASS: TestUsageHistoryHidesAnotherUsersVPN (0.12s)
+--- PASS: TestUsageHistoryHidesAnotherUsersVPN (0.11s)
 === RUN   TestUsageHistoryRequiresAuth
---- PASS: TestUsageHistoryRequiresAuth (0.04s)
+--- PASS: TestUsageHistoryRequiresAuth (0.05s)
 === RUN   TestUsageUnknownVPNIs404
---- PASS: TestUsageUnknownVPNIs404 (0.12s)
+--- PASS: TestUsageUnknownVPNIs404 (0.15s)
 === RUN   TestServerMetricsRoleScoping
---- PASS: TestServerMetricsRoleScoping (0.18s)
+--- PASS: TestServerMetricsRoleScoping (0.19s)
 === RUN   TestSyncStatusIsNotForClients
---- PASS: TestSyncStatusIsNotForClients (0.17s)
+--- PASS: TestSyncStatusIsNotForClients (0.19s)
 === RUN   TestUsageWindowNamedRanges
 --- PASS: TestUsageWindowNamedRanges (0.00s)
 === RUN   TestUsageWindowUnknownRangeIsRefused
@@ -1506,127 +1506,127 @@ ok  	veylix/backend/internal/domain	0.010s
 === RUN   TestUsageHistorySplitsUpDownTotal
 --- PASS: TestUsageHistorySplitsUpDownTotal (0.10s)
 === RUN   TestUsageRangesDifferFromEachOther
---- PASS: TestUsageRangesDifferFromEachOther (0.09s)
+--- PASS: TestUsageRangesDifferFromEachOther (0.11s)
 === RUN   TestUsageRangeTypoIsRefused
---- PASS: TestUsageRangeTypoIsRefused (0.08s)
+--- PASS: TestUsageRangeTypoIsRefused (0.10s)
 === RUN   TestOrderWithPlanBuildsTheVpnOnConfirm
---- PASS: TestOrderWithPlanBuildsTheVpnOnConfirm (0.13s)
+--- PASS: TestOrderWithPlanBuildsTheVpnOnConfirm (0.15s)
 === RUN   TestConfirmingAPlanlessOrderSettlesCashOnly
---- PASS: TestConfirmingAPlanlessOrderSettlesCashOnly (0.12s)
+--- PASS: TestConfirmingAPlanlessOrderSettlesCashOnly (0.14s)
 === RUN   TestPlanOrderRefusedWhenSettlementServiceIsMissing
---- PASS: TestPlanOrderRefusedWhenSettlementServiceIsMissing (0.12s)
+--- PASS: TestPlanOrderRefusedWhenSettlementServiceIsMissing (0.14s)
 === RUN   TestOfferCreateRefusesAnInboundFromAnotherPanel
---- PASS: TestOfferCreateRefusesAnInboundFromAnotherPanel (0.08s)
+--- PASS: TestOfferCreateRefusesAnInboundFromAnotherPanel (0.10s)
 === RUN   TestClientCannotConfirmPayments
---- PASS: TestClientCannotConfirmPayments (0.12s)
+--- PASS: TestClientCannotConfirmPayments (0.14s)
 === RUN   TestFreeConcurrentCapIsEnforced
---- PASS: TestFreeConcurrentCapIsEnforced (0.08s)
+--- PASS: TestFreeConcurrentCapIsEnforced (0.11s)
 === RUN   TestFreeClaimUsageIsReadable
---- PASS: TestFreeClaimUsageIsReadable (0.09s)
+--- PASS: TestFreeClaimUsageIsReadable (0.10s)
 === RUN   TestRefusedCreateRefundsTheFreeClaim
---- PASS: TestRefusedCreateRefundsTheFreeClaim (0.09s)
+--- PASS: TestRefusedCreateRefundsTheFreeClaim (0.10s)
 === RUN   TestVPNLinksAndPingScope
---- PASS: TestVPNLinksAndPingScope (0.22s)
+--- PASS: TestVPNLinksAndPingScope (0.26s)
 === RUN   TestDormantRoutePutsVPNToSleep
---- PASS: TestDormantRoutePutsVPNToSleep (0.09s)
+--- PASS: TestDormantRoutePutsVPNToSleep (0.10s)
 === RUN   TestWakeRouteClearsDormancy
---- PASS: TestWakeRouteClearsDormancy (0.10s)
+--- PASS: TestWakeRouteClearsDormancy (0.11s)
 === RUN   TestDormantIsIdempotent
---- PASS: TestDormantIsIdempotent (0.12s)
+--- PASS: TestDormantIsIdempotent (0.10s)
 === RUN   TestDormantRouteRefusesOtherOwnersVPN
---- PASS: TestDormantRouteRefusesOtherOwnersVPN (0.12s)
+--- PASS: TestDormantRouteRefusesOtherOwnersVPN (0.15s)
 === RUN   TestDormantRouteRefusesAnonymous
---- PASS: TestDormantRouteRefusesAnonymous (0.08s)
+--- PASS: TestDormantRouteRefusesAnonymous (0.09s)
 === RUN   TestUntaggedPanelClientIsSuperAdminOnly
---- PASS: TestUntaggedPanelClientIsSuperAdminOnly (0.25s)
+--- PASS: TestUntaggedPanelClientIsSuperAdminOnly (0.32s)
 === RUN   TestTaggingPublishesPanelClient
---- PASS: TestTaggingPublishesPanelClient (0.08s)
+--- PASS: TestTaggingPublishesPanelClient (0.10s)
 === RUN   TestVPNListRejectsUnknownTagFilter
---- PASS: TestVPNListRejectsUnknownTagFilter (0.08s)
+--- PASS: TestVPNListRejectsUnknownTagFilter (0.10s)
 === RUN   TestPanelOutageDegradesToList
---- PASS: TestPanelOutageDegradesToList (0.08s)
+--- PASS: TestPanelOutageDegradesToList (0.10s)
 === RUN   TestUnreadablePanelWithNoLocalRowsIsAnError
---- PASS: TestUnreadablePanelWithNoLocalRowsIsAnError (0.08s)
+--- PASS: TestUnreadablePanelWithNoLocalRowsIsAnError (0.10s)
 === RUN   TestPanelAndLocalRowsMerge
---- PASS: TestPanelAndLocalRowsMerge (0.08s)
+--- PASS: TestPanelAndLocalRowsMerge (0.11s)
 === RUN   TestAdminConsoleUsesThePanelBackedLister
---- PASS: TestAdminConsoleUsesThePanelBackedLister (0.08s)
+--- PASS: TestAdminConsoleUsesThePanelBackedLister (0.10s)
 === RUN   TestClientProvisionsFreeOffer
---- PASS: TestClientProvisionsFreeOffer (0.08s)
+--- PASS: TestClientProvisionsFreeOffer (0.10s)
 === RUN   TestIssuingVPNLocksItsTag
---- PASS: TestIssuingVPNLocksItsTag (0.08s)
+--- PASS: TestIssuingVPNLocksItsTag (0.10s)
 === RUN   TestClientCannotProvisionPremium
---- PASS: TestClientCannotProvisionPremium (0.08s)
+--- PASS: TestClientCannotProvisionPremium (0.10s)
 === RUN   TestVPNRoutesRequireAuth
---- PASS: TestVPNRoutesRequireAuth (0.04s)
+--- PASS: TestVPNRoutesRequireAuth (0.05s)
 === RUN   TestVPNsAreScopedPerOwner
---- PASS: TestVPNsAreScopedPerOwner (0.12s)
+--- PASS: TestVPNsAreScopedPerOwner (0.16s)
 === RUN   TestRevokeRespondsAcceptedUntilConfirmed
---- PASS: TestRevokeRespondsAcceptedUntilConfirmed (0.09s)
+--- PASS: TestRevokeRespondsAcceptedUntilConfirmed (0.10s)
 === RUN   TestRejectedCreateDoesNotLockTag
---- PASS: TestRejectedCreateDoesNotLockTag (0.08s)
+--- PASS: TestRejectedCreateDoesNotLockTag (0.09s)
 === RUN   TestVpnListPublishesStatusChangedAt
---- PASS: TestVpnListPublishesStatusChangedAt (0.12s)
+--- PASS: TestVpnListPublishesStatusChangedAt (0.15s)
 PASS
-ok  	veylix/backend/internal/httpapi	31.771s
+ok  	veylix/backend/internal/httpapi	35.863s
 === RUN   TestAddStoresTokenSealedAndNeverReturnsIt
---- PASS: TestAddStoresTokenSealedAndNeverReturnsIt (0.02s)
+--- PASS: TestAddStoresTokenSealedAndNeverReturnsIt (0.03s)
 === RUN   TestAddRecordsFailureInsteadOfClaimingActive
---- PASS: TestAddRecordsFailureInsteadOfClaimingActive (0.01s)
+--- PASS: TestAddRecordsFailureInsteadOfClaimingActive (0.02s)
 === RUN   TestAddRejectsInvalidInput
 --- PASS: TestAddRejectsInvalidInput (0.03s)
 === RUN   TestAddRejectsDuplicatePanelURL
---- PASS: TestAddRejectsDuplicatePanelURL (0.03s)
+--- PASS: TestAddRejectsDuplicatePanelURL (0.04s)
 === RUN   TestTestReReadsSealedTokenAndUpdatesStatus
 --- PASS: TestTestReReadsSealedTokenAndUpdatesStatus (0.05s)
 === RUN   TestTestUnknownIntegrationIsNotFound
---- PASS: TestTestUnknownIntegrationIsNotFound (0.03s)
+--- PASS: TestTestUnknownIntegrationIsNotFound (0.02s)
 === RUN   TestInboundsCachesMetadata
---- PASS: TestInboundsCachesMetadata (0.04s)
+--- PASS: TestInboundsCachesMetadata (0.02s)
 === RUN   TestInboundsReturnsLocalIDNotPanelID
---- PASS: TestInboundsReturnsLocalIDNotPanelID (0.03s)
+--- PASS: TestInboundsReturnsLocalIDNotPanelID (0.04s)
 === RUN   TestDisableAndRemove
---- PASS: TestDisableAndRemove (0.02s)
+--- PASS: TestDisableAndRemove (0.04s)
 === RUN   TestUpdateRotatesTokenAndRevalidatesPanel
---- PASS: TestUpdateRotatesTokenAndRevalidatesPanel (0.06s)
+--- PASS: TestUpdateRotatesTokenAndRevalidatesPanel (0.04s)
 === RUN   TestUpdateRejectsUrlChangeWithoutNewToken
---- PASS: TestUpdateRejectsUrlChangeWithoutNewToken (0.15s)
+--- PASS: TestUpdateRejectsUrlChangeWithoutNewToken (0.02s)
 === RUN   TestUpdateRejectsInvalidPanelURL
---- PASS: TestUpdateRejectsInvalidPanelURL (0.03s)
+--- PASS: TestUpdateRejectsInvalidPanelURL (0.07s)
 === RUN   TestUpdateNeverLeaksTheTokenInAudit
 --- PASS: TestUpdateNeverLeaksTheTokenInAudit (0.05s)
 === RUN   TestPurgeDeletesTheWholeServer
---- PASS: TestPurgeDeletesTheWholeServer (0.03s)
+--- PASS: TestPurgeDeletesTheWholeServer (0.04s)
 === RUN   TestPurgeRefusesWhenVpnInstancesExist
---- PASS: TestPurgeRefusesWhenVpnInstancesExist (0.02s)
+--- PASS: TestPurgeRefusesWhenVpnInstancesExist (0.03s)
 === RUN   TestPanelClientsReportsPanelTruth
 --- PASS: TestPanelClientsReportsPanelTruth (0.02s)
 === RUN   TestServerClientListShowsBuyer
---- PASS: TestServerClientListShowsBuyer (0.03s)
+--- PASS: TestServerClientListShowsBuyer (0.06s)
 === RUN   TestPanelClientsJoinsTagAndAssignment
---- PASS: TestPanelClientsJoinsTagAndAssignment (0.03s)
+--- PASS: TestPanelClientsJoinsTagAndAssignment (0.05s)
 === RUN   TestPanelClientsKeepsLargeTrafficLimits
---- PASS: TestPanelClientsKeepsLargeTrafficLimits (0.02s)
+--- PASS: TestPanelClientsKeepsLargeTrafficLimits (0.04s)
 === RUN   TestPanelClientsLimitIsNotScaledTwice
---- PASS: TestPanelClientsLimitIsNotScaledTwice (0.04s)
+--- PASS: TestPanelClientsLimitIsNotScaledTwice (0.03s)
 === RUN   TestPanelClientsTreatsRevokedAsNotAssigned
---- PASS: TestPanelClientsTreatsRevokedAsNotAssigned (0.01s)
+--- PASS: TestPanelClientsTreatsRevokedAsNotAssigned (0.03s)
 === RUN   TestPanelClientsPerformsNoWrites
---- PASS: TestPanelClientsPerformsNoWrites (0.02s)
+--- PASS: TestPanelClientsPerformsNoWrites (0.05s)
 === RUN   TestAuditTrailIsWrittenWithoutSecrets
 --- PASS: TestAuditTrailIsWrittenWithoutSecrets (0.02s)
 === RUN   TestDevicesReadsThePanel
 --- PASS: TestDevicesReadsThePanel (0.02s)
 === RUN   TestDevicesEmptyEmailIsRejected
---- PASS: TestDevicesEmptyEmailIsRejected (0.03s)
+--- PASS: TestDevicesEmptyEmailIsRejected (0.02s)
 === RUN   TestRevokeDeviceConfirmsTheRemoval
---- PASS: TestRevokeDeviceConfirmsTheRemoval (0.04s)
+--- PASS: TestRevokeDeviceConfirmsTheRemoval (0.02s)
 === RUN   TestRevokeDeviceRefusesUnconfirmedRemoval
---- PASS: TestRevokeDeviceRefusesUnconfirmedRemoval (0.02s)
+--- PASS: TestRevokeDeviceRefusesUnconfirmedRemoval (0.04s)
 === RUN   TestRevokeAlreadyAbsentDeviceIsSuccess
---- PASS: TestRevokeAlreadyAbsentDeviceIsSuccess (0.05s)
+--- PASS: TestRevokeAlreadyAbsentDeviceIsSuccess (0.02s)
 PASS
-ok  	veylix/backend/internal/integrations	0.955s
+ok  	veylix/backend/internal/integrations	0.966s
 === RUN   TestUnconfiguredSenderRefuses
 --- PASS: TestUnconfiguredSenderRefuses (0.00s)
 === RUN   TestConfiguredNeedsHostAndFrom
@@ -1642,11 +1642,11 @@ ok  	veylix/backend/internal/integrations	0.955s
 === RUN   TestSendFailsFastWhenTheRelayIsDown
 --- PASS: TestSendFailsFastWhenTheRelayIsDown (0.00s)
 PASS
-ok  	veylix/backend/internal/mail	0.010s
+ok  	veylix/backend/internal/mail	0.015s
 === RUN   TestHealthParsesRealPanelPayload
 --- PASS: TestHealthParsesRealPanelPayload (0.00s)
 === RUN   TestHealthMapsAuthFailuresToReauthRequired
---- PASS: TestHealthMapsAuthFailuresToReauthRequired (0.00s)
+--- PASS: TestHealthMapsAuthFailuresToReauthRequired (0.01s)
 === RUN   TestWrongBasePathIsUnavailableNotReauth
 --- PASS: TestWrongBasePathIsUnavailableNotReauth (0.00s)
 === RUN   TestUnreachablePanelIsConnectionUnavailable
@@ -1654,7 +1654,7 @@ ok  	veylix/backend/internal/mail	0.010s
 === RUN   TestInboundsUsesOptionsEndpoint
 --- PASS: TestInboundsUsesOptionsEndpoint (0.00s)
 === RUN   TestGetIsRetriedOnTransportFailure
---- PASS: TestGetIsRetriedOnTransportFailure (0.90s)
+--- PASS: TestGetIsRetriedOnTransportFailure (0.91s)
 === RUN   TestPostIsNeverRetried
 --- PASS: TestPostIsNeverRetried (0.00s)
 === RUN   TestAddClientSendsDocumentedBody
@@ -1752,35 +1752,35 @@ ok  	veylix/backend/internal/mail	0.010s
 === RUN   TestMetadataBlockedEvenWithPrivatePolicy
 --- PASS: TestMetadataBlockedEvenWithPrivatePolicy (0.00s)
 PASS
-ok  	veylix/backend/internal/panel	3.041s
+ok  	veylix/backend/internal/panel	3.056s
 === RUN   TestCustomOrderNeedsServerBeforeRelease
---- PASS: TestCustomOrderNeedsServerBeforeRelease (0.04s)
+--- PASS: TestCustomOrderNeedsServerBeforeRelease (0.05s)
 === RUN   TestCustomOrderReleasesWithItsOwnSpec
---- PASS: TestCustomOrderReleasesWithItsOwnSpec (0.36s)
+--- PASS: TestCustomOrderReleasesWithItsOwnSpec (0.05s)
 === RUN   TestReleaseTargetMustMatchServer
---- PASS: TestReleaseTargetMustMatchServer (0.05s)
+--- PASS: TestReleaseTargetMustMatchServer (0.18s)
 === RUN   TestOrderNamesTheConfirmer
 --- PASS: TestOrderNamesTheConfirmer (0.07s)
 === RUN   TestConfirmPaymentBuildsVPN
---- PASS: TestConfirmPaymentBuildsVPN (0.07s)
+--- PASS: TestConfirmPaymentBuildsVPN (0.08s)
 === RUN   TestPaymentAmountComesFromPlan
 --- PASS: TestPaymentAmountComesFromPlan (0.07s)
 === RUN   TestConfirmPaymentPanelFailureLeavesOrderPending
---- PASS: TestConfirmPaymentPanelFailureLeavesOrderPending (0.07s)
+--- PASS: TestConfirmPaymentPanelFailureLeavesOrderPending (0.08s)
 === RUN   TestConfirmIsNotRepeatable
---- PASS: TestConfirmIsNotRepeatable (0.06s)
+--- PASS: TestConfirmIsNotRepeatable (0.08s)
 === RUN   TestConfirmRequiresTheRightActor
---- PASS: TestConfirmRequiresTheRightActor (0.07s)
+--- PASS: TestConfirmRequiresTheRightActor (0.09s)
 === RUN   TestResellerConfirmsOwnPlanOrder
---- PASS: TestResellerConfirmsOwnPlanOrder (0.06s)
+--- PASS: TestResellerConfirmsOwnPlanOrder (0.08s)
 PASS
-ok  	veylix/backend/internal/payments	0.932s
+ok  	veylix/backend/internal/payments	0.834s
 === RUN   TestPanelEmailIsClientAndKind
---- PASS: TestPanelEmailIsClientAndKind (0.14s)
+--- PASS: TestPanelEmailIsClientAndKind (0.16s)
 === RUN   TestPanelSlotsOnlyMoveForward
---- PASS: TestPanelSlotsOnlyMoveForward (0.08s)
+--- PASS: TestPanelSlotsOnlyMoveForward (0.11s)
 === RUN   TestPanelSubIdStaysDeterministic
---- PASS: TestPanelSubIdStaysDeterministic (0.08s)
+--- PASS: TestPanelSubIdStaysDeterministic (0.07s)
 === RUN   TestFreeOfferIsFixedAtTwoDevices
 --- PASS: TestFreeOfferIsFixedAtTwoDevices (0.00s)
 === RUN   TestPremiumOfferKeepsItsDeviceLimit
@@ -1792,21 +1792,21 @@ ok  	veylix/backend/internal/payments	0.932s
 === RUN   TestSpecSetsExpiryFromDuration
 --- PASS: TestSpecSetsExpiryFromDuration (0.00s)
 === RUN   TestProtocolDetailIsExposed
---- PASS: TestProtocolDetailIsExposed (0.07s)
+--- PASS: TestProtocolDetailIsExposed (0.08s)
 === RUN   TestProtocolReportsOutageHonestly
---- PASS: TestProtocolReportsOutageHonestly (0.08s)
+--- PASS: TestProtocolReportsOutageHonestly (0.07s)
 === RUN   TestLiveTrafficRate
 --- PASS: TestLiveTrafficRate (0.07s)
 === RUN   TestLiveTrafficNeedsTwoReadings
---- PASS: TestLiveTrafficNeedsTwoReadings (0.09s)
+--- PASS: TestLiveTrafficNeedsTwoReadings (0.07s)
 === RUN   TestBuildClientRequestSendsBothLimits
 --- PASS: TestBuildClientRequestSendsBothLimits (0.00s)
 === RUN   TestPayloadRoundTripPreservesLimits
 --- PASS: TestPayloadRoundTripPreservesLimits (0.00s)
 === RUN   TestReconcileSkipsDuplicateCreate
---- PASS: TestReconcileSkipsDuplicateCreate (0.10s)
+--- PASS: TestReconcileSkipsDuplicateCreate (0.08s)
 === RUN   TestReconcileCreatesWhenAbsent
---- PASS: TestReconcileCreatesWhenAbsent (0.07s)
+--- PASS: TestReconcileCreatesWhenAbsent (0.08s)
 === RUN   TestReconcileBacksOffWhenPanelDown
 --- PASS: TestReconcileBacksOffWhenPanelDown (0.08s)
 === RUN   TestReconcileStopsAfterMaxAttempts
@@ -1816,176 +1816,176 @@ ok  	veylix/backend/internal/payments	0.932s
 === RUN   TestPanelEmailFromKey
 --- PASS: TestPanelEmailFromKey (0.00s)
 === RUN   TestOutboxIsIdempotent
---- PASS: TestOutboxIsIdempotent (0.07s)
+--- PASS: TestOutboxIsIdempotent (0.08s)
 === RUN   TestRevokeRequiresVerification
---- PASS: TestRevokeRequiresVerification (0.07s)
+--- PASS: TestRevokeRequiresVerification (0.09s)
 === RUN   TestOwnershipIsEnforced
---- PASS: TestOwnershipIsEnforced (0.09s)
+--- PASS: TestOwnershipIsEnforced (0.12s)
 === RUN   TestFreeOfferRules
---- PASS: TestFreeOfferRules (0.16s)
+--- PASS: TestFreeOfferRules (0.18s)
 === RUN   TestReplaceCreatesTheNewVPNBeforeReleasingTheOld
---- PASS: TestReplaceCreatesTheNewVPNBeforeReleasingTheOld (0.08s)
+--- PASS: TestReplaceCreatesTheNewVPNBeforeReleasingTheOld (0.11s)
 === RUN   TestReplaceBuildsADifferentVPNThenReleasesTheOld
---- PASS: TestReplaceBuildsADifferentVPNThenReleasesTheOld (0.48s)
+--- PASS: TestReplaceBuildsADifferentVPNThenReleasesTheOld (0.23s)
 === RUN   TestReplaceRefusesAnotherOwnersVPN
---- PASS: TestReplaceRefusesAnotherOwnersVPN (0.08s)
+--- PASS: TestReplaceRefusesAnotherOwnersVPN (0.10s)
 === RUN   TestReplaceRefusesWhenNoClaimRemains
 --- PASS: TestReplaceRefusesWhenNoClaimRemains (0.09s)
 === RUN   TestReplaceRefusesAReleasedVPN
---- PASS: TestReplaceRefusesAReleasedVPN (0.07s)
+--- PASS: TestReplaceRefusesAReleasedVPN (0.12s)
 === RUN   TestReplaceRefusesAKindChange
 --- PASS: TestReplaceRefusesAKindChange (0.08s)
 === RUN   TestReplaceWorksAtTheConcurrentCap
 --- PASS: TestReplaceWorksAtTheConcurrentCap (0.09s)
 === RUN   TestCreateProvisionsAndConfirms
---- PASS: TestCreateProvisionsAndConfirms (0.10s)
+--- PASS: TestCreateProvisionsAndConfirms (0.09s)
 === RUN   TestQuotaIsEnforcedUnderConcurrency
     service_test.go:333: ok=1 quotaErr=0, want exactly 1 success and 1 refusal; unexpected errors: req 0 -> provisioning: insert instance: database is locked (5) (SQLITE_BUSY)
---- FAIL: TestQuotaIsEnforcedUnderConcurrency (0.09s)
+--- FAIL: TestQuotaIsEnforcedUnderConcurrency (0.10s)
 === RUN   TestUnreachablePanelIsUnavailableNotRevoked
---- PASS: TestUnreachablePanelIsUnavailableNotRevoked (0.07s)
+--- PASS: TestUnreachablePanelIsUnavailableNotRevoked (0.09s)
 === RUN   TestAmbiguousWriteIsQueuedNotAssumed
---- PASS: TestAmbiguousWriteIsQueuedNotAssumed (0.10s)
+--- PASS: TestAmbiguousWriteIsQueuedNotAssumed (0.09s)
 === RUN   TestVerifyPanelMarksAbsentVPNUnavailable
 --- PASS: TestVerifyPanelMarksAbsentVPNUnavailable (0.08s)
 === RUN   TestVerifyPanelLeavesLiveVPNAlone
 --- PASS: TestVerifyPanelLeavesLiveVPNAlone (0.08s)
 === RUN   TestVerifyPanelRefusesWhenPanelUnreadable
---- PASS: TestVerifyPanelRefusesWhenPanelUnreadable (0.08s)
+--- PASS: TestVerifyPanelRefusesWhenPanelUnreadable (0.09s)
 === RUN   TestSuspendReportsPanelFailureNotNotFound
---- PASS: TestSuspendReportsPanelFailureNotNotFound (0.07s)
+--- PASS: TestSuspendReportsPanelFailureNotNotFound (0.08s)
 === RUN   TestRemoveAbsentDeletesLocalRecordOnly
---- PASS: TestRemoveAbsentDeletesLocalRecordOnly (0.06s)
+--- PASS: TestRemoveAbsentDeletesLocalRecordOnly (0.08s)
 === RUN   TestCreateRefusesOfferWithoutInbound
 --- PASS: TestCreateRefusesOfferWithoutInbound (0.06s)
 === RUN   TestCreateSendsThePanelsInboundNumber
---- PASS: TestCreateSendsThePanelsInboundNumber (0.09s)
+--- PASS: TestCreateSendsThePanelsInboundNumber (0.06s)
 === RUN   TestCreateRefusesInboundFromAnotherServer
---- PASS: TestCreateRefusesInboundFromAnotherServer (0.07s)
+--- PASS: TestCreateRefusesInboundFromAnotherServer (0.10s)
 === RUN   TestPanelRejectionLeavesNoVPNRow
---- PASS: TestPanelRejectionLeavesNoVPNRow (0.06s)
+--- PASS: TestPanelRejectionLeavesNoVPNRow (0.08s)
 === RUN   TestPanelRejectionDoesNotClaimRevocation
---- PASS: TestPanelRejectionDoesNotClaimRevocation (0.07s)
+--- PASS: TestPanelRejectionDoesNotClaimRevocation (0.10s)
 === RUN   TestRemoveAbsentRefusesLiveClient
---- PASS: TestRemoveAbsentRefusesLiveClient (0.07s)
+--- PASS: TestRemoveAbsentRefusesLiveClient (0.13s)
 === RUN   TestRemoveAbsentRefusesClientRole
---- PASS: TestRemoveAbsentRefusesClientRole (0.07s)
+--- PASS: TestRemoveAbsentRefusesClientRole (0.09s)
 === RUN   TestWriteThatLandedIsAdopted
 --- PASS: TestWriteThatLandedIsAdopted (0.08s)
 === RUN   TestUnownedPremiumPlanNeedsSuperAdminConfirm
---- PASS: TestUnownedPremiumPlanNeedsSuperAdminConfirm (0.07s)
+--- PASS: TestUnownedPremiumPlanNeedsSuperAdminConfirm (0.11s)
 === RUN   TestResellerOwnPlanNeedsNoApproval
---- PASS: TestResellerOwnPlanNeedsNoApproval (0.09s)
+--- PASS: TestResellerOwnPlanNeedsNoApproval (0.10s)
 === RUN   TestResellerCannotReleaseForeignPlan
---- PASS: TestResellerCannotReleaseForeignPlan (0.09s)
+--- PASS: TestResellerCannotReleaseForeignPlan (0.12s)
 === RUN   TestResellerCannotReleaseOnUnassignedServer
---- PASS: TestResellerCannotReleaseOnUnassignedServer (0.07s)
+--- PASS: TestResellerCannotReleaseOnUnassignedServer (0.10s)
 === RUN   TestPlanSlotsLimitReleases
---- PASS: TestPlanSlotsLimitReleases (0.08s)
+--- PASS: TestPlanSlotsLimitReleases (0.12s)
 === RUN   TestForcePurgeKeepsThePanelClient
 --- PASS: TestForcePurgeKeepsThePanelClient (0.08s)
 === RUN   TestSpecOverridesPackageLimits
---- PASS: TestSpecOverridesPackageLimits (0.07s)
+--- PASS: TestSpecOverridesPackageLimits (0.09s)
 === RUN   TestSpecIncompleteIsRefused
---- PASS: TestSpecIncompleteIsRefused (0.08s)
+--- PASS: TestSpecIncompleteIsRefused (0.12s)
 FAIL
-FAIL	veylix/backend/internal/provisioning	4.327s
+FAIL	veylix/backend/internal/provisioning	4.649s
 === RUN   TestStaleSuspendedVPNIsSetAsideAfterItsWindow
---- PASS: TestStaleSuspendedVPNIsSetAsideAfterItsWindow (0.08s)
+--- PASS: TestStaleSuspendedVPNIsSetAsideAfterItsWindow (0.13s)
 === RUN   TestExpiredVPNUsesTheShorterWindow
---- PASS: TestExpiredVPNUsesTheShorterWindow (0.08s)
+--- PASS: TestExpiredVPNUsesTheShorterWindow (0.17s)
 === RUN   TestServerUnavailableIsNeverSwept
---- PASS: TestServerUnavailableIsNeverSwept (0.07s)
+--- PASS: TestServerUnavailableIsNeverSwept (0.08s)
 === RUN   TestReportModeChangesNothing
---- PASS: TestReportModeChangesNothing (0.07s)
+--- PASS: TestReportModeChangesNothing (0.10s)
 === RUN   TestReportModeAuditSaysNothingChanged
---- PASS: TestReportModeAuditSaysNothingChanged (0.12s)
+--- PASS: TestReportModeAuditSaysNothingChanged (0.09s)
 === RUN   TestEnforceModeRecordsUndoWindowAndKeptClient
 --- PASS: TestEnforceModeRecordsUndoWindowAndKeptClient (0.10s)
 === RUN   TestSweepDoesNotDeleteTheRow
---- PASS: TestSweepDoesNotDeleteTheRow (0.08s)
+--- PASS: TestSweepDoesNotDeleteTheRow (0.09s)
 === RUN   TestActiveVPNIsNeverSwept
 --- PASS: TestActiveVPNIsNeverSwept (0.08s)
 === RUN   TestUnsetClockIsNotTreatedAsAncient
---- PASS: TestUnsetClockIsNotTreatedAsAncient (0.07s)
+--- PASS: TestUnsetClockIsNotTreatedAsAncient (0.12s)
 === RUN   TestStoreRefusesServerUnavailableAsLifecycleStatus
---- PASS: TestStoreRefusesServerUnavailableAsLifecycleStatus (0.08s)
+--- PASS: TestStoreRefusesServerUnavailableAsLifecycleStatus (0.09s)
 === RUN   TestSweepIsIdempotent
---- PASS: TestSweepIsIdempotent (0.09s)
+--- PASS: TestSweepIsIdempotent (0.10s)
 === RUN   TestReleaseOpensThreeDayWindow
---- PASS: TestReleaseOpensThreeDayWindow (0.07s)
+--- PASS: TestReleaseOpensThreeDayWindow (0.11s)
 === RUN   TestReleaseMarksVPNReleased
---- PASS: TestReleaseMarksVPNReleased (0.08s)
+--- PASS: TestReleaseMarksVPNReleased (0.07s)
 === RUN   TestReleaseCapturesStatusBefore
 --- PASS: TestReleaseCapturesStatusBefore (0.09s)
 === RUN   TestReleaseDefaultsReason
---- PASS: TestReleaseDefaultsReason (0.06s)
+--- PASS: TestReleaseDefaultsReason (0.09s)
 === RUN   TestReleaseTwiceIsRefused
---- PASS: TestReleaseTwiceIsRefused (0.07s)
+--- PASS: TestReleaseTwiceIsRefused (0.08s)
 === RUN   TestReleaseOtherClientsVPNIsNotFound
 --- PASS: TestReleaseOtherClientsVPNIsNotFound (0.07s)
 === RUN   TestReleaseMissingVPNIsNotFound
---- PASS: TestReleaseMissingVPNIsNotFound (0.07s)
+--- PASS: TestReleaseMissingVPNIsNotFound (0.08s)
 === RUN   TestReleaseWithoutIdentityIsRefused
---- PASS: TestReleaseWithoutIdentityIsRefused (0.06s)
+--- PASS: TestReleaseWithoutIdentityIsRefused (0.10s)
 === RUN   TestReleaseRecordsAudit
---- PASS: TestReleaseRecordsAudit (0.07s)
+--- PASS: TestReleaseRecordsAudit (0.12s)
 === RUN   TestReleaseSurvivesNilAuditLogger
---- PASS: TestReleaseSurvivesNilAuditLogger (0.07s)
+--- PASS: TestReleaseSurvivesNilAuditLogger (0.10s)
 === RUN   TestRestoreInsideWindowSucceeds
 --- PASS: TestRestoreInsideWindowSucceeds (0.08s)
 === RUN   TestRestoreAtDeadlineSucceeds
---- PASS: TestRestoreAtDeadlineSucceeds (0.08s)
+--- PASS: TestRestoreAtDeadlineSucceeds (0.09s)
 === RUN   TestRestoreAfterDeadlineIsRefused
 --- PASS: TestRestoreAfterDeadlineIsRefused (0.08s)
 === RUN   TestRestoreIsNotRepeatable
---- PASS: TestRestoreIsNotRepeatable (0.09s)
+--- PASS: TestRestoreIsNotRepeatable (0.10s)
 === RUN   TestRestoreOtherClientsReleaseIsNotFound
---- PASS: TestRestoreOtherClientsReleaseIsNotFound (0.08s)
+--- PASS: TestRestoreOtherClientsReleaseIsNotFound (0.14s)
 === RUN   TestRestoreMissingReleaseIsNotFound
---- PASS: TestRestoreMissingReleaseIsNotFound (0.08s)
+--- PASS: TestRestoreMissingReleaseIsNotFound (0.10s)
 === RUN   TestPurgeSkipsReleaseStillInWindow
---- PASS: TestPurgeSkipsReleaseStillInWindow (0.08s)
+--- PASS: TestPurgeSkipsReleaseStillInWindow (0.14s)
 === RUN   TestPurgeSkipsReleaseAtDeadline
---- PASS: TestPurgeSkipsReleaseAtDeadline (0.07s)
+--- PASS: TestPurgeSkipsReleaseAtDeadline (0.08s)
 === RUN   TestPurgeRemovesExpiredRelease
---- PASS: TestPurgeRemovesExpiredRelease (0.09s)
+--- PASS: TestPurgeRemovesExpiredRelease (0.08s)
 === RUN   TestPurgeDeletesChildrenInDependencyOrder
 --- PASS: TestPurgeDeletesChildrenInDependencyOrder (0.11s)
 === RUN   TestPurgeIsIdempotent
---- PASS: TestPurgeIsIdempotent (0.09s)
+--- PASS: TestPurgeIsIdempotent (0.13s)
 === RUN   TestPurgeSkipsReleaseRestoredSinceSelection
---- PASS: TestPurgeSkipsReleaseRestoredSinceSelection (0.07s)
+--- PASS: TestPurgeSkipsReleaseRestoredSinceSelection (0.11s)
 === RUN   TestPurgeSkipsRestoredRelease
---- PASS: TestPurgeSkipsRestoredRelease (0.07s)
+--- PASS: TestPurgeSkipsRestoredRelease (0.12s)
 === RUN   TestPurgeAuditNamesWhatWasDeleted
---- PASS: TestPurgeAuditNamesWhatWasDeleted (0.08s)
+--- PASS: TestPurgeAuditNamesWhatWasDeleted (0.11s)
 === RUN   TestPurgeAuditHasNoActor
---- PASS: TestPurgeAuditHasNoActor (0.09s)
+--- PASS: TestPurgeAuditHasNoActor (0.13s)
 === RUN   TestListClientIsForcedToOwnTimeline
---- PASS: TestListClientIsForcedToOwnTimeline (0.08s)
+--- PASS: TestListClientIsForcedToOwnTimeline (0.12s)
 === RUN   TestListResellerCannotReadAnotherClientsTimeline
---- PASS: TestListResellerCannotReadAnotherClientsTimeline (0.09s)
+--- PASS: TestListResellerCannotReadAnotherClientsTimeline (0.11s)
 === RUN   TestListSuperAdminCanReadAnyClientTimeline
---- PASS: TestListSuperAdminCanReadAnyClientTimeline (0.07s)
+--- PASS: TestListSuperAdminCanReadAnyClientTimeline (0.12s)
 === RUN   TestListEmptyForClientWithNoReleases
 --- PASS: TestListEmptyForClientWithNoReleases (0.10s)
 === RUN   TestPurgeRetainsTheReleaseTrail
---- PASS: TestPurgeRetainsTheReleaseTrail (0.08s)
+--- PASS: TestPurgeRetainsTheReleaseTrail (0.09s)
 === RUN   TestPurgeNoLongerCascadesTheReleaseRow
---- PASS: TestPurgeNoLongerCascadesTheReleaseRow (0.08s)
+--- PASS: TestPurgeNoLongerCascadesTheReleaseRow (0.09s)
 === RUN   TestPurgedReleaseRemembersItsPanelIdentity
---- PASS: TestPurgedReleaseRemembersItsPanelIdentity (0.07s)
+--- PASS: TestPurgedReleaseRemembersItsPanelIdentity (0.08s)
 === RUN   TestPurgedReleaseSurvivesTheClientTimeline
---- PASS: TestPurgedReleaseSurvivesTheClientTimeline (0.06s)
+--- PASS: TestPurgedReleaseSurvivesTheClientTimeline (0.09s)
 === RUN   TestReleaseTombstoneIsNotPending
 --- PASS: TestReleaseTombstoneIsNotPending (0.07s)
 === RUN   TestPackageNeverImportsThePanel
 --- PASS: TestPackageNeverImportsThePanel (0.00s)
 === RUN   TestPurgeWorksWithNoPanelConfigured
---- PASS: TestPurgeWorksWithNoPanelConfigured (0.06s)
+--- PASS: TestPurgeWorksWithNoPanelConfigured (0.07s)
 PASS
-ok  	veylix/backend/internal/releases	3.645s
+ok  	veylix/backend/internal/releases	4.584s
 === RUN   TestSaveSealsTheSecretAndNeverReturnsIt
 --- PASS: TestSaveSealsTheSecretAndNeverReturnsIt (0.00s)
 === RUN   TestResolvePrefersDatabaseOverEnvironment
@@ -2001,279 +2001,279 @@ ok  	veylix/backend/internal/releases	3.645s
 === RUN   TestOnGoogleChangeFiresWithTheResolvedValue
 --- PASS: TestOnGoogleChangeFiresWithTheResolvedValue (0.00s)
 PASS
-ok  	veylix/backend/internal/settings	0.009s
+ok  	veylix/backend/internal/settings	0.004s
 === RUN   TestAssignKeepsThePanelName
---- PASS: TestAssignKeepsThePanelName (0.10s)
+--- PASS: TestAssignKeepsThePanelName (0.09s)
 === RUN   TestAssignRefusesAnAlreadyHeldPanelClient
---- PASS: TestAssignRefusesAnAlreadyHeldPanelClient (0.07s)
+--- PASS: TestAssignRefusesAnAlreadyHeldPanelClient (0.12s)
 === RUN   TestAssignRefusesNonClientTarget
---- PASS: TestAssignRefusesNonClientTarget (0.07s)
+--- PASS: TestAssignRefusesNonClientTarget (0.10s)
 === RUN   TestAssignThenRenameUsesSlots
---- PASS: TestAssignThenRenameUsesSlots (0.07s)
+--- PASS: TestAssignThenRenameUsesSlots (0.11s)
 === RUN   TestAssignIsPerCustomer
---- PASS: TestAssignIsPerCustomer (0.07s)
+--- PASS: TestAssignIsPerCustomer (0.11s)
 === RUN   TestClientVPNCountIsSellerScoped
---- PASS: TestClientVPNCountIsSellerScoped (0.07s)
+--- PASS: TestClientVPNCountIsSellerScoped (0.08s)
 === RUN   TestAuditLogIsAppendOnly
---- PASS: TestAuditLogIsAppendOnly (0.08s)
+--- PASS: TestAuditLogIsAppendOnly (0.12s)
 === RUN   TestAgeFromBirthday
 --- PASS: TestAgeFromBirthday (0.00s)
 === RUN   TestFreeConcurrentCapIsThree
---- PASS: TestFreeConcurrentCapIsThree (0.10s)
+--- PASS: TestFreeConcurrentCapIsThree (0.15s)
 === RUN   TestReleaseDoesNotRefundMonthlySlot
---- PASS: TestReleaseDoesNotRefundMonthlySlot (0.08s)
+--- PASS: TestReleaseDoesNotRefundMonthlySlot (0.13s)
 === RUN   TestMonthlyWindowRollsOver
---- PASS: TestMonthlyWindowRollsOver (0.08s)
+--- PASS: TestMonthlyWindowRollsOver (0.13s)
 === RUN   TestFreeCapsArePerServer
---- PASS: TestFreeCapsArePerServer (0.09s)
+--- PASS: TestFreeCapsArePerServer (0.13s)
 === RUN   TestListClientsAdminShape
---- PASS: TestListClientsAdminShape (0.09s)
+--- PASS: TestListClientsAdminShape (0.12s)
 === RUN   TestListClientsAdminFilters
---- PASS: TestListClientsAdminFilters (0.08s)
+--- PASS: TestListClientsAdminFilters (0.10s)
 === RUN   TestClientDetailAggregate
---- PASS: TestClientDetailAggregate (0.08s)
+--- PASS: TestClientDetailAggregate (0.11s)
 === RUN   TestClientBlockRevokesSessions
 --- PASS: TestClientBlockRevokesSessions (0.10s)
 === RUN   TestClientFreeLimitOverride
---- PASS: TestClientFreeLimitOverride (0.07s)
+--- PASS: TestClientFreeLimitOverride (0.11s)
 === RUN   TestListClientsAdminOffsetFollowsClampedLimit
 === RUN   TestListClientsAdminOffsetFollowsClampedLimit/sane_page_size
 === RUN   TestListClientsAdminOffsetFollowsClampedLimit/limit_above_the_ceiling
 === RUN   TestListClientsAdminOffsetFollowsClampedLimit/limit_of_zero
 === RUN   TestListClientsAdminOffsetFollowsClampedLimit/negative_limit
 === RUN   TestListClientsAdminOffsetFollowsClampedLimit/negative_page
---- PASS: TestListClientsAdminOffsetFollowsClampedLimit (0.08s)
+--- PASS: TestListClientsAdminOffsetFollowsClampedLimit (0.09s)
     --- PASS: TestListClientsAdminOffsetFollowsClampedLimit/sane_page_size (0.00s)
     --- PASS: TestListClientsAdminOffsetFollowsClampedLimit/limit_above_the_ceiling (0.00s)
     --- PASS: TestListClientsAdminOffsetFollowsClampedLimit/limit_of_zero (0.00s)
     --- PASS: TestListClientsAdminOffsetFollowsClampedLimit/negative_limit (0.00s)
     --- PASS: TestListClientsAdminOffsetFollowsClampedLimit/negative_page (0.00s)
 === RUN   TestBlockAndUnblockVPN
---- PASS: TestBlockAndUnblockVPN (0.08s)
+--- PASS: TestBlockAndUnblockVPN (0.11s)
 === RUN   TestMethodChangeIsRecorded
---- PASS: TestMethodChangeIsRecorded (0.07s)
+--- PASS: TestMethodChangeIsRecorded (0.09s)
 === RUN   TestMethodChangeToSameIsNoop
 --- PASS: TestMethodChangeToSameIsNoop (0.08s)
 === RUN   TestMethodChangeIsPayerOnly
---- PASS: TestMethodChangeIsPayerOnly (0.08s)
+--- PASS: TestMethodChangeIsPayerOnly (0.07s)
 === RUN   TestProofChannelIsRecorded
---- PASS: TestProofChannelIsRecorded (0.06s)
+--- PASS: TestProofChannelIsRecorded (0.05s)
 === RUN   TestLifecycleMigrationBackfillsToMigrationTime
---- PASS: TestLifecycleMigrationBackfillsToMigrationTime (0.06s)
+--- PASS: TestLifecycleMigrationBackfillsToMigrationTime (0.07s)
 === RUN   TestLifecycleMigrationIsIdempotent
---- PASS: TestLifecycleMigrationIsIdempotent (0.06s)
+--- PASS: TestLifecycleMigrationIsIdempotent (0.08s)
 === RUN   TestMigration0017PreservesUsers
---- PASS: TestMigration0017PreservesUsers (0.01s)
+--- PASS: TestMigration0017PreservesUsers (0.02s)
 === RUN   TestMigration0019RepairsSplitAssignments
---- PASS: TestMigration0019RepairsSplitAssignments (0.06s)
+--- PASS: TestMigration0019RepairsSplitAssignments (0.09s)
 === RUN   TestOfferPriceRoundTrips
---- PASS: TestOfferPriceRoundTrips (0.06s)
+--- PASS: TestOfferPriceRoundTrips (0.07s)
 === RUN   TestUpdateOfferChangesPrice
---- PASS: TestUpdateOfferChangesPrice (0.06s)
+--- PASS: TestUpdateOfferChangesPrice (0.08s)
 === RUN   TestArchiveOfferRemovesItWithoutDestroyingIt
---- PASS: TestArchiveOfferRemovesItWithoutDestroyingIt (0.06s)
+--- PASS: TestArchiveOfferRemovesItWithoutDestroyingIt (0.08s)
 === RUN   TestDeleteOfferRefusesOneThatHasBeenSold
---- PASS: TestDeleteOfferRefusesOneThatHasBeenSold (0.07s)
+--- PASS: TestDeleteOfferRefusesOneThatHasBeenSold (0.08s)
 === RUN   TestOverviewQueriesUseIndexes
+=== RUN   TestOverviewQueriesUseIndexes/quota_usage
+    overview_index_test.go:50: plan: SEARCH vpn_assignments USING COVERING INDEX idx_assign_seller (seller_user_id=? AND status=?) | 
 === RUN   TestOverviewQueriesUseIndexes/monthly_trend
     overview_index_test.go:50: plan: SEARCH payment_records USING INDEX idx_pay_status (status=?) | USE TEMP B-TREE FOR GROUP BY | 
 === RUN   TestOverviewQueriesUseIndexes/month_window
     overview_index_test.go:50: plan: SEARCH payment_records USING INDEX idx_pay_status (status=?) | 
-=== RUN   TestOverviewQueriesUseIndexes/quota_usage
-    overview_index_test.go:50: plan: SEARCH vpn_assignments USING COVERING INDEX idx_assign_seller (seller_user_id=? AND status=?) | 
---- PASS: TestOverviewQueriesUseIndexes (0.07s)
+--- PASS: TestOverviewQueriesUseIndexes (0.08s)
+    --- PASS: TestOverviewQueriesUseIndexes/quota_usage (0.00s)
     --- PASS: TestOverviewQueriesUseIndexes/monthly_trend (0.00s)
     --- PASS: TestOverviewQueriesUseIndexes/month_window (0.00s)
-    --- PASS: TestOverviewQueriesUseIndexes/quota_usage (0.00s)
 === RUN   TestPaymentTotalsNetRevenue
---- PASS: TestPaymentTotalsNetRevenue (0.07s)
+--- PASS: TestPaymentTotalsNetRevenue (0.08s)
 === RUN   TestPaymentTotalsIgnoresUndatedConfirmations
---- PASS: TestPaymentTotalsIgnoresUndatedConfirmations (0.06s)
+--- PASS: TestPaymentTotalsIgnoresUndatedConfirmations (0.07s)
 === RUN   TestPaymentTotalsRefusesToSumCurrencies
---- PASS: TestPaymentTotalsRefusesToSumCurrencies (0.06s)
+--- PASS: TestPaymentTotalsRefusesToSumCurrencies (0.08s)
 === RUN   TestPaymentTotalsOnAnEmptyDatabase
---- PASS: TestPaymentTotalsOnAnEmptyDatabase (0.07s)
+--- PASS: TestPaymentTotalsOnAnEmptyDatabase (0.05s)
 === RUN   TestResellerHealthCountsTheThingsOnlyAnOwnerCanFix
---- PASS: TestResellerHealthCountsTheThingsOnlyAnOwnerCanFix (0.08s)
+--- PASS: TestResellerHealthCountsTheThingsOnlyAnOwnerCanFix (0.09s)
 === RUN   TestPaymentListIsCappedButTheCountIsNot
---- PASS: TestPaymentListIsCappedButTheCountIsNot (0.07s)
+--- PASS: TestPaymentListIsCappedButTheCountIsNot (0.11s)
 === RUN   TestPaymentCountMatchesTheListScope
 === RUN   TestPaymentCountMatchesTheListScope/super_admin
 === RUN   TestPaymentCountMatchesTheListScope/admin
 === RUN   TestPaymentCountMatchesTheListScope/client
---- PASS: TestPaymentCountMatchesTheListScope (0.06s)
+--- PASS: TestPaymentCountMatchesTheListScope (0.08s)
     --- PASS: TestPaymentCountMatchesTheListScope/super_admin (0.00s)
     --- PASS: TestPaymentCountMatchesTheListScope/admin (0.00s)
     --- PASS: TestPaymentCountMatchesTheListScope/client (0.00s)
 === RUN   TestPaymentCountRespectsThePendingFilter
---- PASS: TestPaymentCountRespectsThePendingFilter (0.07s)
+--- PASS: TestPaymentCountRespectsThePendingFilter (0.08s)
 === RUN   TestPaymentCountOnAnEmptyDatabase
---- PASS: TestPaymentCountOnAnEmptyDatabase (0.05s)
+--- PASS: TestPaymentCountOnAnEmptyDatabase (0.08s)
 === RUN   TestPaymentListNamesWhoPlacedIt
---- PASS: TestPaymentListNamesWhoPlacedIt (0.06s)
+--- PASS: TestPaymentListNamesWhoPlacedIt (0.09s)
 === RUN   TestPaymentListStatesAnAbsentPackageAsEmpty
---- PASS: TestPaymentListStatesAnAbsentPackageAsEmpty (0.06s)
+--- PASS: TestPaymentListStatesAnAbsentPackageAsEmpty (0.07s)
 === RUN   TestClaimPlanSlotIsAtomic
 --- PASS: TestClaimPlanSlotIsAtomic (0.06s)
 === RUN   TestClaimPlanSlotUnlimited
---- PASS: TestClaimPlanSlotUnlimited (0.05s)
+--- PASS: TestClaimPlanSlotUnlimited (0.06s)
 === RUN   TestCheckPlanRelease
---- PASS: TestCheckPlanRelease (0.06s)
+--- PASS: TestCheckPlanRelease (0.05s)
 === RUN   TestCheckPlanReleaseFreeIsUngated
 --- PASS: TestCheckPlanReleaseFreeIsUngated (0.05s)
 === RUN   TestPricingFallsBackToPlatformDefault
 --- PASS: TestPricingFallsBackToPlatformDefault (0.07s)
 === RUN   TestServerRateOverridesGlobal
---- PASS: TestServerRateOverridesGlobal (0.04s)
+--- PASS: TestServerRateOverridesGlobal (0.07s)
 === RUN   TestSavePricingIsUpsert
---- PASS: TestSavePricingIsUpsert (0.04s)
+--- PASS: TestSavePricingIsUpsert (0.07s)
 === RUN   TestPricingSeededRowIsZeroNotFake
---- PASS: TestPricingSeededRowIsZeroNotFake (0.04s)
+--- PASS: TestPricingSeededRowIsZeroNotFake (0.06s)
 === RUN   TestPricingMissingScopeIsAnError
---- PASS: TestPricingMissingScopeIsAnError (0.04s)
+--- PASS: TestPricingMissingScopeIsAnError (0.05s)
 === RUN   TestProfilePatchOnlyTouchesNamedFields
---- PASS: TestProfilePatchOnlyTouchesNamedFields (0.06s)
+--- PASS: TestProfilePatchOnlyTouchesNamedFields (0.07s)
 === RUN   TestUsernameIsUnique
 --- PASS: TestUsernameIsUnique (0.05s)
 === RUN   TestEmailChangeLifecycle
---- PASS: TestEmailChangeLifecycle (0.04s)
+--- PASS: TestEmailChangeLifecycle (0.05s)
 === RUN   TestEmailChangeSupersedeAndBurn
---- PASS: TestEmailChangeSupersedeAndBurn (0.04s)
+--- PASS: TestEmailChangeSupersedeAndBurn (0.05s)
 === RUN   TestReleaseMarksReleasedAndNeverServerUnavailable
---- PASS: TestReleaseMarksReleasedAndNeverServerUnavailable (0.05s)
+--- PASS: TestReleaseMarksReleasedAndNeverServerUnavailable (0.08s)
 === RUN   TestPurgeReturnsSnapshotBeforeDeleting
---- PASS: TestPurgeReturnsSnapshotBeforeDeleting (0.05s)
+--- PASS: TestPurgeReturnsSnapshotBeforeDeleting (0.06s)
 === RUN   TestPanelTruthSchemaIsPresent
---- PASS: TestPanelTruthSchemaIsPresent (0.04s)
+--- PASS: TestPanelTruthSchemaIsPresent (0.06s)
 === RUN   TestPanelClientTagValuesAreConstrained
 --- PASS: TestPanelClientTagValuesAreConstrained (0.05s)
 === RUN   TestPanelClientTagIsUniquePerClient
---- PASS: TestPanelClientTagIsUniquePerClient (0.04s)
+--- PASS: TestPanelClientTagIsUniquePerClient (0.06s)
 === RUN   TestPlanMoneySchemaIsPresent
---- PASS: TestPlanMoneySchemaIsPresent (0.06s)
+--- PASS: TestPlanMoneySchemaIsPresent (0.05s)
 === RUN   TestPlanDefaultsKeepLegacyRowsMeaningful
---- PASS: TestPlanDefaultsKeepLegacyRowsMeaningful (0.04s)
+--- PASS: TestPlanDefaultsKeepLegacyRowsMeaningful (0.05s)
 === RUN   TestPaymentTargetDefaultsToNullAndIsReadable
---- PASS: TestPaymentTargetDefaultsToNullAndIsReadable (0.05s)
+--- PASS: TestPaymentTargetDefaultsToNullAndIsReadable (0.06s)
 === RUN   TestPlanPurchaseRequiresRealPlan
---- PASS: TestPlanPurchaseRequiresRealPlan (0.05s)
+--- PASS: TestPlanPurchaseRequiresRealPlan (0.06s)
 === RUN   TestListStaffIsStaffOnly
 --- PASS: TestListStaffIsStaffOnly (0.06s)
 === RUN   TestListStaffFilters
---- PASS: TestListStaffFilters (0.04s)
+--- PASS: TestListStaffFilters (0.06s)
 === RUN   TestStaffDetailNamesTheBook
 --- PASS: TestStaffDetailNamesTheBook (0.05s)
 === RUN   TestStaffQuotaUsedCountsSales
---- PASS: TestStaffQuotaUsedCountsSales (0.04s)
+--- PASS: TestStaffQuotaUsedCountsSales (0.07s)
 === RUN   TestMigrateIsIdempotent
---- PASS: TestMigrateIsIdempotent (0.17s)
+--- PASS: TestMigrateIsIdempotent (0.07s)
 === RUN   TestPragmasAreApplied
 --- PASS: TestPragmasAreApplied (0.06s)
 === RUN   TestTxRollbackLeavesNoRows
---- PASS: TestTxRollbackLeavesNoRows (0.04s)
+--- PASS: TestTxRollbackLeavesNoRows (0.07s)
 === RUN   TestDuplicatePanelEmailIsRejected
 --- PASS: TestDuplicatePanelEmailIsRejected (0.05s)
 === RUN   TestTagLocksOnceIssued
---- PASS: TestTagLocksOnceIssued (0.05s)
+--- PASS: TestTagLocksOnceIssued (0.07s)
 === RUN   TestUntaggedClientHasNoTag
---- PASS: TestUntaggedClientHasNoTag (0.06s)
+--- PASS: TestUntaggedClientHasNoTag (0.05s)
 === RUN   TestSetClientTagRejectsUnknownValue
 --- PASS: TestSetClientTagRejectsUnknownValue (0.05s)
 === RUN   TestLockIsIdempotent
---- PASS: TestLockIsIdempotent (0.04s)
+--- PASS: TestLockIsIdempotent (0.05s)
 === RUN   TestTransferMovesOwner
---- PASS: TestTransferMovesOwner (0.06s)
+--- PASS: TestTransferMovesOwner (0.05s)
 === RUN   TestTransferKeepsPanelIdentity
---- PASS: TestTransferKeepsPanelIdentity (0.08s)
+--- PASS: TestTransferKeepsPanelIdentity (0.05s)
 === RUN   TestTransferKeepsTagAndLock
---- PASS: TestTransferKeepsTagAndLock (0.05s)
+--- PASS: TestTransferKeepsTagAndLock (0.06s)
 === RUN   TestTransferRefusesSelf
 --- PASS: TestTransferRefusesSelf (0.06s)
 === RUN   TestTransferRefusesNonClient
 --- PASS: TestTransferRefusesNonClient (0.06s)
 === RUN   TestTransferRefusesTerminal
---- PASS: TestTransferRefusesTerminal (0.05s)
+--- PASS: TestTransferRefusesTerminal (0.07s)
 === RUN   TestTransferRefusesReleased
---- PASS: TestTransferRefusesReleased (0.05s)
+--- PASS: TestTransferRefusesReleased (0.07s)
 === RUN   TestTransferRefusesUnknownVPN
 --- PASS: TestTransferRefusesUnknownVPN (0.06s)
 === RUN   TestTransferRefusesBlockedClient
 --- PASS: TestTransferRefusesBlockedClient (0.07s)
 === RUN   TestTransferLeavesNothingBehindOnRefusal
---- PASS: TestTransferLeavesNothingBehindOnRefusal (0.06s)
+--- PASS: TestTransferLeavesNothingBehindOnRefusal (0.05s)
 === RUN   TestTransferClosesOldAssignment
---- PASS: TestTransferClosesOldAssignment (0.07s)
+--- PASS: TestTransferClosesOldAssignment (0.06s)
 === RUN   TestTransferMovesFreeClaim
---- PASS: TestTransferMovesFreeClaim (0.05s)
+--- PASS: TestTransferMovesFreeClaim (0.06s)
 === RUN   TestTransferWithoutFreeClaimReportsNoMove
---- PASS: TestTransferWithoutFreeClaimReportsNoMove (0.06s)
+--- PASS: TestTransferWithoutFreeClaimReportsNoMove (0.09s)
 === RUN   TestTransferWritesHistory
---- PASS: TestTransferWritesHistory (0.07s)
+--- PASS: TestTransferWritesHistory (0.06s)
 PASS
-ok  	veylix/backend/internal/store	5.619s
+ok  	veylix/backend/internal/store	6.701s
 === RUN   TestMetricsRecordNetworkRate
---- PASS: TestMetricsRecordNetworkRate (0.09s)
+--- PASS: TestMetricsRecordNetworkRate (0.10s)
 === RUN   TestMetricsTreatCounterResetAsZero
---- PASS: TestMetricsTreatCounterResetAsZero (0.08s)
+--- PASS: TestMetricsTreatCounterResetAsZero (0.10s)
 === RUN   TestSyncMirrorsPanelLimits
---- PASS: TestSyncMirrorsPanelLimits (0.07s)
+--- PASS: TestSyncMirrorsPanelLimits (0.12s)
 === RUN   TestSyncMirrorIsIdempotent
---- PASS: TestSyncMirrorIsIdempotent (0.07s)
+--- PASS: TestSyncMirrorIsIdempotent (0.11s)
 === RUN   TestSyncWritesMirrorOnceForLegacyRows
---- PASS: TestSyncWritesMirrorOnceForLegacyRows (0.07s)
+--- PASS: TestSyncWritesMirrorOnceForLegacyRows (0.09s)
 === RUN   TestSyncClearsMirrorWhenVerificationFails
-2026/11/10 22:27:48 INFO sync: reconciled VPN presence server_id=1 absent=0 unverified=1
---- PASS: TestSyncClearsMirrorWhenVerificationFails (0.07s)
+2026/11/10 23:26:38 INFO sync: reconciled VPN presence server_id=1 absent=0 unverified=1
+--- PASS: TestSyncClearsMirrorWhenVerificationFails (0.08s)
 === RUN   TestSchedulerSkipsOverlappingTicks
-2026/11/10 22:27:48 INFO sync scheduler started interval=20ms
-2026/11/10 22:27:49 WARN sync: server pass failed server_id=1 err="sync: list local vpns: context canceled" duration_ms=120
-2026/11/10 22:27:49 INFO sync scheduler stopped
---- PASS: TestSchedulerSkipsOverlappingTicks (0.48s)
+2026/11/10 23:26:38 INFO sync scheduler started interval=20ms
+2026/11/10 23:26:38 WARN sync: server pass failed server_id=1 err="sync: list local vpns: context canceled" duration_ms=120
+2026/11/10 23:26:38 INFO sync scheduler stopped
+--- PASS: TestSchedulerSkipsOverlappingTicks (0.49s)
 === RUN   TestSchedulerDisabledWhenIntervalIsZero
---- PASS: TestSchedulerDisabledWhenIntervalIsZero (0.20s)
+--- PASS: TestSchedulerDisabledWhenIntervalIsZero (0.21s)
 === RUN   TestSchedulerStopIsIdempotent
 --- PASS: TestSchedulerStopIsIdempotent (0.00s)
 === RUN   TestSyncRecordsSnapshotAndLifetime
---- PASS: TestSyncRecordsSnapshotAndLifetime (0.08s)
+--- PASS: TestSyncRecordsSnapshotAndLifetime (0.09s)
 === RUN   TestSyncAccumulatesAcrossPasses
---- PASS: TestSyncAccumulatesAcrossPasses (0.08s)
+--- PASS: TestSyncAccumulatesAcrossPasses (0.07s)
 === RUN   TestSyncSurvivesRemoteResetEndToEnd
 --- PASS: TestSyncSurvivesRemoteResetEndToEnd (0.07s)
 === RUN   TestSyncIsolatesAFailingServer
-2026/11/10 22:27:49 WARN sync: server pass failed server_id=999 err="sync: server unreachable: panel offline" duration_ms=1
---- PASS: TestSyncIsolatesAFailingServer (0.06s)
+2026/11/10 23:26:39 WARN sync: server pass failed server_id=999 err="sync: server unreachable: panel offline" duration_ms=1
+--- PASS: TestSyncIsolatesAFailingServer (0.08s)
 === RUN   TestSyncFailureNeverRevokes
-2026/11/10 22:27:49 WARN sync: server pass failed server_id=1 err="sync: server unreachable: connection refused" duration_ms=0
---- PASS: TestSyncFailureNeverRevokes (0.06s)
+2026/11/10 23:26:39 WARN sync: server pass failed server_id=1 err="sync: server unreachable: connection refused" duration_ms=0
+--- PASS: TestSyncFailureNeverRevokes (0.07s)
 === RUN   TestSyncPaginatesThroughEveryClient
-2026/11/10 22:27:49 INFO sync: panel no longer holds this VPN; marked unavailable vpn_id=1 panel_email=a@panel.test from=ACTIVE
-2026/11/10 22:27:49 INFO sync: reconciled VPN presence server_id=1 absent=1 unverified=0
+2026/11/10 23:26:39 INFO sync: panel no longer holds this VPN; marked unavailable vpn_id=1 panel_email=a@panel.test from=ACTIVE
+2026/11/10 23:26:39 INFO sync: reconciled VPN presence server_id=1 absent=1 unverified=0
 --- PASS: TestSyncPaginatesThroughEveryClient (0.07s)
 === RUN   TestSyncTimesOutOneServerOnly
-2026/11/10 22:27:50 WARN sync: server pass failed server_id=7 err="sync: server unreachable: read page 1: context deadline exceeded" duration_ms=150
---- PASS: TestSyncTimesOutOneServerOnly (0.21s)
+2026/11/10 23:26:39 WARN sync: server pass failed server_id=7 err="sync: server unreachable: read page 1: context deadline exceeded" duration_ms=150
+--- PASS: TestSyncTimesOutOneServerOnly (0.22s)
 === RUN   TestSyncMarksExpiredAndDepleted
---- PASS: TestSyncMarksExpiredAndDepleted (0.07s)
+--- PASS: TestSyncMarksExpiredAndDepleted (0.06s)
 === RUN   TestSyncMarksTrafficDepleted
---- PASS: TestSyncMarksTrafficDepleted (0.06s)
+--- PASS: TestSyncMarksTrafficDepleted (0.05s)
 === RUN   TestSyncLeavesDormantVPNStatusAlone
-2026/11/10 22:27:50 INFO sync: panel no longer holds this VPN; marked unavailable vpn_id=1 panel_email=a@panel.test from=ACTIVE
-2026/11/10 22:27:50 INFO sync: reconciled VPN presence server_id=1 absent=1 unverified=0
---- PASS: TestSyncLeavesDormantVPNStatusAlone (0.05s)
+2026/11/10 23:26:39 INFO sync: panel no longer holds this VPN; marked unavailable vpn_id=1 panel_email=a@panel.test from=ACTIVE
+2026/11/10 23:26:39 INFO sync: reconciled VPN presence server_id=1 absent=1 unverified=0
+--- PASS: TestSyncLeavesDormantVPNStatusAlone (0.08s)
 === RUN   TestSyncMarksVerifiedAbsentClient
-2026/11/10 22:27:50 INFO sync: panel no longer holds this VPN; marked unavailable vpn_id=1 panel_email=a@panel.test from=ACTIVE
-2026/11/10 22:27:50 INFO sync: reconciled VPN presence server_id=1 absent=1 unverified=0
---- PASS: TestSyncMarksVerifiedAbsentClient (0.05s)
+2026/11/10 23:26:40 INFO sync: panel no longer holds this VPN; marked unavailable vpn_id=1 panel_email=a@panel.test from=ACTIVE
+2026/11/10 23:26:40 INFO sync: reconciled VPN presence server_id=1 absent=1 unverified=0
+--- PASS: TestSyncMarksVerifiedAbsentClient (0.07s)
 === RUN   TestSyncDoesNotMarkWhenVerificationFails
-2026/11/10 22:27:50 INFO sync: reconciled VPN presence server_id=1 absent=0 unverified=1
---- PASS: TestSyncDoesNotMarkWhenVerificationFails (0.06s)
+2026/11/10 23:26:40 INFO sync: reconciled VPN presence server_id=1 absent=0 unverified=1
+--- PASS: TestSyncDoesNotMarkWhenVerificationFails (0.05s)
 === RUN   TestSyncKeepsStatusWhenClientExistsButPageWasShort
-2026/11/10 22:27:50 INFO sync: reconciled VPN presence server_id=1 absent=0 unverified=1
---- PASS: TestSyncKeepsStatusWhenClientExistsButPageWasShort (0.05s)
+2026/11/10 23:26:40 INFO sync: reconciled VPN presence server_id=1 absent=0 unverified=1
+--- PASS: TestSyncKeepsStatusWhenClientExistsButPageWasShort (0.08s)
 === RUN   TestSyncReflectsPanelDisable
 --- PASS: TestSyncReflectsPanelDisable (0.06s)
 === RUN   TestSyncIsIdempotentWithinOneSecond
---- PASS: TestSyncIsIdempotentWithinOneSecond (0.06s)
+--- PASS: TestSyncIsIdempotentWithinOneSecond (0.09s)
 === RUN   TestFoldAccumulatesDelta
 --- PASS: TestFoldAccumulatesDelta (0.00s)
 === RUN   TestFoldSurvivesRemoteReset
@@ -2299,7 +2299,7 @@ ok  	veylix/backend/internal/store	5.619s
     --- PASS: TestLifetimeExceeded/exactly_at_limit (0.00s)
     --- PASS: TestLifetimeExceeded/over_limit (0.00s)
 PASS
-ok  	veylix/backend/internal/sync	2.204s
+ok  	veylix/backend/internal/sync	2.531s
 === RUN   TestCompareVersions
 --- PASS: TestCompareVersions (0.00s)
 === RUN   TestParseVersion
@@ -2335,5 +2335,5 @@ ok  	veylix/backend/internal/sync	2.204s
 === RUN   TestGitHubFetcherRequiresARepo
 --- PASS: TestGitHubFetcherRequiresARepo (0.00s)
 PASS
-ok  	veylix/backend/internal/versioning	0.011s
+ok  	veylix/backend/internal/versioning	0.020s
 FAIL
