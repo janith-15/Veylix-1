@@ -1333,6 +1333,15 @@ install_caddy() {
 		fi
 		mv "$CADDYFILE.veylix-new" "$CADDYFILE"
 
+		# The service user must be able to READ it. The file was written by a
+		# root shell whose umask was 077 (generate_secrets sets it earlier in the
+		# same process), so the redirect produced mode 0600 root:root. Caddy runs
+		# as the `caddy` user and its stock config is 0644, so it failed with
+		# "open /etc/caddy/Caddyfile: permission denied" and the site never came
+		# up - while `caddy validate` (run as root, which CAN read it) had already
+		# said "Valid configuration". Traced on a live host.
+		chmod 0644 "$CADDYFILE" 2>/dev/null || true
+
 		if ! caddy validate --config "$CADDYFILE"; then
 			if [ -f "$CADDYFILE.pre-veylix" ]; then
 				mv "$CADDYFILE.pre-veylix" "$CADDYFILE"
@@ -1342,7 +1351,20 @@ install_caddy() {
 		fi
 	fi
 
-	run systemctl reload caddy || run systemctl restart caddy
+	# A reload of a service that is not running fails, so fall back to a start -
+	# and if BOTH fail, say so instead of letting `set -e` kill the installer
+	# with no message. Traced live: `systemctl reload caddy` failed (not yet
+	# started under our config), `systemctl restart caddy` failed (the config was
+	# unreadable), and the || chain ended at status 1, so the installer stopped
+	# right there with the operator never told which command to run.
+	if ! run systemctl reload caddy 2>/dev/null; then
+		if ! run systemctl restart caddy; then
+			warn "caddy did not start. Check: journalctl -u caddy -n 50 --no-pager"
+			warn "the application is still running on 127.0.0.1:$APP_PORT"
+			INCOMPLETE=1
+			return 0
+		fi
+	fi
 
 	if [ "$HTTP_MODE" -eq 1 ]; then
 		say "caddy reloaded: serving plain HTTP on $HTTP_BIND:$HTTP_PORT"

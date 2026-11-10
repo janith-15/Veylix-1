@@ -1005,6 +1005,25 @@ else
 	ok "T17 a filter in a substitution tolerates no match"
 fi
 
+# (h) The Caddyfile must be READABLE by the caddy service user. The file is
+#     written by a root shell carrying the 077 umask from generate_secrets, so
+#     it lands as 0600 root:root and Caddy - which runs as `caddy` - dies with
+#     "open /etc/caddy/Caddyfile: permission denied". `caddy validate` runs as
+#     root and passes, so the failure is invisible until the service starts.
+expect_grep "T21 the rendered Caddyfile is made readable" \
+	'chmod 0644 "$CADDYFILE"' "$ROOT/install.sh"
+
+# (i) A reload-or-restart fallback whose final command fails must not abort
+#     under set -e. `run a || run b` ends at status 1 when both fail, killing
+#     the installer with no message.
+T17_svcfail=$(grep -nE '^[[:space:]]*run[[:space:]]+systemctl.*\|\|[[:space:]]*run[[:space:]]+systemctl' \
+	"$ROOT/install.sh" 2>/dev/null || true)
+if [ -n "$T17_svcfail" ]; then
+	bad "T17 a service reload fallback reports its own failure" "$T17_svcfail"
+else
+	ok "T17 a service reload fallback reports its own failure"
+fi
+
 
 # ---------------------------------------------------------------------------
 # T19 - ports are DETECTED, not asked for (D-131).
